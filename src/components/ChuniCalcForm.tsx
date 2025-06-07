@@ -37,8 +37,8 @@ export default function ChuniCalcForm() {
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
-    setCurrentRatingStr(""); 
-    setIsCurrentRatingLocked(false); 
+    setCurrentRatingStr("");
+    setIsCurrentRatingLocked(false);
   };
 
   const handleFetchRating = async () => {
@@ -60,8 +60,8 @@ export default function ChuniCalcForm() {
     }
 
     setIsFetchingRating(true);
-    setIsCurrentRatingLocked(false); 
-    setCurrentRatingStr(""); 
+    setIsCurrentRatingLocked(false);
+    setCurrentRatingStr("");
 
     try {
       const response = await fetch(
@@ -82,7 +82,7 @@ export default function ChuniCalcForm() {
       }
       if (response.status === 403) {
         let message = data.error?.message || "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.";
-        if (data.error?.code === 403) { 
+        if (data.error?.code === 403) {
             message = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${data.error.code})`;
         }
         toast({
@@ -113,7 +113,7 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        setIsCurrentRatingLocked(true); 
+        setIsCurrentRatingLocked(true);
         toast({
           title: "레이팅 조회 성공!",
           description: `'${nickname}'님의 현재 레이팅: ${ratingValue.toFixed(2)}`,
@@ -164,7 +164,7 @@ export default function ChuniCalcForm() {
       });
       return;
     }
-    
+
     if (current < 0 || current > 18 || target < 0 || target > 18) {
         toast({
           title: "잘못된 레이팅 범위",
@@ -173,7 +173,16 @@ export default function ChuniCalcForm() {
         });
         return;
     }
-    
+
+    if (target <= current) {
+      toast({
+        title: "목표 레이팅 오류",
+        description: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     router.push(`/result?nickname=${encodeURIComponent(nickname)}&current=${currentRatingStr}&target=${targetRatingStr}`);
   };
 
@@ -210,7 +219,7 @@ export default function ChuniCalcForm() {
         <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
-              <User className="mr-2 h-5 w-5 text-primary" /> 닉네임
+              <User className="mr-2 h-5 w-5 text-primary" /> 닉네임 (Chunirec User Name)
             </Label>
             <div className="flex space-x-2">
               <Input
@@ -248,8 +257,8 @@ export default function ChuniCalcForm() {
               disabled={isCurrentRatingLocked}
             />
             <p id="currentRatingHelp" className="text-sm text-muted-foreground">
-              {isCurrentRatingLocked 
-                ? "API에서 조회된 레이팅입니다. 닉네임 변경 시 다시 입력 가능합니다." 
+              {isCurrentRatingLocked
+                ? "API에서 조회된 레이팅입니다. 닉네임 변경 시 다시 입력 가능합니다."
                 : "현재 레이팅을 입력하세요 (0.00 - 18.00)."}
             </p>
           </div>

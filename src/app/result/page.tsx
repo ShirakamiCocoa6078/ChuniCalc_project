@@ -13,14 +13,13 @@ import { cn } from "@/lib/utils";
 
 const API_TOKEN = process.env.CHUNIREC_API_TOKEN;
 
-// API 응답 타입 (Chunirec API 문서 기반)
 type ApiSongEntry = {
-  id: string; // 곡 ID
-  title: string; // 곡 제목
-  score: number; // 현재 점수
-  rating: number; // 현재 레이팅 값
-  // jacketUrl은 API에 없으므로 placeholder 사용 예정
-  // const, level 등 다른 유용한 정보도 포함 가능
+  id: string;
+  title: string;
+  score: number;
+  rating: number;
+  // Chunirec API rating_data.json 응답에는 jacketUrl이 없음
+  // diff, const, genre 등 다른 유용한 정보도 포함될 수 있음
 };
 
 const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
@@ -32,11 +31,11 @@ const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
   // 여기서는 현재 값에서 약간 높게 설정하여 표시.
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
-  
+
   return {
-    id: apiSong.id || `song-${index}`, // API ID 사용, 없으면 임시 ID
+    id: apiSong.id || `song-${index}`,
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Song'}`, 
+    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Song'}`,
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -49,7 +48,6 @@ const sortSongs = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    // currentRating이 같으면, targetScore와 currentScore의 차이가 큰 순으로 (더 많이 올려야 하는 곡)
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
@@ -58,14 +56,46 @@ const sortSongs = (songs: Song[]): Song[] => {
 
 function ResultContent() {
   const searchParams = useSearchParams();
-  const nickname = searchParams.get("nickname") || "플레이어";
+  const userNameForApi = searchParams.get("nickname") || "플레이어";
   const currentRatingDisplay = searchParams.get("current") || "N/A";
   const targetRatingDisplay = searchParams.get("target") || "N/A";
-  
+
+  const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20 데이터 (API 연동 대기)
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchPlayerProfile = async () => {
+      if (!API_TOKEN || !userNameForApi || userNameForApi === "플레이어") {
+        setApiPlayerName(userNameForApi); // Fallback to URL nickname if no API call needed
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.player_name) {
+            setApiPlayerName(data.player_name);
+          } else {
+            setApiPlayerName(userNameForApi); // Fallback if player_name not in response
+          }
+        } else {
+          console.error("Failed to fetch player profile:", response.status);
+          setApiPlayerName(userNameForApi); // Fallback on error
+        }
+      } catch (error) {
+        console.error("Error fetching player profile:", error);
+        setApiPlayerName(userNameForApi); // Fallback on error
+      }
+    };
+    fetchPlayerProfile();
+  }, [userNameForApi]);
+
 
   useEffect(() => {
     const fetchSongData = async () => {
@@ -77,46 +107,51 @@ function ResultContent() {
         return;
       }
 
-      // user_name 파라미터가 URL에 명시적으로 제공되면 해당 값을 사용, 아니면 기본값 또는 빈 문자열 처리
-      const userNameFromQuery = searchParams.get("nickname");
-      const userNameParam = userNameFromQuery ? `&user_name=${encodeURIComponent(userNameFromQuery)}` : "";
+      const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
+      if (!userNameParam && !searchParams.get("user_id")) { // user_name과 user_id 둘 다 없으면
+        setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
+        setIsLoadingSongs(false);
+        setBest30SongsData([]);
+        setNew20SongsData([]);
+        return;
+      }
 
       try {
         setIsLoadingSongs(true);
         setErrorLoadingSongs(null);
-        
+
         const response = await fetch(
           `https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`
         );
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({})); // JSON 파싱 실패 대비
+          const errorData = await response.json().catch(() => ({}));
           let errorMessage = `곡 정보를 가져오는 데 실패했습니다. (상태: ${response.status})`;
-            if (errorData && errorData.error && errorData.error.message) {
-                errorMessage += `: ${errorData.error.message}`;
-            }
-            if (response.status === 404) {
-              errorMessage = `사용자 '${userNameFromQuery || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
-            } else if (response.status === 403) {
-                errorMessage = `사용자 '${userNameFromQuery || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code})`;
-            }
+          if (errorData && errorData.error && errorData.error.message) {
+            errorMessage += `: ${errorData.error.message}`;
+          }
+          if (response.status === 404) {
+            errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
+          } else if (response.status === 403 && errorData.error?.code === 403) { // 구체적인 403 에러 코드 확인
+             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error.code})`;
+          } else if (response.status === 403) { // 일반적인 403 에러
+            errorMessage = `API 접근 권한 오류입니다. 토큰이 유효한지 확인해주세요. (상태: ${response.status})`;
+          }
           throw new Error(errorMessage);
         }
 
         const data = await response.json();
-        
-        // Temporary: Log API response for debugging. Remove after use.
-        // 만약 특정 유저(예: cocoa)의 응답을 보고 싶다면, 브라우저 주소창에 ?nickname=cocoa&... 와 같이 입력하고
-        // 개발자 도구의 콘솔 탭에서 아래 로그를 확인하세요.
-        console.log('Chunirec rating_data.json API Response:', data);
+        // console.log('Chunirec rating_data.json API Response:', data);
 
-        // Best 30 데이터 처리
-        // API 응답에서 best.entries가 null일 수 있으므로 필터링 추가
+
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         setBest30SongsData(sortSongs(bestEntries));
 
         // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음
-        setNew20SongsData([]); 
+        // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
+        // setNew20SongsData(sortSongs(recentEntries));
+        setNew20SongsData([]);
+
 
       } catch (error) {
         console.error("Error fetching song data:", error);
@@ -128,18 +163,12 @@ function ResultContent() {
       }
     };
 
-    // 닉네임이 URL에 있을 때만 데이터 호출 (또는 기본 사용자 정보 로드 로직이 있다면 해당 조건에 맞게)
-    // if (nickname && nickname !== "플레이어") { // 닉네임이 있을때만 호출하고 싶다면 이 조건 사용
-       fetchSongData();
-    // } else { // 닉네임이 없으면 로딩 중단 및 메시지 표시 (선택사항)
-    //   setErrorLoadingSongs("닉네임 정보가 없어 곡 정보를 가져올 수 없습니다.");
-    //   setIsLoadingSongs(false);
-    // }
-  }, [searchParams]); // searchParams가 변경될 때마다 실행 (닉네임 변경 등)
+    fetchSongData();
+  }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"; // 20곡 기준
-  
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"; // 20곡일 경우 컬럼 수 (현재는 10곡만)
+
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
 
@@ -151,7 +180,7 @@ function ResultContent() {
           <div className="flex items-center gap-3">
             <User className="w-8 h-8 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold font-headline">{nickname}</h1>
+              <h1 className="text-2xl font-bold font-headline">{apiPlayerName || userNameForApi}</h1>
               <Link href="/" className="text-sm text-primary hover:underline flex items-center">
                 <ArrowLeft className="w-4 h-4 mr-1" /> 계산기로 돌아가기
               </Link>
@@ -229,7 +258,7 @@ function ResultContent() {
                      {new20SongsData.length > 0 ? (
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        new20GridCols
+                        new20GridCols // 20곡 기준 컬럼 수
                       )}>
                         {new20SongsData.map((song) => (
                           <SongCard key={`new20-${song.id}`} song={song} />
@@ -268,7 +297,7 @@ function ResultContent() {
                        {new20SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
-                           combinedNew20GridCols
+                           combinedNew20GridCols // 20곡 기준 컬럼 수
                         )}>
                           {new20SongsData.map((song) => (
                             <SongCard key={`combo-new20-${song.id}`} song={song} />
@@ -296,5 +325,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    
