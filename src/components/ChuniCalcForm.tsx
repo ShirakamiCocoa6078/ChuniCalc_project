@@ -26,7 +26,7 @@ export default function ChuniCalcForm() {
   useEffect(() => {
     setIsClient(true);
     if (!API_TOKEN) {
-      console.error("Chunirec API Token is not configured. Please set CHUNIREC_API_TOKEN in your .env.local file.");
+      console.error("Chunirec API Token is not configured. Please set CHUNIREC_API_TOKEN in your .env.local file or environment variables.");
       toast({
         title: "API 설정 오류",
         description: "Chunirec API 토큰이 설정되지 않았습니다. 기능이 제한될 수 있습니다.",
@@ -37,8 +37,8 @@ export default function ChuniCalcForm() {
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
-    setCurrentRatingStr(""); // 닉네임 변경 시 현재 레이팅 초기화
-    setIsCurrentRatingLocked(false); // 잠금 해제
+    setCurrentRatingStr(""); 
+    setIsCurrentRatingLocked(false); 
   };
 
   const handleFetchRating = async () => {
@@ -60,8 +60,8 @@ export default function ChuniCalcForm() {
     }
 
     setIsFetchingRating(true);
-    setIsCurrentRatingLocked(false); // 조회 시도 시 일단 잠금 해제
-    setCurrentRatingStr(""); // 이전 값 초기화
+    setIsCurrentRatingLocked(false); 
+    setCurrentRatingStr(""); 
 
     try {
       const response = await fetch(
@@ -74,18 +74,25 @@ export default function ChuniCalcForm() {
           description: `닉네임 '${nickname}'에 해당하는 사용자를 찾을 수 없거나 플레이 데이터가 없습니다.`,
           variant: "destructive",
         });
+        setIsFetchingRating(false);
         return;
       }
       if (response.status === 403) {
+        const errorData = await response.json().catch(() => ({}));
+        let message = "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.";
+        if (errorData.error?.code === 403) { // Assuming specific error code for this case
+            message = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${errorData.error.code})`;
+        }
         toast({
           title: "접근 금지",
-          description: "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.",
+          description: message,
           variant: "destructive",
         });
+        setIsFetchingRating(false);
         return;
       }
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})); // JSON 파싱 실패 대비
+        const errorData = await response.json().catch(() => ({})); 
         let errorMessage = `API 요청 실패 (상태: ${response.status})`;
         if (errorData.error && errorData.error.message) {
             errorMessage += `: ${errorData.error.message}`;
@@ -96,7 +103,7 @@ export default function ChuniCalcForm() {
       const data = await response.json();
       if (data && typeof data.rating === 'number') {
         setCurrentRatingStr(data.rating.toFixed(2));
-        setIsCurrentRatingLocked(true); // 성공 시 잠금
+        setIsCurrentRatingLocked(true); 
         toast({
           title: "레이팅 조회 성공!",
           description: `'${nickname}'님의 현재 레이팅: ${data.rating.toFixed(2)}`,
@@ -203,7 +210,7 @@ export default function ChuniCalcForm() {
               />
               <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating || !API_TOKEN}>
                 {isFetchingRating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                <span className="sr-only sm:not-sr-only sm:ml-2">조회</span>
+                <span className="ml-2">조회</span>
               </Button>
             </div>
             <p id="nicknameHelp" className="text-sm text-muted-foreground">Chunirec 닉네임을 입력하여 현재 레이팅을 조회합니다.</p>
