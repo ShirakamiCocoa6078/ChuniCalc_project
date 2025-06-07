@@ -75,7 +75,7 @@ export default function ChuniCalcForm() {
     }
     
     // Redirect to an external site
-    window.location.href = 'https://chunithm.net';
+    window.location.href = 'https://chunirec.net';
   };
 
   if (!isClient) {
@@ -170,7 +170,7 @@ export default function ChuniCalcForm() {
           </div>
 
           <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
-            Proceed to Chunithm.net
+            Proceed to Chunirec.net
           </Button>
         </form>
       </CardContent>
