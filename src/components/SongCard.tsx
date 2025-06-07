@@ -4,7 +4,7 @@
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Music2, TrendingUp, Target as TargetIcon, Star } from "lucide-react";
+import { Music2, Star, Target as TargetIcon } from "lucide-react";
 
 export type Song = {
   id: number;
@@ -21,6 +21,9 @@ type SongCardProps = {
 };
 
 export default function SongCard({ song }: SongCardProps) {
+  const scoreDifference = song.targetScore - song.currentScore;
+  const ratingDifference = song.targetRating - song.currentRating;
+
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full" style={{ aspectRatio: '2 / 1' }}>
       <CardContent className="p-0 flex h-full">
@@ -43,12 +46,18 @@ export default function SongCard({ song }: SongCardProps) {
           </div>
           <div className="space-y-1.5 text-xs mt-1">
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="flex items-center"><Star className="w-3 h-3 mr-1 text-yellow-500" /> Current:</span>
+              <span className="flex items-center"><Star className="w-3 h-3 mr-1 text-yellow-500" /></span>
               <span className="font-medium text-foreground">{song.currentScore.toLocaleString()} / {song.currentRating.toFixed(2)}</span>
             </div>
             <div className="flex items-center justify-between text-muted-foreground">
-              <span className="flex items-center"><TargetIcon className="w-3 h-3 mr-1 text-green-500" /> Target:</span>
-              <span className="font-medium text-foreground">{song.targetScore.toLocaleString()} / {song.targetRating.toFixed(2)}</span>
+              <span className="flex items-center"><TargetIcon className="w-3 h-3 mr-1 text-green-500" /></span>
+              <span className="font-medium text-foreground">
+                {song.targetScore.toLocaleString()}
+                {scoreDifference >= 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{scoreDifference.toLocaleString()})</span>}
+                {' / '}
+                {song.targetRating.toFixed(2)}
+                {ratingDifference >= 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{ratingDifference.toFixed(2)})</span>}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground/70 pt-1">Max: 1,001,000 / 17.85</p>
           </div>
