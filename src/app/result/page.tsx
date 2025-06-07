@@ -12,38 +12,37 @@ import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTrian
 import { cn } from "@/lib/utils";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
-const NEW_COUNT = 20; // Number of songs for the "New 20" list
+const NEW_COUNT = 20; 
 
-// Type for entries from records/rating_data.json (best.entries)
 type RatingApiSongEntry = {
-  id: string; // Music ID
+  id: string; 
+  diff: string; // Added diff
   title: string;
   score: number;
   rating: number;
   // Other fields if used by mapApiSongToAppSong
 };
 
-// Type for entries from records/showall.json (for New 20)
 type ShowallApiSongEntry = {
-  id: string; // Music ID (e.g., "711eb337f4d4bcb0")
-  diff: string; // e.g., "MAS"
-  level: number | string; // e.g., 12 or "12"
+  id: string; 
+  diff: string; 
+  level: number | string; 
   title: string;
-  const: number; // e.g., 12.4
+  const: number; 
   score: number;
-  rating: number; // Single rating value
+  rating: number; 
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
   is_alljustice: boolean;
   is_fullchain: boolean;
   genre: string;
-  updated_at: string; // ISO date string e.g., "1970-01-01T09:00:00+0900"
+  updated_at: string; 
   is_played: boolean;
 };
 
 
-const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, index: number): Song => {
+const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number): Song => {
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
@@ -51,9 +50,10 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
   return {
-    id: apiSong.id || `song-${index}`,
+    id: apiSong.id, // music_id should be present due to filtering
+    diff: apiSong.diff, // difficulty
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Jkt'}`, // Placeholder, fetching disabled
+    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Jkt'}`, 
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -77,7 +77,7 @@ const calculateNewSongs = (allRecords: ShowallApiSongEntry[], count: number): So
     return [];
   }
   const sortedByDate = [...allRecords]
-    .filter(record => record.is_played) // Ensure only played songs
+    .filter(record => record.is_played) 
     .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
   
   const recentPlayed = sortedByDate.slice(0, count);
@@ -116,11 +116,11 @@ function ResultContent() {
           }
         } else {
           console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi);
+          setApiPlayerName(userNameForApi); // Fallback to query param nickname
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi);
+        setApiPlayerName(userNameForApi); // Fallback to query param nickname
       }
     };
     fetchPlayerProfile();
@@ -161,14 +161,18 @@ function ResultContent() {
           if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
           if (ratingDataResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다.`;
           else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다.`;
+          // If rating_data fails, we consider it a critical error for song display
           throw new Error(errorMessage);
         }
-        const bestEntries = ratingData.best?.entries?.filter((e: any) => e !== null && e.id).map((entry: RatingApiSongEntry, index: number) => mapApiSongToAppSong(entry, index)) || [];
-        setBest30SongsData(sortSongsByRatingDesc(bestEntries));
+        // Ensure entries are not null and have an id before mapping
+        const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
+        const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index));
+        setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
+        
 
         // Process showall.json (for New 20)
         const showallData = await showallResponse.json();
-         console.log('Chunirec showall.json API Response:', showallData);
+        console.log('Chunirec showall.json API Response:', showallData);
 
         if (!showallResponse.ok) {
           const errorData = showallData || {};
@@ -178,11 +182,11 @@ function ResultContent() {
           else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다.`;
           // Don't throw here if rating_data was successful, just set new20 to empty and log error
           console.error(errorMessage);
-          setNew20SongsData([]);
+          setNew20SongsData([]); 
         } else {
-          const allUserRecords: ShowallApiSongEntry[] = showallData.records || [];
+          const allUserRecords: ShowallApiSongEntry[] = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
           const calculatedNewSongs = calculateNewSongs(allUserRecords, NEW_COUNT);
-          setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); // Also sort New 20 by rating for consistency if desired
+          setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); 
         }
 
       } catch (error) {
@@ -199,7 +203,7 @@ function ResultContent() {
   }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; // Adjusted for 20 songs
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
 
@@ -270,7 +274,7 @@ function ResultContent() {
                         best30GridCols
                       )}>
                         {best30SongsData.map((song) => (
-                          <SongCard key={`best30-${song.id}`} song={song} />
+                          <SongCard key={`best30-${song.id}-${song.diff}`} song={song} />
                         ))}
                       </div>
                     ) : (
@@ -292,7 +296,7 @@ function ResultContent() {
                         new20GridCols
                       )}>
                         {new20SongsData.map((song) => (
-                          <SongCard key={`new20-${song.id}`} song={song} />
+                          <SongCard key={`new20-${song.id}-${song.diff}`} song={song} />
                         ))}
                       </div>
                      ) : (
@@ -316,7 +320,7 @@ function ResultContent() {
                           combinedBest30GridCols
                         )}>
                           {best30SongsData.map((song) => (
-                            <SongCard key={`combo-best30-${song.id}`} song={song} />
+                            <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} />
                           ))}
                         </div>
                       ) : (
@@ -331,7 +335,7 @@ function ResultContent() {
                            combinedNew20GridCols
                         )}>
                           {new20SongsData.map((song) => (
-                            <SongCard key={`combo-new20-${song.id}`} song={song} />
+                            <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} />
                           ))}
                         </div>
                        ) : (
