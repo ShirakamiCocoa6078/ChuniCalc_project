@@ -68,20 +68,22 @@ export default function ChuniCalcForm() {
         `https://api.chunirec.net/2.0/records/profile.json?user_name=${encodeURIComponent(nickname)}&region=jp2&token=${API_TOKEN}`
       );
 
+      const data = await response.json();
+      console.log("Chunirec profile.json API Response:", data); // API 응답 로깅
+
       if (response.status === 404) {
         toast({
           title: "사용자 없음",
-          description: `닉네임 '${nickname}'에 해당하는 사용자를 찾을 수 없거나 플레이 데이터가 없습니다.`,
+          description: data.error?.message || `닉네임 '${nickname}'에 해당하는 사용자를 찾을 수 없거나 플레이 데이터가 없습니다.`,
           variant: "destructive",
         });
         setIsFetchingRating(false);
         return;
       }
       if (response.status === 403) {
-        const errorData = await response.json().catch(() => ({}));
-        let message = "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.";
-        if (errorData.error?.code === 403) { // Assuming specific error code for this case
-            message = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${errorData.error.code})`;
+        let message = data.error?.message || "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.";
+        if (data.error?.code === 403) { 
+            message = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${data.error.code})`;
         }
         toast({
           title: "접근 금지",
@@ -92,15 +94,13 @@ export default function ChuniCalcForm() {
         return;
       }
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})); 
         let errorMessage = `API 요청 실패 (상태: ${response.status})`;
-        if (errorData.error && errorData.error.message) {
-            errorMessage += `: ${errorData.error.message}`;
+        if (data.error && data.error.message) {
+            errorMessage += `: ${data.error.message}`;
         }
         throw new Error(errorMessage);
       }
 
-      const data = await response.json();
       if (data && typeof data.rating === 'number') {
         setCurrentRatingStr(data.rating.toFixed(2));
         setIsCurrentRatingLocked(true); 
@@ -109,14 +109,18 @@ export default function ChuniCalcForm() {
           description: `'${nickname}'님의 현재 레이팅: ${data.rating.toFixed(2)}`,
         });
       } else {
+         setCurrentRatingStr("");
+         setIsCurrentRatingLocked(false);
         toast({
           title: "데이터 오류",
-          description: "레이팅 정보를 가져왔으나 형식이 올바르지 않습니다.",
+          description: "레이팅 정보를 가져왔으나 형식이 올바르지 않거나, 플레이 데이터가 없습니다.",
           variant: "destructive",
         });
       }
     } catch (error) {
       console.error("Error fetching rating:", error);
+      setCurrentRatingStr("");
+      setIsCurrentRatingLocked(false);
       toast({
         title: "조회 실패",
         description: error instanceof Error ? error.message : "레이팅을 가져오는 중 오류가 발생했습니다.",
@@ -267,3 +271,4 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
+
