@@ -132,16 +132,16 @@ function ResultContent() {
           }
           if (response.status === 404) {
             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
-          } else if (response.status === 403 && errorData.error?.code === 403) { // 구체적인 403 에러 코드 확인
-             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error.code})`;
-          } else if (response.status === 403) { // 일반적인 403 에러
-            errorMessage = `API 접근 권한 오류입니다. 토큰이 유효한지 확인해주세요. (상태: ${response.status})`;
+          } else if (response.status === 403 && errorData.error?.code === 403 && errorData.error?.message?.includes("invalid token")) {
+             errorMessage = `Chunirec API 토큰이 유효하지 않습니다. 토큰을 확인해주세요. (오류 메시지: ${errorData.error.message})`;
+          } else if (response.status === 403 ) {
+             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code}, 메시지: ${errorData.error?.message})`;
           }
           throw new Error(errorMessage);
         }
 
         const data = await response.json();
-        // console.log('Chunirec rating_data.json API Response:', data);
+        console.log('Chunirec rating_data.json API Response:', data);
 
 
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
@@ -150,7 +150,7 @@ function ResultContent() {
         // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음
         // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         // setNew20SongsData(sortSongs(recentEntries));
-        setNew20SongsData([]);
+        setNew20SongsData([]); // New 20는 비워둠
 
 
       } catch (error) {
@@ -167,8 +167,10 @@ function ResultContent() {
   }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"; // 20곡일 경우 컬럼 수 (현재는 10곡만)
+  // New 20 탭은 20곡 기준으로, 5열까지 가능하게 설정 (화면 너비에 따라)
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
+  // Combined view에서 Best 30 (lg:w-3/5)은 최대 3열, New 20 (lg:w-2/5)는 최대 2열
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
 
@@ -219,7 +221,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지 확인해주세요.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -258,7 +260,7 @@ function ResultContent() {
                      {new20SongsData.length > 0 ? (
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        new20GridCols // 20곡 기준 컬럼 수
+                        new20GridCols
                       )}>
                         {new20SongsData.map((song) => (
                           <SongCard key={`new20-${song.id}`} song={song} />
@@ -297,7 +299,7 @@ function ResultContent() {
                        {new20SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
-                           combinedNew20GridCols // 20곡 기준 컬럼 수
+                           combinedNew20GridCols
                         )}>
                           {new20SongsData.map((song) => (
                             <SongCard key={`combo-new20-${song.id}`} song={song} />
@@ -325,3 +327,5 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
+    
