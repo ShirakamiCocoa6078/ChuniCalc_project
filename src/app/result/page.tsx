@@ -13,57 +13,20 @@ import SongCard, { type Song } from "@/components/SongCard";
 import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { getApiToken } from "@/lib/get-api-token";
+import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS } from "@/lib/cache";
 
-const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
+
+// const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN; // Replaced by getApiToken()
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
 const NEW_SONG_POOL_SIZE = 87; // Last 87 songs from music/showall.json
 
-const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
-const USER_DATA_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for user data
-const GLOBAL_MUSIC_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for global music list
 
-const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
-
-type CachedData<T> = {
-  timestamp: number;
-  data: T;
+type ProfileData = {
+    player_name: string;
+    rating?: number | string; 
 };
-
-function getCachedData<T>(key: string, expiryMs: number = USER_DATA_CACHE_EXPIRY_MS): T | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const item = localStorage.getItem(key);
-    if (!item) return null;
-    const cached = JSON.parse(item) as CachedData<T>;
-    if (Date.now() - cached.timestamp > expiryMs) {
-      localStorage.removeItem(key);
-      console.log(`Cache expired and removed for key: ${key}`);
-      return null;
-    }
-    console.log(`Cache hit for key: ${key}`);
-    return cached.data;
-  } catch (error) {
-    console.error("Error reading from localStorage for key:", key, error);
-    localStorage.removeItem(key);
-    return null;
-  }
-}
-
-function setCachedData<T>(key: string, data: T): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const item: CachedData<T> = { timestamp: Date.now(), data };
-    localStorage.setItem(key, JSON.stringify(item));
-    console.log(`Data cached for key: ${key}`);
-  } catch (error) {
-    console.error("Error writing to localStorage for key:", key, error);
-    if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-        alert('로컬 저장 공간이 부족하여 데이터를 캐시할 수 없습니다. 일부 오래된 캐시를 삭제해보세요.');
-    }
-  }
-}
-
 
 type RatingApiSongEntry = {
   id: string;
@@ -266,11 +229,6 @@ const calculateNewSongs = (
 };
 
 
-type ProfileData = {
-    player_name: string;
-    rating?: number | string; 
-};
-
 type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
@@ -321,8 +279,9 @@ function ResultContent() {
 
   useEffect(() => {
     const fetchAndProcessData = async () => {
-      if (!API_TOKEN) {
-        setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다.");
+      const apiToken = getApiToken();
+      if (!apiToken) {
+        setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.");
         setIsLoadingSongs(false);
         return;
       }
@@ -340,6 +299,8 @@ function ResultContent() {
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
       const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+      const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
+
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
       const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
@@ -396,10 +357,10 @@ function ResultContent() {
       console.log("Fetching data from API as some cache is missing or expired...");
       try {
         const apiRequests = [
-            fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${API_TOKEN}`) 
+            fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${apiToken}`),
+            fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${apiToken}`),
+            fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${apiToken}`),
+            fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${apiToken}`) 
         ];
 
         const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponse] = await Promise.all(apiRequests);
@@ -531,7 +492,7 @@ function ResultContent() {
                     ? (lastRefreshed && lastRefreshed !== '사용자 캐시 없음' ? `사용자 데이터 동기화: ${lastRefreshed}` : '캐시된 사용자 데이터가 없거나 만료되었습니다.') 
                     : '동기화 상태 확인 중...'}
             </p>
-            <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === "플레이어"}>
+            <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === "플레이어" || !getApiToken()}>
                 <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingSongs && "animate-spin")} />
                 사용자 데이터 새로고침
             </Button>
@@ -585,7 +546,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted 
-                  ? (getCachedData(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) && getCachedData(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS)
+                  ? (getCachedData(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) && getCachedData(`${LOCAL_STORAGE_PREFIX}globalMusicData`, GLOBAL_MUSIC_CACHE_EXPIRY_MS)
                     ? '캐시를 확인/갱신 중입니다...'
                     : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
                   : '데이터 상태 확인 중...'
@@ -706,4 +667,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
