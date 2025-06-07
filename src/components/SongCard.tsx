@@ -4,13 +4,13 @@
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { Music2, Star, Target as TargetIcon, ImageOff, Loader2 } from "lucide-react";
-import { useEffect, useState } from 'react';
+import { Music2, Star, Target as TargetIcon, ImageOff } from "lucide-react";
+// Removed useEffect, useState, Loader2 as jacket fetching is disabled
 
 export type Song = {
-  id: string; // Changed to string to match API response for music_id
+  id: string;
   title: string;
-  jacketUrl: string; // Initial placeholder URL
+  jacketUrl: string; // Will always be a placeholder
   currentScore: number;
   currentRating: number;
   targetScore: number;
@@ -25,79 +25,48 @@ export default function SongCard({ song }: SongCardProps) {
   const scoreDifference = song.targetScore > 0 ? song.targetScore - song.currentScore : 0;
   const ratingDifference = song.targetRating > 0 ? parseFloat((song.targetRating - song.currentRating).toFixed(2)) : 0;
 
-  const [actualJacketUrl, setActualJacketUrl] = useState<string>(song.jacketUrl); // Initialize with placeholder
-  const [isLoadingJacket, setIsLoadingJacket] = useState<boolean>(true);
-  const [jacketError, setJacketError] = useState<boolean>(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    if (song.id) {
-      setIsLoadingJacket(true);
-      setJacketError(false);
-      fetch(`/api/get-jacket-image?musicId=${song.id}`)
-        .then(res => {
-          if (!res.ok) {
-            return res.json().then(errData => { // Try to parse error message from API
-              throw new Error(errData.error || `Failed to fetch jacket: ${res.status}`);
-            });
-          }
-          return res.json();
-        })
-        .then(data => {
-          if (isMounted) {
-            if (data.imageUrl) {
-              setActualJacketUrl(data.imageUrl);
-            } else {
-              console.warn(`No image URL found for song ${song.id}: ${data.error || 'Unknown error'}`);
-              setJacketError(true); // Mark as error, placeholder will be shown
-            }
-          }
-        })
-        .catch(error => {
-          if (isMounted) {
-            console.error(`Error fetching jacket for song ${song.id}:`, error.message);
-            setJacketError(true); // Mark as error
-          }
-        })
-        .finally(() => {
-          if (isMounted) {
-            setIsLoadingJacket(false);
-          }
-        });
-    } else {
-      setIsLoadingJacket(false);
-      setJacketError(true); // No ID, cannot fetch
-    }
-    return () => {
-      isMounted = false;
-    };
-  }, [song.id]);
-
-  const displayJacketUrl = jacketError ? song.jacketUrl : actualJacketUrl;
+  // Jacket fetching is disabled, always use the placeholder from song.jacketUrl
+  // or a generic "no image" indicator. For simplicity, we use song.jacketUrl.
+  // If song.jacketUrl itself is a "no image" placeholder, that will be shown.
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full" style={{ aspectRatio: '2 / 1' }}>
       <CardContent className="p-0 flex h-full">
         <div className="w-1/3 relative h-full bg-muted flex items-center justify-center">
-          {isLoadingJacket ? (
-            <Loader2 className="w-6 h-6 text-primary animate-spin" />
-          ) : jacketError ? (
-            <div className="flex flex-col items-center text-muted-foreground p-1">
-              <ImageOff className="w-6 h-6" />
-              <span className="text-xs mt-1 text-center">No Image</span>
-            </div>
-          ) : (
-            <Image
-              src={displayJacketUrl}
+          {/* Always show placeholder or a generic "no image" icon if song.jacketUrl is for that */}
+          {song.jacketUrl && !song.jacketUrl.includes("placehold.co") && !song.jacketUrl.startsWith("/api/get-jacket-image") ? (
+             <Image
+              src={song.jacketUrl} // This should be a placeholder URL
               alt={`Jacket for ${song.title}`}
               layout="fill"
               objectFit="cover"
-              onError={() => {
-                if (!jacketError) setJacketError(true); // If fetched URL fails to load
+              data-ai-hint="album art"
+              onError={(e) => {
+                // Fallback to a default placeholder if the provided song.jacketUrl also fails
+                e.currentTarget.srcset = "https://placehold.co/120x120.png?text=Error";
+                e.currentTarget.src = "https://placehold.co/120x120.png?text=Error";
               }}
+            />
+          ) : (
+             <Image
+              src={song.jacketUrl || "https://placehold.co/120x120.png?text=Jkt"} // Default placeholder
+              alt={`Jacket for ${song.title}`}
+              layout="fill"
+              objectFit="cover"
               data-ai-hint="album art"
             />
           )}
+          {/* Fallback for when jacketUrl is truly missing or explicitly for "no image" */}
+          {/* This part can be simplified if song.jacketUrl is always a valid placeholder */}
+          {/* For now, if jacketUrl is not a typical placeholder, it means it was an attempt for real image */}
+          {/* Since we disabled fetching, we can show ImageOff or the placeholder. */}
+          {/* Let's simplify and always rely on song.jacketUrl being a placeholder now. */}
+          {/*
+          <div className="flex flex-col items-center text-muted-foreground p-1">
+            <ImageOff className="w-6 h-6" />
+            <span className="text-xs mt-1 text-center">No Image</span>
+          </div>
+          */}
         </div>
         <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
           <div>
