@@ -7,23 +7,25 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import SongCard, { type Song } from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
-const TARGET_NEW_SONG_RELEASE_DATE = "2024-12-12"; // 기준 출시일 (변경 금지)
+const TARGET_NEW_SONG_RELEASE_DATE = "2024-12-12";
 
 type RatingApiSongEntry = {
   id: string;
   diff: string;
   title: string;
   score: number;
-  rating: number; // API에서 제공하는 레이팅 (폴백용)
+  rating: number;
   genre?: string;
-  const?: number; // 보면 정수
+  const?: number;
   updated_at?: string;
 };
 
@@ -32,9 +34,9 @@ type ShowallApiSongEntry = {
   diff: string;
   level: number | string;
   title: string;
-  const: number; // 보면 정수
+  const: number;
   score: number;
-  rating: number; // API에서 제공하는 레이팅 (폴백용)
+  rating: number;
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
@@ -50,8 +52,10 @@ type MusicSearchApiEntry = {
   title: string;
   genre: string;
   artist: string;
-  release: string; // "YYYY-MM-DD"
+  release: string;
 };
+
+export type CalculationStrategy = "average" | "peak" | "floor";
 
 const calculateChunithmSongRating = (score: number, chartConstant: number | undefined | null): number => {
   if (typeof chartConstant !== 'number' || chartConstant <= 0) {
@@ -60,45 +64,40 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
 
   let ratingValue = 0;
 
-  if (score >= 1009000) { // SSS+
+  if (score >= 1009000) {
     ratingValue = chartConstant + 2.15;
-  } else if (score >= 1007500) { // SSS (1,007,500 ~ 1,008,999)
-    // Max bonus: floor((1008999 - 1007500) / 100) * 0.01 = 14 * 0.01 = 0.14
+  } else if (score >= 1007500) {
     ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
-  } else if (score >= 1005000) { // SS+ (1,005,000 ~ 1,007,499)
-    // Max bonus: floor((1007499 - 1005000) / 50) * 0.01 = 49 * 0.01 = 0.49
+  } else if (score >= 1005000) {
     ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
-  } else if (score >= 1000000) { // SS (1,000,000 ~ 1,004,999)
-    // Max bonus: floor((1004999 - 1000000) / 100) * 0.01 = 49 * 0.01 = 0.49
+  } else if (score >= 1000000) {
     ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
-  } else if (score >= 990000) { // S+ (990,000 ~ 999,999)
-    // Max bonus: floor((999999 - 990000) / 250) * 0.01 = 39 * 0.01 = 0.39
+  } else if (score >= 990000) {
     ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
-  } else if (score >= 975000) { // S (975,000 ~ 989,999)
-    // Max bonus: floor((989999 - 975000) / 250) * 0.01 = 59 * 0.01 = 0.59
+  } else if (score >= 975000) {
     ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
-  } else if (score >= 950000) { // AAA
+  } else if (score >= 950000) {
     ratingValue = chartConstant - 1.50;
-  } else if (score >= 925000) { // AA
+  } else if (score >= 925000) {
     ratingValue = chartConstant - 3.00;
-  } else if (score >= 900000) { // A
+  } else if (score >= 900000) {
     ratingValue = chartConstant - 5.00;
-  } else if (score >= 800000) { // BBB
+  } else if (score >= 800000) {
     ratingValue = (chartConstant - 5.00) / 2.0;
-  } else { // C or below
+  } else {
     ratingValue = 0;
   }
   return Math.max(0, parseFloat(ratingValue.toFixed(2)));
 };
 
-const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number): Song => {
+const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number, chartConstantOverride?: number): Song => {
   const score = apiSong.score;
-  const chartConst = apiSong.const;
+  const chartConst = chartConstantOverride ?? apiSong.const;
   let calculatedCurrentRating: number;
 
   const isConstUnknown = 'is_const_unknown' in apiSong && apiSong.is_const_unknown;
 
-  if (isConstUnknown) {
+  if (isConstUnknown && typeof chartConst !== 'number') {
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   } else if (typeof chartConst === 'number' && chartConst > 0 && typeof score === 'number') {
     calculatedCurrentRating = calculateChunithmSongRating(score, chartConst);
@@ -108,26 +107,24 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   
   const currentRating = calculatedCurrentRating;
 
-  // AI 추천 목표 점수 (기존 로직 유지)
+  // AI 추천 목표 점수 (임시 로직, 추후 전략에 따라 변경 필요)
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
   
   let targetRating: number;
-  if (isConstUnknown) {
-    // 보면 정수를 모르면, 현재 레이팅에서 약간의 향상치만 더함 (기존 로직과 유사하게)
+  if (isConstUnknown && typeof chartConst !== 'number') {
     targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   } else if (typeof chartConst === 'number' && chartConst > 0) {
     targetRating = calculateChunithmSongRating(targetScore, chartConst);
   } else {
-    // 보면 정수도 없고, API 레이팅도 없다면 현재 레이팅 기준으로 처리
      targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   }
   
   return {
     id: apiSong.id,
-    diff: apiSong.diff,
+    diff: apiSong.diff.toUpperCase(), // 일관성을 위해 대문자로
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=Jkt`, // 자켓 이미지 로딩 비활성화
+    chartConstant: typeof chartConst === 'number' ? chartConst : null,
     currentScore: score,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -147,6 +144,7 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
 };
 
 const difficultyOrder: { [key: string]: number } = {
+  ULT: 5,
   MAS: 4,
   EXP: 3,
   ADV: 2,
@@ -162,12 +160,10 @@ const calculateNewSongs = (
     return [];
   }
 
-  // 1. Filter music entries: release date > TARGET_NEW_SONG_RELEASE_DATE and genre != "WORLD'S END"
   const eligibleNewMusic = allMusicEntries.filter(music => {
     return music.release > TARGET_NEW_SONG_RELEASE_DATE && music.genre !== "WORLD'S END";
   });
   console.log(`Eligible new music (after target release date '${TARGET_NEW_SONG_RELEASE_DATE}' & genre filter):`, eligibleNewMusic);
-
 
   if (eligibleNewMusic.length === 0) {
     console.warn(`No music found released after ${TARGET_NEW_SONG_RELEASE_DATE} or matching genre criteria.`);
@@ -176,28 +172,23 @@ const calculateNewSongs = (
 
   const eligibleNewMusicIds = new Set<string>(eligibleNewMusic.map(m => m.id));
 
-  // 2. Filter user records: played, score > 0, and is one of the eligible new music
   const userPlayedEligibleNewSongs = allUserRecords.filter(record =>
-    eligibleNewMusicIds.has(record.id) && record.is_played && record.score > 0
+    eligibleNewMusicIds.has(record.id) && record.is_played && record.score > 0 && typeof record.rating === 'number' && typeof record.score === 'number' && typeof record.const === 'number'
   );
   console.log("User played eligible new songs (before sorting/slicing):", userPlayedEligibleNewSongs);
 
-
   if (userPlayedEligibleNewSongs.length === 0) {
-    console.warn("User has not played any of the eligible new songs or scores are 0.");
+    console.warn("User has not played any of the eligible new songs or scores are 0 / rating/const data missing.");
     return [];
   }
   
-  // 3. Map to Song type (this will apply the new rating calculation)
-  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index));
+  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const));
 
-  // 4. Sort these user-played eligible new songs with calculated ratings
-  //    Rating (desc), Score (desc), Difficulty (MAS > EXP > ADV > BAS)
   mappedUserPlayedNewSongs.sort((a, b) => {
-    if (b.currentRating !== a.currentRating) { // Use calculated rating
+    if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    if (b.currentScore !== a.currentScore) { // Use score from record
+    if (b.currentScore !== a.currentScore) {
       return b.currentScore - a.currentScore;
     }
     const diffAUpper = a.diff.toUpperCase();
@@ -207,7 +198,6 @@ const calculateNewSongs = (
     return diffBOrder - diffAOrder;
   });
 
-  // 5. Take top 'count'
   return mappedUserPlayedNewSongs.slice(0, count);
 };
 
@@ -223,6 +213,8 @@ function ResultContent() {
   const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
+  const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
+
 
   useEffect(() => {
     const fetchPlayerProfile = async () => {
@@ -272,7 +264,7 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      const musicSearchBaseQuery = "since:2024-01-01"; // 이 날짜는 TARGET_NEW_SONG_RELEASE_DATE 이전이어야 함
+      const musicSearchBaseQuery = "since:2024-01-01";
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -295,7 +287,7 @@ function ResultContent() {
           criticalError = errorMessage;
         } else {
           const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')) || [];
-          const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index));
+          const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
           setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         }
 
@@ -312,7 +304,7 @@ function ResultContent() {
           if (!criticalError) criticalError = errorMessage;
           else console.warn("Also failed to fetch showall.json:", errorMessage);
         } else {
-          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && typeof e.rating === 'number' && typeof e.score === 'number' && typeof e.is_played === 'boolean' && typeof e.const === 'number') || [];
+          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) && typeof e.score === 'number' && typeof e.is_played === 'boolean' && (typeof e.const === 'number' || e.const === null) && typeof e.is_const_unknown === 'boolean' ) || [];
         }
 
         const musicSearchData = await musicSearchResponse.json();
@@ -394,6 +386,41 @@ function ResultContent() {
           </div>
         </header>
 
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="font-headline text-xl">전략 선택</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup
+              defaultValue="average"
+              onValueChange={(value) => setCalculationStrategy(value as CalculationStrategy)}
+              className="flex flex-col sm:flex-row gap-4"
+            >
+              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
+                <RadioGroupItem value="average" id="r-average" />
+                <Label htmlFor="r-average" className="flex items-center cursor-pointer">
+                  <BarChart3 className="w-5 h-5 mr-2 text-primary" /> 평균 (Average)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
+                <RadioGroupItem value="peak" id="r-peak" />
+                <Label htmlFor="r-peak" className="flex items-center cursor-pointer">
+                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> 고점 (Peak Performance)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
+                <RadioGroupItem value="floor" id="r-floor" />
+                <Label htmlFor="r-floor" className="flex items-center cursor-pointer">
+                  <TrendingDown className="w-5 h-5 mr-2 text-green-600" /> 저점 (Fill Bottom Slots)
+                </Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground mt-2">
+              * 현재 이 전략 선택은 UI 프로토타입이며, 실제 목표 점수 계산 로직은 아직 구현되지 않았습니다.
+            </p>
+          </CardContent>
+        </Card>
+
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
             <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">Best 30</TabsTrigger>
@@ -435,7 +462,7 @@ function ResultContent() {
                         best30GridCols
                       )}>
                         {best30SongsData.map((song) => (
-                          <SongCard key={`best30-${song.id}-${song.diff}`} song={song} />
+                          <SongCard key={`best30-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
                         ))}
                       </div>
                     ) : (
@@ -457,7 +484,7 @@ function ResultContent() {
                         new20GridCols
                       )}>
                         {new20SongsData.map((song) => (
-                          <SongCard key={`new20-${song.id}-${song.diff}`} song={song} />
+                          <SongCard key={`new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
                         ))}
                       </div>
                      ) : (
@@ -481,7 +508,7 @@ function ResultContent() {
                           combinedBest30GridCols
                         )}>
                           {best30SongsData.map((song) => (
-                            <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} />
+                            <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
                           ))}
                         </div>
                       ) : (
@@ -496,7 +523,7 @@ function ResultContent() {
                            combinedNew20GridCols
                         )}>
                           {new20SongsData.map((song) => (
-                            <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} />
+                            <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
                           ))}
                         </div>
                        ) : (
@@ -522,3 +549,4 @@ export default function ResultPage() {
   );
 }
 
+    
