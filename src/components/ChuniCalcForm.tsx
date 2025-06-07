@@ -18,6 +18,7 @@ export default function ChuniCalcForm() {
   const [currentRatingStr, setCurrentRatingStr] = useState<string>("");
   const [targetRatingStr, setTargetRatingStr] = useState<string>("");
   const [isFetchingRating, setIsFetchingRating] = useState<boolean>(false);
+  const [isCurrentRatingLocked, setIsCurrentRatingLocked] = useState<boolean>(false);
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
@@ -33,6 +34,12 @@ export default function ChuniCalcForm() {
       });
     }
   }, [toast]);
+
+  const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setNickname(e.target.value);
+    setCurrentRatingStr(""); // 닉네임 변경 시 현재 레이팅 초기화
+    setIsCurrentRatingLocked(false); // 잠금 해제
+  };
 
   const handleFetchRating = async () => {
     if (!nickname) {
@@ -53,6 +60,9 @@ export default function ChuniCalcForm() {
     }
 
     setIsFetchingRating(true);
+    setIsCurrentRatingLocked(false); // 조회 시도 시 일단 잠금 해제
+    setCurrentRatingStr(""); // 이전 값 초기화
+
     try {
       const response = await fetch(
         `https://api.chunirec.net/2.0/records/profile.json?user_name=${encodeURIComponent(nickname)}&region=jp2&token=${API_TOKEN}`
@@ -64,7 +74,6 @@ export default function ChuniCalcForm() {
           description: `닉네임 '${nickname}'에 해당하는 사용자를 찾을 수 없거나 플레이 데이터가 없습니다.`,
           variant: "destructive",
         });
-        setCurrentRatingStr("");
         return;
       }
       if (response.status === 403) {
@@ -73,23 +82,26 @@ export default function ChuniCalcForm() {
           description: "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.",
           variant: "destructive",
         });
-        setCurrentRatingStr("");
         return;
       }
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `API 요청 실패: ${response.status}`);
+        const errorData = await response.json().catch(() => ({})); // JSON 파싱 실패 대비
+        let errorMessage = `API 요청 실패 (상태: ${response.status})`;
+        if (errorData.error && errorData.error.message) {
+            errorMessage += `: ${errorData.error.message}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       if (data && typeof data.rating === 'number') {
         setCurrentRatingStr(data.rating.toFixed(2));
+        setIsCurrentRatingLocked(true); // 성공 시 잠금
         toast({
           title: "레이팅 조회 성공!",
           description: `'${nickname}'님의 현재 레이팅: ${data.rating.toFixed(2)}`,
         });
       } else {
-        setCurrentRatingStr("");
         toast({
           title: "데이터 오류",
           description: "레이팅 정보를 가져왔으나 형식이 올바르지 않습니다.",
@@ -98,7 +110,6 @@ export default function ChuniCalcForm() {
       }
     } catch (error) {
       console.error("Error fetching rating:", error);
-      setCurrentRatingStr("");
       toast({
         title: "조회 실패",
         description: error instanceof Error ? error.message : "레이팅을 가져오는 중 오류가 발생했습니다.",
@@ -186,7 +197,7 @@ export default function ChuniCalcForm() {
                 type="text"
                 placeholder="예: chunirec"
                 value={nickname}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setNickname(e.target.value)}
+                onChange={handleNicknameChange}
                 className="text-lg"
                 aria-describedby="nicknameHelp"
               />
@@ -213,8 +224,13 @@ export default function ChuniCalcForm() {
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
               className="text-lg"
               aria-describedby="currentRatingHelp"
+              disabled={isCurrentRatingLocked}
             />
-            <p id="currentRatingHelp" className="text-sm text-muted-foreground">현재 레이팅을 입력하세요 (0.00 - 18.00).</p>
+            <p id="currentRatingHelp" className="text-sm text-muted-foreground">
+              {isCurrentRatingLocked 
+                ? "API에서 조회된 레이팅입니다. 닉네임 변경 시 다시 입력 가능합니다." 
+                : "현재 레이팅을 입력하세요 (0.00 - 18.00)."}
+            </p>
           </div>
 
           <div className="space-y-2">
