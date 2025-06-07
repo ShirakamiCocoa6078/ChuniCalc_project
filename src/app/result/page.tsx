@@ -17,12 +17,12 @@ const generatePlaceholderSongs = (count: number): Song[] => {
     const currentRating = parseFloat((Math.random() * 2 + 15.0).toFixed(2)); // 15.00 - 17.00
     
     // Ensure target is an improvement or same
-    const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * 50000))); 
-    const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.5)).toFixed(2));
+    const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * 100000))); 
+    const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.8)).toFixed(2));
 
     return {
       id: i + 1,
-      title: `Placeholder Song Title ${i + 1} (Longer name to test truncation)`,
+      title: `Placeholder Song Title ${i + 1}`,
       jacketUrl: `https://placehold.co/120x120.png?text=S${i+1}`,
       currentScore,
       currentRating,
@@ -43,8 +43,24 @@ function ResultContent() {
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
 
   useEffect(() => {
-    setBest30SongsData(generatePlaceholderSongs(30));
-    setNew20SongsData(generatePlaceholderSongs(20));
+    const rawBest30 = generatePlaceholderSongs(30);
+    const rawNew20 = generatePlaceholderSongs(20);
+
+    const sortSongs = (songs: Song[]): Song[] => {
+      return [...songs].sort((a, b) => {
+        // Primary sort: currentRating (descending)
+        if (b.currentRating !== a.currentRating) {
+          return b.currentRating - a.currentRating;
+        }
+        // Secondary sort: score difference (targetScore - currentScore) (descending)
+        const scoreDiffA = a.targetScore - a.currentScore;
+        const scoreDiffB = b.targetScore - b.currentScore;
+        return scoreDiffB - scoreDiffA;
+      });
+    };
+
+    setBest30SongsData(sortSongs(rawBest30));
+    setNew20SongsData(sortSongs(rawNew20));
     setIsLoadingSongs(false);
   }, []);
 
@@ -97,7 +113,7 @@ function ResultContent() {
                       "sm:grid-cols-2",
                       "md:grid-cols-3",
                       "lg:grid-cols-4",
-                      "xl:grid-cols-5"
+                      "xl:grid-cols-5" // Fixed medium size
                     )}>
                       {best30SongsData.map((song) => (
                         <SongCard key={`best30-${song.id}`} song={song} />
@@ -117,8 +133,8 @@ function ResultContent() {
                       "grid grid-cols-1 gap-4",
                       "sm:grid-cols-2",
                       "md:grid-cols-3",
-                      "lg:grid-cols-4",
-                      "xl:grid-cols-4" 
+                      "lg:grid-cols-4", 
+                      "xl:grid-cols-4" // Fixed medium size, slightly fewer columns for fewer items
                     )}>
                       {new20SongsData.map((song) => (
                         <SongCard key={`new20-${song.id}`} song={song} />
@@ -139,9 +155,9 @@ function ResultContent() {
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
                         "sm:grid-cols-2",
-                        "md:grid-cols-2", // Adjusted for better fit in 3/5 width
+                        "md:grid-cols-2",
                         "lg:grid-cols-3",
-                        "xl:grid-cols-3"
+                        "xl:grid-cols-3" // Adjusted for 3/5 width
                       )}>
                         {best30SongsData.map((song) => (
                           <SongCard key={`combo-best30-${song.id}`} song={song} />
@@ -152,10 +168,10 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        "sm:grid-cols-1", // Adjusted for better fit in 2/5 width
+                        "sm:grid-cols-1",
                         "md:grid-cols-2",
                         "lg:grid-cols-2",
-                        "xl:grid-cols-2"
+                        "xl:grid-cols-2" // Adjusted for 2/5 width
                       )}>
                         {new20SongsData.map((song) => (
                           <SongCard key={`combo-new20-${song.id}`} song={song} />
@@ -180,4 +196,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
