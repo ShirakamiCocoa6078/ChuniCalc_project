@@ -346,9 +346,9 @@ function ResultContent() {
 
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 bg-muted p-1 rounded-lg">
-            <TabsTrigger value="best30" className="py-2.5 text-sm sm:text-base">Best 30</TabsTrigger>
-            <TabsTrigger value="new20" className="py-2.5 text-sm sm:text-base">New 20</TabsTrigger>
-            <TabsTrigger value="best30new20" className="py-2.5 text-sm sm:text-base">Best30 + New20</TabsTrigger>
+            <TabsTrigger value="best30" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">Best 30</TabsTrigger>
+            <TabsTrigger value="new20" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">New 20</TabsTrigger>
+            <TabsTrigger value="best30new20" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">Best30 + New20</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
@@ -471,5 +471,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    
