@@ -24,20 +24,19 @@ type ApiSongEntry = {
 };
 
 const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
-  // targetScore, targetRating은 현재 API에서 직접 제공되지 않으므로,
-  // 기존 로직처럼 현재 값에서 약간 높게 설정하거나, 다른 로직 적용 필요.
-  // 여기서는 임시로 현재값 + 약간의 증가로 설정.
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
   // 목표 점수/레이팅 생성 로직 (기존 placeholder 로직 참고)
-  const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0) ? (1001000 - currentScore)/2 : 50000) ) ) );
-  const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.5)).toFixed(2));
+  // 실제 API 데이터에서는 targetScore, targetRating이 없으므로, 필요시 다른 로직으로 대체해야 함.
+  // 여기서는 현재 값에서 약간 높게 설정하여 표시.
+  const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
+  const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   
   return {
     id: apiSong.id || `song-${index}`, // API ID 사용, 없으면 임시 ID
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Song'}`, // API에 자켓 URL이 없으므로 ID 기반 임시 생성
+    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Song'}`, 
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -45,14 +44,14 @@ const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
   };
 };
 
-
 const sortSongs = (songs: Song[]): Song[] => {
   return [...songs].sort((a, b) => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity; // 목표 점수가 없으면 우선순위 낮춤
-    const scoreDiffB = b.targetScore > 0 ? (b.targetScore - b.currentScore) : -Infinity;
+    // currentRating이 같으면, targetScore와 currentScore의 차이가 큰 순으로 (더 많이 올려야 하는 곡)
+    const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
+    const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
   });
 };
@@ -64,7 +63,7 @@ function ResultContent() {
   const targetRatingDisplay = searchParams.get("target") || "N/A";
   
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [recent10SongsData, setRecent10SongsData] = useState<Song[]>([]);
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20 데이터 (현재는 비워둠)
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
 
@@ -73,45 +72,52 @@ function ResultContent() {
       if (!API_TOKEN) {
         setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다.");
         setIsLoadingSongs(false);
+        // Best30, New20 모두 빈 배열로 설정하여 "데이터 없음" 메시지 표시
+        setBest30SongsData([]);
+        setNew20SongsData([]);
         return;
       }
 
-      // user_name 파라미터는 API 명세에 따라 user_id 또는 user_name으로 전달
-      // 여기서는 form에서 nickname으로 전달받으므로 user_name 사용
       const userNameParam = nickname !== "플레이어" ? `&user_name=${encodeURIComponent(nickname)}` : "";
 
       try {
         setIsLoadingSongs(true);
         setErrorLoadingSongs(null);
+        // Best 30 및 Recent (New) 데이터 가져오기
         const response = await fetch(
           `https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`
         );
 
         if (!response.ok) {
-          const errorData = await response.json();
-           let errorMessage = `곡 정보를 가져오는 데 실패했습니다. (상태: ${response.status})`;
+          const errorData = await response.json().catch(() => ({})); // JSON 파싱 실패 대비
+          let errorMessage = `곡 정보를 가져오는 데 실패했습니다. (상태: ${response.status})`;
             if (errorData && errorData.error && errorData.error.message) {
                 errorMessage += `: ${errorData.error.message}`;
             }
             if (response.status === 404) {
               errorMessage = `사용자 '${nickname}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
             } else if (response.status === 403) {
-              errorMessage = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다.`;
+                errorMessage = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code})`;
             }
           throw new Error(errorMessage);
         }
 
         const data = await response.json();
 
+        // Best 30 데이터 처리
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
-        const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
-        
         setBest30SongsData(sortSongs(bestEntries));
-        setRecent10SongsData(sortSongs(recentEntries));
+
+        // New 20 (Recent 10) 데이터 처리 - 현재는 비워두고 API 문제 해결 후 연동 예정
+        // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
+        // setNew20SongsData(sortSongs(recentEntries)); // API 연동 시 주석 해제
+        setNew20SongsData([]); // New 20는 일단 비워둠
 
       } catch (error) {
         console.error("Error fetching song data:", error);
         setErrorLoadingSongs(error instanceof Error ? error.message : "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.");
+        setBest30SongsData([]);
+        setNew20SongsData([]);
       } finally {
         setIsLoadingSongs(false);
       }
@@ -119,6 +125,13 @@ function ResultContent() {
 
     fetchSongData();
   }, [nickname]);
+
+  const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"; // 20곡 기준
+  
+  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
+  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
+
 
   return (
     <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
@@ -148,8 +161,8 @@ function ResultContent() {
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 bg-muted p-1 rounded-lg">
             <TabsTrigger value="best30" className="py-2.5 text-sm sm:text-base">Best 30</TabsTrigger>
-            <TabsTrigger value="recent10" className="py-2.5 text-sm sm:text-base">Recent 10</TabsTrigger>
-            <TabsTrigger value="best30recent10" className="py-2.5 text-sm sm:text-base">Best30 + Recent10</TabsTrigger>
+            <TabsTrigger value="new20" className="py-2.5 text-sm sm:text-base">New 20</TabsTrigger>
+            <TabsTrigger value="best30new20" className="py-2.5 text-sm sm:text-base">Best30 + New20</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
@@ -183,10 +196,7 @@ function ResultContent() {
                     {best30SongsData.length > 0 ? (
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        "sm:grid-cols-2",
-                        "md:grid-cols-3",
-                        "lg:grid-cols-4",
-                        "xl:grid-cols-5"
+                        best30GridCols
                       )}>
                         {best30SongsData.map((song) => (
                           <SongCard key={`best30-${song.id}`} song={song} />
@@ -199,35 +209,32 @@ function ResultContent() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="recent10">
+              <TabsContent value="new20">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Recent 10 곡 (최근 플레이)</CardTitle>
+                    <CardTitle className="font-headline text-2xl">New 20 곡</CardTitle>
                   </CardHeader>
                   <CardContent>
-                     {recent10SongsData.length > 0 ? (
+                     {new20SongsData.length > 0 ? (
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        "sm:grid-cols-2",
-                        "md:grid-cols-3",
-                        "lg:grid-cols-4", 
-                        "xl:grid-cols-5" // Recent 10은 5열로도 충분할 수 있음, 필요시 조정
+                        new20GridCols
                       )}>
-                        {recent10SongsData.map((song) => (
-                          <SongCard key={`recent10-${song.id}`} song={song} />
+                        {new20SongsData.map((song) => (
+                          <SongCard key={`new20-${song.id}`} song={song} />
                         ))}
                       </div>
                      ) : (
-                       <p className="text-muted-foreground">Recent 10 곡 데이터가 없습니다.</p>
+                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (API 연동 확인 중)</p>
                      )}
                   </CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="best30recent10">
+              <TabsContent value="best30new20">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Best 30 + Recent 10 곡</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Best 30 + New 20 곡</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col lg:flex-row gap-6">
                     <div className="lg:w-3/5">
@@ -235,10 +242,7 @@ function ResultContent() {
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
-                          "sm:grid-cols-2",
-                          "md:grid-cols-2",
-                          "lg:grid-cols-3",
-                          "xl:grid-cols-3"
+                          combinedBest30GridCols
                         )}>
                           {best30SongsData.map((song) => (
                             <SongCard key={`combo-best30-${song.id}`} song={song} />
@@ -249,21 +253,18 @@ function ResultContent() {
                       )}
                     </div>
                     <div className="lg:w-2/5">
-                      <h3 className="text-xl font-semibold mb-3 font-headline">Recent 10</h3>
-                       {recent10SongsData.length > 0 ? (
+                      <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
+                       {new20SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
-                          "sm:grid-cols-1",
-                          "md:grid-cols-2",
-                          "lg:grid-cols-2",
-                          "xl:grid-cols-2"
+                           combinedNew20GridCols
                         )}>
-                          {recent10SongsData.map((song) => (
-                            <SongCard key={`combo-recent10-${song.id}`} song={song} />
+                          {new20SongsData.map((song) => (
+                            <SongCard key={`combo-new20-${song.id}`} song={song} />
                           ))}
                         </div>
                        ) : (
-                          <p className="text-muted-foreground">Recent 10 곡 데이터가 없습니다.</p>
+                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (API 연동 확인 중)</p>
                        )}
                     </div>
                   </CardContent>
@@ -284,3 +285,5 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
+    
