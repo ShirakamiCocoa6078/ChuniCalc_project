@@ -16,16 +16,16 @@ import { cn } from "@/lib/utils";
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
-const TARGET_NEW_SONG_RELEASE_DATE = "2024-12-12";
+const TARGET_NEW_SONG_RELEASE_DATE = "2024-12-12"; // New 20 Release Date Cutoff
 
 type RatingApiSongEntry = {
   id: string;
   diff: string;
   title: string;
   score: number;
-  rating: number;
+  rating: number; // API-provided rating
   genre?: string;
-  const?: number;
+  const?: number; // 보면 정수
   updated_at?: string;
 };
 
@@ -34,9 +34,9 @@ type ShowallApiSongEntry = {
   diff: string;
   level: number | string;
   title: string;
-  const: number;
+  const: number | null; // 보면 정수, can be null
   score: number;
-  rating: number;
+  rating: number | null; // API-provided rating, can be null
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
@@ -52,7 +52,7 @@ type MusicSearchApiEntry = {
   title: string;
   genre: string;
   artist: string;
-  release: string;
+  release: string; // Release date string, e.g., "YYYY-MM-DD"
 };
 
 export type CalculationStrategy = "average" | "peak" | "floor";
@@ -64,27 +64,27 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
 
   let ratingValue = 0;
 
-  if (score >= 1009000) {
+  if (score >= 1009000) { // SSS+
     ratingValue = chartConstant + 2.15;
-  } else if (score >= 1007500) {
+  } else if (score >= 1007500) { // SSS
     ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
-  } else if (score >= 1005000) {
+  } else if (score >= 1005000) { // SS+
     ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
-  } else if (score >= 1000000) {
+  } else if (score >= 1000000) { // SS
     ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
-  } else if (score >= 990000) {
+  } else if (score >= 990000) { // S+
     ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
-  } else if (score >= 975000) {
+  } else if (score >= 975000) { // S
     ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
-  } else if (score >= 950000) {
+  } else if (score >= 950000) { // AAA
     ratingValue = chartConstant - 1.50;
-  } else if (score >= 925000) {
+  } else if (score >= 925000) { // AA
     ratingValue = chartConstant - 3.00;
-  } else if (score >= 900000) {
+  } else if (score >= 900000) { // A
     ratingValue = chartConstant - 5.00;
-  } else if (score >= 800000) {
+  } else if (score >= 800000) { // BBB
     ratingValue = (chartConstant - 5.00) / 2.0;
-  } else {
+  } else { // C and below
     ratingValue = 0;
   }
   return Math.max(0, parseFloat(ratingValue.toFixed(2)));
@@ -107,7 +107,6 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   
   const currentRating = calculatedCurrentRating;
 
-  // AI 추천 목표 점수 (임시 로직, 추후 전략에 따라 변경 필요)
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
   
@@ -122,7 +121,7 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   
   return {
     id: apiSong.id,
-    diff: apiSong.diff.toUpperCase(), // 일관성을 위해 대문자로
+    diff: apiSong.diff.toUpperCase(),
     title: apiSong.title,
     chartConstant: typeof chartConst === 'number' ? chartConst : null,
     currentScore: score,
@@ -173,16 +172,21 @@ const calculateNewSongs = (
   const eligibleNewMusicIds = new Set<string>(eligibleNewMusic.map(m => m.id));
 
   const userPlayedEligibleNewSongs = allUserRecords.filter(record =>
-    eligibleNewMusicIds.has(record.id) && record.is_played && record.score > 0 && typeof record.rating === 'number' && typeof record.score === 'number' && typeof record.const === 'number'
+    eligibleNewMusicIds.has(record.id) && 
+    record.is_played && 
+    record.score > 0 && 
+    (typeof record.rating === 'number' || record.rating === null) && // Allow null rating
+    typeof record.score === 'number' && 
+    (typeof record.const === 'number' || record.const === null) // Allow null const
   );
   console.log("User played eligible new songs (before sorting/slicing):", userPlayedEligibleNewSongs);
 
   if (userPlayedEligibleNewSongs.length === 0) {
-    console.warn("User has not played any of the eligible new songs or scores are 0 / rating/const data missing.");
+    console.warn("User has not played any of the eligible new songs or scores are 0 / rating/const data missing for all.");
     return [];
   }
   
-  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const));
+  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const ?? undefined));
 
   mappedUserPlayedNewSongs.sort((a, b) => {
     if (b.currentRating !== a.currentRating) {
@@ -264,7 +268,10 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      const musicSearchBaseQuery = "since:2024-01-01";
+      // music/search.json API는 'since' 파라미터가 정확한 의미로 동작하지 않을 수 있으므로,
+      // 충분한 기간(예: 최근 1년)의 데이터를 가져와 클라이언트에서 'release' 필드로 직접 필터링합니다.
+      // TARGET_NEW_SONG_RELEASE_DATE ("2024-12-12")는 calculateNewSongs 함수 내부에서 사용됩니다.
+      const musicSearchBaseQuery = "since:2024-01-01"; // Fetch recent additions/updates to filter by release date later
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -286,7 +293,13 @@ function ResultContent() {
           else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (rating_data)`;
           criticalError = errorMessage;
         } else {
-          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')) || [];
+          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => 
+            e !== null && 
+            typeof e.id === 'string' && 
+            typeof e.diff === 'string' && 
+            typeof e.score === 'number' && 
+            (typeof e.rating === 'number' || typeof e.const === 'number')
+          ) || [];
           const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
           setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         }
@@ -304,7 +317,17 @@ function ResultContent() {
           if (!criticalError) criticalError = errorMessage;
           else console.warn("Also failed to fetch showall.json:", errorMessage);
         } else {
-          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) && typeof e.score === 'number' && typeof e.is_played === 'boolean' && (typeof e.const === 'number' || e.const === null) && typeof e.is_const_unknown === 'boolean' ) || [];
+          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => 
+            e !== null && 
+            typeof e.id === 'string' && 
+            typeof e.diff === 'string' && 
+            typeof e.updated_at === 'string' && 
+            (typeof e.rating === 'number' || e.rating === null) && 
+            typeof e.score === 'number' && 
+            typeof e.is_played === 'boolean' && 
+            (typeof e.const === 'number' || e.const === null) && 
+            typeof e.is_const_unknown === 'boolean' 
+          ) || [];
         }
 
         const musicSearchData = await musicSearchResponse.json();
@@ -324,7 +347,7 @@ function ResultContent() {
                 typeof e.id === 'string' &&
                 typeof e.title === 'string' &&
                 typeof e.genre === 'string' &&
-                typeof e.release === 'string'
+                typeof e.release === 'string' // Ensure release is a string
             ) || [];
         }
 
@@ -340,7 +363,6 @@ function ResultContent() {
             if (allMusicEntriesFromSearch.length === 0) console.warn("No music entries found from music/search API or it failed, impacting New 20 calculation.");
             if (allUserRecords.length === 0) console.warn("No user records found from showall API or it failed, impacting New 20 calculation.");
         }
-
 
       } catch (error) {
         console.error("Error fetching song data:", error);
