@@ -1,0 +1,25 @@
+{
+  "verse": [
+    {
+      "id": "placeholder_song_id_1",
+      "title": "새로운 시대의 찬가 (Verse 예시)",
+      "genre": "POPS & ANIME",
+      "artist": "가상 아티스트 A",
+      "release": "2024-12-15"
+    },
+    {
+      "id": "placeholder_song_id_2",
+      "title": "미래로의 질주 (Verse 예시)",
+      "genre": "ORIGINAL",
+      "artist": "가상 아티스트 B",
+      "release": "2025-01-20"
+    },
+    {
+      "id": "placeholder_song_id_3",
+      "title": "별빛 속의 멜로디 (Verse 예시)",
+      "genre": "VARIETY",
+      "artist": "가상 아티스트 C",
+      "release": "2025-02-10"
+    }
+  ]
+}
