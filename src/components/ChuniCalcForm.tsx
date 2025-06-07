@@ -69,7 +69,7 @@ export default function ChuniCalcForm() {
       );
 
       const data = await response.json();
-      console.log("Chunirec profile.json API Response:", data); // API 응답 로깅
+      console.log("Chunirec profile.json API Response:", data);
 
       if (response.status === 404) {
         toast({
@@ -101,12 +101,22 @@ export default function ChuniCalcForm() {
         throw new Error(errorMessage);
       }
 
+      let ratingValue: number | null = null;
       if (data && typeof data.rating === 'number') {
-        setCurrentRatingStr(data.rating.toFixed(2));
+        ratingValue = data.rating;
+      } else if (data && typeof data.rating === 'string') {
+        const parsedRating = parseFloat(data.rating);
+        if (!isNaN(parsedRating)) {
+          ratingValue = parsedRating;
+        }
+      }
+
+      if (ratingValue !== null) {
+        setCurrentRatingStr(ratingValue.toFixed(2));
         setIsCurrentRatingLocked(true); 
         toast({
           title: "레이팅 조회 성공!",
-          description: `'${nickname}'님의 현재 레이팅: ${data.rating.toFixed(2)}`,
+          description: `'${nickname}'님의 현재 레이팅: ${ratingValue.toFixed(2)}`,
         });
       } else {
          setCurrentRatingStr("");
@@ -271,4 +281,3 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
-
