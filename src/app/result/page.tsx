@@ -12,11 +12,11 @@ import { Label } from "@/components/ui/label";
 import SongCard, { type Song } from "@/components/SongCard";
 import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import NewSongsData from '@/data/NewSongs.json'; // Import NewSongs.json
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
-const TARGET_NEW_SONG_RELEASE_DATE = "2024-12-12"; // New 20 Release Date Cutoff
 
 type RatingApiSongEntry = {
   id: string;
@@ -29,14 +29,23 @@ type RatingApiSongEntry = {
   updated_at?: string;
 };
 
+// Type for songs defined in NewSongs.json (similar to MusicSearchApiEntry)
+type DefinedNewSongEntry = {
+  id: string;
+  title: string;
+  genre: string;
+  artist: string;
+  release: string;
+};
+
 type ShowallApiSongEntry = {
   id: string;
   diff: string;
-  level: number | string; // 보면 정수 불명 시 사용될 수 있음
+  level: number | string; 
   title: string;
-  const: number | null; // 보면 정수, can be null
+  const: number | null; 
   score: number;
-  rating: number | null; // API-provided rating, can be null
+  rating: number | null; 
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
@@ -45,14 +54,6 @@ type ShowallApiSongEntry = {
   genre: string;
   updated_at: string;
   is_played: boolean;
-};
-
-type MusicSearchApiEntry = {
-  id: string;
-  title: string;
-  genre: string;
-  artist: string;
-  release: string; // Release date string, e.g., "YYYY-MM-DD"
 };
 
 export type CalculationStrategy = "average" | "peak" | "floor";
@@ -67,15 +68,15 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
   if (score >= 1009000) { // SSS+
     ratingValue = chartConstant + 2.15;
   } else if (score >= 1007500) { // SSS
-    ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
+    ratingValue = chartConstant + 2.00 + Math.min(0.15, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
   } else if (score >= 1005000) { // SS+
-    ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
+    ratingValue = chartConstant + 1.50 + Math.min(0.50, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
   } else if (score >= 1000000) { // SS
-    ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
+    ratingValue = chartConstant + 1.00 + Math.min(0.50, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
   } else if (score >= 990000) { // S+
-    ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
+    ratingValue = chartConstant + 0.60 + Math.min(0.40, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
   } else if (score >= 975000) { // S
-    ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+    ratingValue = chartConstant + 0.00 + Math.min(0.60, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
   } else if (score >= 950000) { // AAA
     ratingValue = chartConstant - 1.50;
   } else if (score >= 925000) { // AA
@@ -87,6 +88,19 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
   } else { // C and below
     ratingValue = 0;
   }
+  // Ensure max values for additions are strictly adhered to
+  if (score >= 1007500 && score < 1009000) { // SSS
+      ratingValue = Math.min(chartConstant + 2.00 + 0.14, chartConstant + 2.00 + Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
+  } else if (score >= 1005000 && score < 1007500) { // SS+
+      ratingValue = Math.min(chartConstant + 1.50 + 0.49, chartConstant + 1.50 + Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
+  } else if (score >= 1000000 && score < 1005000) { // SS
+      ratingValue = Math.min(chartConstant + 1.00 + 0.49, chartConstant + 1.00 + Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
+  } else if (score >= 990000 && score < 1000000) { // S+
+      ratingValue = Math.min(chartConstant + 0.60 + 0.39, chartConstant + 0.60 + Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
+  } else if (score >= 975000 && score < 990000) { // S
+      ratingValue = Math.min(chartConstant + 0.00 + 0.59, chartConstant + 0.00 + Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+  }
+
   return Math.max(0, parseFloat(ratingValue.toFixed(2)));
 };
 
@@ -98,7 +112,7 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
     effectiveChartConstant = chartConstantOverride;
   } else if (typeof apiSong.const === 'number' && apiSong.const > 0) {
     effectiveChartConstant = apiSong.const;
-  } else if ( // Fallback to level if const is unknown/invalid for ShowallApiSongEntry
+  } else if (
     'is_const_unknown' in apiSong && apiSong.is_const_unknown &&
     'level' in apiSong && apiSong.level
   ) {
@@ -112,7 +126,6 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && typeof score === 'number') {
     calculatedCurrentRating = calculateChunithmSongRating(score, effectiveChartConstant);
   } else {
-    // If chart constant is still unknown, use API rating or 0
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
   
@@ -130,7 +143,7 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   
   return {
     id: apiSong.id,
-    diff: apiSong.diff, // Keep original casing for display
+    diff: apiSong.diff,
     title: apiSong.title,
     chartConstant: effectiveChartConstant,
     currentScore: score,
@@ -160,42 +173,34 @@ const difficultyOrder: { [key: string]: number } = {
 };
 
 const calculateNewSongs = (
-  allMusicEntries: MusicSearchApiEntry[],
+  definedNewSongs: DefinedNewSongEntry[],
   allUserRecords: ShowallApiSongEntry[],
   count: number
 ): Song[] => {
-  if (!allMusicEntries || allMusicEntries.length === 0 || !allUserRecords || allUserRecords.length === 0) {
+  if (!definedNewSongs || definedNewSongs.length === 0 || !allUserRecords || allUserRecords.length === 0) {
+    console.warn("New song definitions or user records are empty. Cannot calculate New 20.");
     return [];
   }
 
-  const eligibleNewMusic = allMusicEntries.filter(music => {
-    return music.release > TARGET_NEW_SONG_RELEASE_DATE && music.genre !== "WORLD'S END";
-  });
-  console.log(`Eligible new music (after target release date '${TARGET_NEW_SONG_RELEASE_DATE}' & genre filter):`, eligibleNewMusic);
+  const definedNewSongIds = new Set<string>(definedNewSongs.map(s => s.id));
+  console.log(`Defined new song IDs from NewSongs.json (count: ${definedNewSongIds.size}):`, definedNewSongIds);
 
-  if (eligibleNewMusic.length === 0) {
-    console.warn(`No music found released after ${TARGET_NEW_SONG_RELEASE_DATE} or matching genre criteria.`);
-    return [];
-  }
-
-  const eligibleNewMusicIds = new Set<string>(eligibleNewMusic.map(m => m.id));
-
-  const userPlayedEligibleNewSongs = allUserRecords.filter(record =>
-    eligibleNewMusicIds.has(record.id) && 
-    record.is_played && 
-    record.score > 0 && 
-    (typeof record.rating === 'number' || record.rating === null) && 
+  const userPlayedMatchingNewSongs = allUserRecords.filter(record =>
+    definedNewSongIds.has(record.id) &&
+    record.is_played &&
+    record.score > 0 &&
+    (typeof record.rating === 'number' || record.rating === null) &&
     typeof record.score === 'number' &&
-    (typeof record.const === 'number' || record.const === null || record.is_const_unknown) // Allow if const is unknown
+    (typeof record.const === 'number' || record.const === null || record.is_const_unknown)
   );
-  console.log("User played eligible new songs (before mapping, sorting/slicing):", userPlayedEligibleNewSongs);
+  console.log("User played songs matching NewSongs.json definitions (before mapping, sorting/slicing):", userPlayedMatchingNewSongs);
 
-  if (userPlayedEligibleNewSongs.length === 0) {
-    console.warn("User has not played any of the eligible new songs or scores are 0 / rating/const data missing for all.");
+  if (userPlayedMatchingNewSongs.length === 0) {
+    console.warn("User has not played any of the songs defined in NewSongs.json, or scores/rating data missing for all played matches.");
     return [];
   }
   
-  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const ?? undefined));
+  const mappedUserPlayedNewSongs = userPlayedMatchingNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const ?? undefined));
 
   mappedUserPlayedNewSongs.sort((a, b) => {
     if (b.currentRating !== a.currentRating) {
@@ -211,6 +216,7 @@ const calculateNewSongs = (
     return diffBOrder - diffAOrder;
   });
 
+  console.log("Sorted New 20 candidate songs (after mapping and sorting):", mappedUserPlayedNewSongs.slice(0, count));
   return mappedUserPlayedNewSongs.slice(0, count);
 };
 
@@ -277,20 +283,10 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      // Attempt to fetch all music data by not providing a 'q' parameter, or using a very broad one if required.
-      // The API documentation should clarify the best way to get "all" or "most recent broad set" of music.
-      // For now, removing 'q' entirely. If API requires 'q', a very broad query like 'q=release_date>2000-01-01' might be needed.
-      // Or, stick to a recent date like 'since:2023-01-01' if "all" is too much data or not supported.
-      // For this change, we remove the `q` param, assuming it fetches a broader set.
-      const musicSearchUrl = `https://api.chunirec.net/2.0/music/search.json?region=jp2&token=${API_TOKEN}`;
-      // const musicSearchBaseQuery = ""; // No specific query to fetch all/broad set. Filter client-side.
-
-
       try {
-        const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
+        const [ratingDataResponse, showallResponse] = await Promise.all([
           fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
           fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
-          fetch(musicSearchUrl) // Use the modified URL
         ]);
 
         let criticalError = null;
@@ -338,49 +334,35 @@ function ResultContent() {
             (typeof e.rating === 'number' || e.rating === null) && 
             typeof e.score === 'number' && 
             typeof e.is_played === 'boolean' && 
-            (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') && // Allow if const is unknown
+            (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') &&
             typeof e.is_const_unknown === 'boolean' &&
-            ('level' in e) // Ensure level field exists
+            ('level' in e) 
           ) || [];
         }
-
-        const musicSearchData = await musicSearchResponse.json();
-        console.log('Chunirec music/search.json API Response:', musicSearchData);
-        let allMusicEntriesFromSearch: MusicSearchApiEntry[] = [];
-        if (!musicSearchResponse.ok) {
-            const errorData = musicSearchData || {};
-            let errorMessage = `최신 곡 목록을 가져오는 데 실패했습니다. (상태: ${musicSearchResponse.status})`;
-            if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-            // Removed specific error message for query string as it's now broader
-
-            if (!criticalError) criticalError = errorMessage;
-            else console.warn("Also failed to fetch music/search.json:", errorMessage);
-        } else {
-            allMusicEntriesFromSearch = musicSearchData.filter((e: any): e is MusicSearchApiEntry =>
-                e !== null &&
-                typeof e.id === 'string' &&
-                typeof e.title === 'string' &&
-                typeof e.genre === 'string' &&
-                typeof e.release === 'string' 
-            ) || [];
-        }
-
+        
         if (criticalError) {
             throw new Error(criticalError);
         }
-
-        if (allMusicEntriesFromSearch.length > 0 && allUserRecords.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(allMusicEntriesFromSearch, allUserRecords, NEW_COUNT);
+        
+        // Calculate New 20 songs using NewSongs.json and allUserRecords
+        // Assuming NewSongsData is { verse: [...] }
+        const definedNewSongsList = NewSongsData.verse as DefinedNewSongEntry[];
+        if (definedNewSongsList.length > 0 && allUserRecords.length > 0) {
+            const calculatedNewSongs = calculateNewSongs(definedNewSongsList, allUserRecords, NEW_COUNT);
             setNew20SongsData(calculatedNewSongs); 
         } else {
             setNew20SongsData([]);
-            if (allMusicEntriesFromSearch.length === 0) console.warn("No music entries found from music/search API or it failed, impacting New 20 calculation.");
+            if (definedNewSongsList.length === 0) console.warn("NewSongs.json is empty or not loaded correctly, impacting New 20 calculation.");
             if (allUserRecords.length === 0) console.warn("No user records found from showall API or it failed, impacting New 20 calculation.");
         }
 
       } catch (error) {
         console.error("Error fetching song data:", error);
-        setErrorLoadingSongs(error instanceof Error ? error.message : "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.");
+        let detailedErrorMessage = "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.";
+        if (error instanceof Error) {
+            detailedErrorMessage = error.message;
+        }
+        setErrorLoadingSongs(detailedErrorMessage);
         setBest30SongsData([]);
         setNew20SongsData([]);
       } finally {
@@ -389,7 +371,7 @@ function ResultContent() {
     };
 
     fetchSongData();
-  }, [userNameForApi]); // Removed searchParams as userNameForApi covers its changes
+  }, [userNameForApi]); 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -478,7 +460,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. music/search API가 모든 곡을 반환하지 않을 수 있습니다.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. NewSongs.json 파일이 올바르게 로드되었는지도 확인해주세요.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -524,7 +506,7 @@ function ResultContent() {
                         ))}
                       </div>
                      ) : (
-                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (지정된 날짜 이후 출시된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
+                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
                      )}
                   </CardContent>
                 </Card>
@@ -563,7 +545,7 @@ function ResultContent() {
                           ))}
                         </div>
                        ) : (
-                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (지정된 날짜 이후 출시된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
+                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
                        )}
                     </div>
                   </CardContent>
@@ -584,5 +566,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    

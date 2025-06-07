@@ -1,16 +1,16 @@
 
 "use client";
 
-import type { CalculationStrategy } from "@/app/result/page"; // CalculationStrategy 타입을 가져옵니다.
+import type { CalculationStrategy } from "@/app/result/page"; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Music2, Star, Target as TargetIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type Song = {
   id: string;
-  diff: string; // ULT, MAS, EXP, ADV, BAS (original casing)
+  diff: string; 
   title: string;
-  chartConstant: number | null; // 보면 정수
+  chartConstant: number | null; 
   currentScore: number;
   currentRating: number;
   targetScore: number;
@@ -19,7 +19,7 @@ export type Song = {
 
 type SongCardProps = {
   song: Song;
-  calculationStrategy: CalculationStrategy; // 전략 prop 추가
+  calculationStrategy: CalculationStrategy; 
 };
 
 const difficultyColors: { [key: string]: string } = {
@@ -40,7 +40,6 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
     return difficultyColors[upperDiff] || difficultyColors.UNKNOWN;
   };
 
-  // 갱신 가능 여부 테두리: 점수 1,009,000 이상이면 빨강, 아니면 초록
   const borderColorClass = song.currentScore >= 1009000 ? "border-red-500" : "border-green-500";
 
   return (
@@ -52,20 +51,20 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
     >
       <CardContent className="p-0 flex h-full">
         <div className="w-1/3 relative h-full bg-muted flex items-center justify-center">
-          {/* 자켓 이미지 영역 - 비워둠 */}
+          {/* Jacket image area - kept empty as per request */}
         </div>
         <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
           <div>
             <h3 className={cn(
                 "text-sm font-semibold font-headline truncate flex items-center",
-                getDifficultyColorClass(song.diff) // 곡명에 난이도 색상 적용
+                getDifficultyColorClass(song.diff) // Apply color to title
               )}
             >
               <Music2 className="w-4 h-4 mr-1.5 text-primary shrink-0" />
               {song.title}
             </h3>
             <span className="text-xs font-bold ml-1 text-muted-foreground">
-              {song.diff} {/* 난이도 텍스트 (대문자 변환 없이) */}
+              {song.diff} {/* Difficulty text without uppercasing, color now on title */}
             </span>
           </div>
           <div className="space-y-1.5 text-xs mt-1">
@@ -89,5 +88,3 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
     </Card>
   );
 }
-
-    
