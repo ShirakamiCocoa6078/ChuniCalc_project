@@ -12,15 +12,18 @@ import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTrian
 import { cn } from "@/lib/utils";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
+const BEST_COUNT = 30; // Though rating_data.json's best.entries is already 30
 const NEW_COUNT = 20; 
 
 type RatingApiSongEntry = {
   id: string; 
-  diff: string; // Added diff
+  diff: string;
   title: string;
   score: number;
   rating: number;
-  // Other fields if used by mapApiSongToAppSong
+  // genre: string; // available in rating_data.json best.entries
+  // const: number; // available
+  // updated_at: string; // available
 };
 
 type ShowallApiSongEntry = {
@@ -41,17 +44,26 @@ type ShowallApiSongEntry = {
   is_played: boolean;
 };
 
+type MusicSearchApiEntry = {
+  id: string;
+  title: string;
+  genre: string;
+  artist: string;
+  release: string; // "YYYY-MM-DD"
+};
+
 
 const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number): Song => {
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
+  // Placeholder target scores/ratings - can be refined later
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
   return {
-    id: apiSong.id, // music_id should be present due to filtering
-    diff: apiSong.diff, // difficulty
+    id: apiSong.id,
+    diff: apiSong.diff,
     title: apiSong.title,
     jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Jkt'}`, 
     currentScore: currentScore,
@@ -66,22 +78,50 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
+    // Secondary sort: higher target score difference first
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
   });
 };
 
-const calculateNewSongs = (allRecords: ShowallApiSongEntry[], count: number): Song[] => {
-  if (!allRecords || allRecords.length === 0) {
+const calculateNewSongsByReleaseDate = (
+  newlyReleasedSongs: MusicSearchApiEntry[],
+  allUserRecords: ShowallApiSongEntry[],
+  count: number
+): Song[] => {
+  if (!newlyReleasedSongs || newlyReleasedSongs.length === 0 || !allUserRecords || allUserRecords.length === 0) {
     return [];
   }
-  const sortedByDate = [...allRecords]
-    .filter(record => record.is_played) 
-    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+
+  const releaseDateMap = new Map<string, string>();
+  const candidateNewReleaseSongIds = new Set<string>();
+
+  newlyReleasedSongs.forEach(song => {
+    if (song.genre !== "WORLD'S END") {
+      releaseDateMap.set(song.id, song.release);
+      candidateNewReleaseSongIds.add(song.id);
+    }
+  });
+
+  const userPlayedNewSongs = allUserRecords.filter(record => 
+    candidateNewReleaseSongIds.has(record.id) && record.score > 0
+  );
+
+  // Sort: 1. Release Date (desc), 2. User Rating (desc), 3. User Score (desc)
+  userPlayedNewSongs.sort((a, b) => {
+    const releaseA = releaseDateMap.get(a.id) || "0000-00-00";
+    const releaseB = releaseDateMap.get(b.id) || "0000-00-00";
+    if (releaseB !== releaseA) {
+      return new Date(releaseB).getTime() - new Date(releaseA).getTime();
+    }
+    if (b.rating !== a.rating) {
+      return b.rating - a.rating;
+    }
+    return b.score - a.score;
+  });
   
-  const recentPlayed = sortedByDate.slice(0, count);
-  return recentPlayed.map((record, index) => mapApiSongToAppSong(record, index));
+  return userPlayedNewSongs.slice(0, count).map((record, index) => mapApiSongToAppSong(record, index));
 };
 
 
@@ -116,11 +156,11 @@ function ResultContent() {
           }
         } else {
           console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi); // Fallback to query param nickname
+          setApiPlayerName(userNameForApi); 
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi); // Fallback to query param nickname
+        setApiPlayerName(userNameForApi); 
       }
     };
     fetchPlayerProfile();
@@ -136,7 +176,7 @@ function ResultContent() {
       }
 
       const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
-      if (!userNameParam && !searchParams.get("user_id")) {
+      if (!userNameParam && !searchParams.get("user_id")) { // user_id is not used, but keeping for future
          setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
          setIsLoadingSongs(false);
          return;
@@ -145,11 +185,18 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
+      // Define the date for "since" query, e.g., start of the current year or a fixed recent date
+      // For example, "since:2024-01-01". User requested "since:2024-12-12" which is future, using a placeholder.
+      const sinceDateQuery = "since:2024-01-01"; // Placeholder, adjust as needed
+
       try {
-        const [ratingDataResponse, showallResponse] = await Promise.all([
+        const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
           fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
-          fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2${userNameParam}&token=${API_TOKEN}`)
+          fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
+          fetch(`https://api.chunirec.net/2.0/music/search.json?q=${encodeURIComponent(sinceDateQuery)}&region=jp2&token=${API_TOKEN}`)
         ]);
+
+        let criticalError = null;
 
         // Process rating_data.json (for Best 30)
         const ratingData = await ratingDataResponse.json();
@@ -159,51 +206,83 @@ function ResultContent() {
           const errorData = ratingData || {};
           let errorMessage = `곡 레이팅 정보를 가져오는 데 실패했습니다. (상태: ${ratingDataResponse.status})`;
           if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-          if (ratingDataResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다.`;
-          else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다.`;
-          // If rating_data fails, we consider it a critical error for song display
-          throw new Error(errorMessage);
+          if (ratingDataResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. (rating_data)`;
+          else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (rating_data)`;
+          criticalError = errorMessage;
+        } else {
+          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
+          const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index));
+          setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         }
-        // Ensure entries are not null and have an id before mapping
-        const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
-        const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index));
-        setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         
-
-        // Process showall.json (for New 20)
+        // Process showall.json (for New 20 calculation base)
         const showallData = await showallResponse.json();
         console.log('Chunirec showall.json API Response:', showallData);
-
+        let allUserRecords: ShowallApiSongEntry[] = [];
         if (!showallResponse.ok) {
           const errorData = showallData || {};
           let errorMessage = `전체 곡 기록 정보를 가져오는 데 실패했습니다. (상태: ${showallResponse.status})`;
            if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-          if (showallResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 전체 곡 기록을 찾을 수 없습니다.`;
-          else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다.`;
-          // Don't throw here if rating_data was successful, just set new20 to empty and log error
-          console.error(errorMessage);
-          setNew20SongsData([]); 
+          if (showallResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 전체 곡 기록을 찾을 수 없습니다. (showall)`;
+          else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (showall)`;
+          
+          if (!criticalError) criticalError = errorMessage; // If rating_data was ok, this becomes critical for New20
+          else console.error("Also failed to fetch showall.json:", errorMessage); // Log if rating_data also failed
         } else {
-          const allUserRecords: ShowallApiSongEntry[] = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
-          const calculatedNewSongs = calculateNewSongs(allUserRecords, NEW_COUNT);
-          setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); 
+          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
         }
+
+        // Process music/search.json (for New 20 calculation base)
+        const musicSearchData = await musicSearchResponse.json();
+        console.log('Chunirec music/search.json API Response:', musicSearchData);
+        let newlyReleasedSongs: MusicSearchApiEntry[] = [];
+        if (!musicSearchResponse.ok) {
+            const errorData = musicSearchData || {};
+            let errorMessage = `최신 곡 목록을 가져오는 데 실패했습니다. (상태: ${musicSearchResponse.status})`;
+            if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
+            else if (musicSearchResponse.status === 400) errorMessage += `. 검색어 '${sinceDateQuery}'를 확인해주세요.`;
+            
+            if (!criticalError) criticalError = errorMessage;
+            else console.error("Also failed to fetch music/search.json:", errorMessage);
+        } else {
+            newlyReleasedSongs = musicSearchData.filter((e: any): e is MusicSearchApiEntry => 
+                e !== null && 
+                typeof e.id === 'string' &&
+                typeof e.genre === 'string' &&
+                typeof e.release === 'string'
+            ) || [];
+        }
+
+        if (criticalError) {
+            throw new Error(criticalError);
+        }
+        
+        // Calculate New 20 songs using the new logic
+        if (newlyReleasedSongs.length > 0 && allUserRecords.length > 0) {
+            const calculatedNewSongs = calculateNewSongsByReleaseDate(newlyReleasedSongs, allUserRecords, NEW_COUNT);
+            setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); // Keep sorting by rating for display consistency
+        } else {
+            setNew20SongsData([]); // Set to empty if dependent data is missing
+            if (newlyReleasedSongs.length === 0) console.warn("No newly released songs found or music/search API failed.");
+            if (allUserRecords.length === 0) console.warn("No user records found or showall API failed.");
+        }
+
 
       } catch (error) {
         console.error("Error fetching song data:", error);
         setErrorLoadingSongs(error instanceof Error ? error.message : "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.");
-        setBest30SongsData([]);
-        setNew20SongsData([]);
+        setBest30SongsData([]); // Clear data on critical error
+        setNew20SongsData([]);  // Clear data on critical error
       } finally {
         setIsLoadingSongs(false);
       }
     };
 
     fetchSongData();
-  }, [searchParams, userNameForApi]);
+  }, [searchParams, userNameForApi]); // userNameForApi is a dependency for API calls
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; 
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
 
@@ -300,7 +379,7 @@ function ResultContent() {
                         ))}
                       </div>
                      ) : (
-                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (최근 플레이 기록이 없거나 API 오류일 수 있습니다.)</p>
+                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (최근 출시된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
                      )}
                   </CardContent>
                 </Card>
@@ -339,7 +418,7 @@ function ResultContent() {
                           ))}
                         </div>
                        ) : (
-                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (최근 플레이 기록이 없거나 API 오류일 수 있습니다.)</p>
+                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (최근 출시된 곡 중 플레이 기록이 없거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
                        )}
                     </div>
                   </CardContent>
@@ -360,3 +439,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
