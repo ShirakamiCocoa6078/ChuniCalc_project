@@ -11,7 +11,7 @@ import SongCard, { type Song } from "@/components/SongCard";
 import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_TOKEN = process.env.CHUNIREC_API_TOKEN;
+const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 
 type ApiSongEntry = {
   id: string; // Music ID
@@ -25,13 +25,15 @@ const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
+  // 목표 점수/레이팅 생성 로직 (플레이스홀더)
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
   return {
-    id: apiSong.id || `song-${index}`,
+    id: apiSong.id || `song-${index}`, // music_id for jacket fetching
     title: apiSong.title,
-    jacketUrl: `https://db.chunirec.net/music/${apiSong.id}`, // 새 URL 형식으로 변경
+    // jacketUrl은 SongCard에서 /api/get-jacket-image를 통해 가져오므로, 여기서는 placeholder.
+    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Jkt'}`,
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -79,15 +81,15 @@ function ResultContent() {
           if (data.player_name) {
             setApiPlayerName(data.player_name);
           } else {
-            setApiPlayerName(userNameForApi);
+            setApiPlayerName(userNameForApi); // API에서 player_name 못가져오면 URL의 닉네임 사용
           }
         } else {
           console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi);
+          setApiPlayerName(userNameForApi); // 실패 시 URL 닉네임 사용
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi);
+        setApiPlayerName(userNameForApi); // 에러 시 URL 닉네임 사용
       }
     };
     fetchPlayerProfile();
@@ -106,11 +108,11 @@ function ResultContent() {
 
       const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
       if (!userNameParam && !searchParams.get("user_id")) {
-        setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
-        setIsLoadingSongs(false);
-        setBest30SongsData([]);
-        setNew20SongsData([]);
-        return;
+         setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
+         setIsLoadingSongs(false);
+         setBest30SongsData([]);
+         setNew20SongsData([]);
+         return;
       }
 
       try {
@@ -142,10 +144,12 @@ function ResultContent() {
         }
 
 
-        const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
+        const bestEntries = data.best?.entries?.filter((e: any) => e !== null && e.id).map(mapApiSongToAppSong) || [];
         setBest30SongsData(sortSongs(bestEntries));
 
-        // New 20 (Recent 10) 데이터는 비워둠
+        // New 20 (Recent 10) 데이터는 API 응답에 recent.entries 로 있으나, 현재는 비워두기로 함.
+        // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null && e.id).map(mapApiSongToAppSong) || [];
+        // setNew20SongsData(sortSongs(recentEntries)); // New20은 일단 비워둠
         setNew20SongsData([]);
 
 
@@ -163,6 +167,7 @@ function ResultContent() {
   }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  // New 20이 비어있으므로, 컬럼 수는 Best30과 유사하게 유지하거나 필요시 조정
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
