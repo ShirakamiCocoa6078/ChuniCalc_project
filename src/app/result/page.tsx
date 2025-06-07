@@ -32,7 +32,7 @@ type RatingApiSongEntry = {
 type ShowallApiSongEntry = {
   id: string;
   diff: string;
-  level: number | string;
+  level: number | string; // 보면 정수 불명 시 사용될 수 있음
   title: string;
   const: number | null; // 보면 정수, can be null
   score: number;
@@ -92,16 +92,27 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
 
 const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number, chartConstantOverride?: number): Song => {
   const score = apiSong.score;
-  const chartConst = chartConstantOverride ?? apiSong.const;
+  
+  let effectiveChartConstant: number | null = null;
+  if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
+    effectiveChartConstant = chartConstantOverride;
+  } else if (typeof apiSong.const === 'number' && apiSong.const > 0) {
+    effectiveChartConstant = apiSong.const;
+  } else if ( // Fallback to level if const is unknown/invalid for ShowallApiSongEntry
+    'is_const_unknown' in apiSong && apiSong.is_const_unknown &&
+    'level' in apiSong && apiSong.level
+  ) {
+    const parsedLevel = parseFloat(String(apiSong.level));
+    if (!isNaN(parsedLevel) && parsedLevel > 0) {
+      effectiveChartConstant = parsedLevel;
+    }
+  }
+
   let calculatedCurrentRating: number;
-
-  const isConstUnknown = 'is_const_unknown' in apiSong && apiSong.is_const_unknown;
-
-  if (isConstUnknown && typeof chartConst !== 'number') {
-    calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
-  } else if (typeof chartConst === 'number' && chartConst > 0 && typeof score === 'number') {
-    calculatedCurrentRating = calculateChunithmSongRating(score, chartConst);
+  if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && typeof score === 'number') {
+    calculatedCurrentRating = calculateChunithmSongRating(score, effectiveChartConstant);
   } else {
+    // If chart constant is still unknown, use API rating or 0
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
   
@@ -111,19 +122,17 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
   
   let targetRating: number;
-  if (isConstUnknown && typeof chartConst !== 'number') {
-    targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
-  } else if (typeof chartConst === 'number' && chartConst > 0) {
-    targetRating = calculateChunithmSongRating(targetScore, chartConst);
+  if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0) {
+    targetRating = calculateChunithmSongRating(targetScore, effectiveChartConstant);
   } else {
      targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   }
   
   return {
     id: apiSong.id,
-    diff: apiSong.diff.toUpperCase(),
+    diff: apiSong.diff, // Keep original casing for display
     title: apiSong.title,
-    chartConstant: typeof chartConst === 'number' ? chartConst : null,
+    chartConstant: effectiveChartConstant,
     currentScore: score,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -137,7 +146,7 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
       return b.currentRating - a.currentRating;
     }
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
-    const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
+    const scoreDiffB = b.targetScore > 0 ? (b.targetScore - b.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
   });
 };
@@ -176,10 +185,10 @@ const calculateNewSongs = (
     record.is_played && 
     record.score > 0 && 
     (typeof record.rating === 'number' || record.rating === null) && 
-    typeof record.score === 'number' && 
-    (typeof record.const === 'number' || record.const === null) 
+    typeof record.score === 'number' &&
+    (typeof record.const === 'number' || record.const === null || record.is_const_unknown) // Allow if const is unknown
   );
-  console.log("User played eligible new songs (before sorting/slicing):", userPlayedEligibleNewSongs);
+  console.log("User played eligible new songs (before mapping, sorting/slicing):", userPlayedEligibleNewSongs);
 
   if (userPlayedEligibleNewSongs.length === 0) {
     console.warn("User has not played any of the eligible new songs or scores are 0 / rating/const data missing for all.");
@@ -268,13 +277,20 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      const musicSearchBaseQuery = "since:2024-01-01"; 
+      // Attempt to fetch all music data by not providing a 'q' parameter, or using a very broad one if required.
+      // The API documentation should clarify the best way to get "all" or "most recent broad set" of music.
+      // For now, removing 'q' entirely. If API requires 'q', a very broad query like 'q=release_date>2000-01-01' might be needed.
+      // Or, stick to a recent date like 'since:2023-01-01' if "all" is too much data or not supported.
+      // For this change, we remove the `q` param, assuming it fetches a broader set.
+      const musicSearchUrl = `https://api.chunirec.net/2.0/music/search.json?region=jp2&token=${API_TOKEN}`;
+      // const musicSearchBaseQuery = ""; // No specific query to fetch all/broad set. Filter client-side.
+
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
           fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
           fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
-          fetch(`https://api.chunirec.net/2.0/music/search.json?q=${encodeURIComponent(musicSearchBaseQuery)}&region=jp2&token=${API_TOKEN}`)
+          fetch(musicSearchUrl) // Use the modified URL
         ]);
 
         let criticalError = null;
@@ -322,8 +338,9 @@ function ResultContent() {
             (typeof e.rating === 'number' || e.rating === null) && 
             typeof e.score === 'number' && 
             typeof e.is_played === 'boolean' && 
-            (typeof e.const === 'number' || e.const === null) && 
-            typeof e.is_const_unknown === 'boolean' 
+            (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') && // Allow if const is unknown
+            typeof e.is_const_unknown === 'boolean' &&
+            ('level' in e) // Ensure level field exists
           ) || [];
         }
 
@@ -334,7 +351,7 @@ function ResultContent() {
             const errorData = musicSearchData || {};
             let errorMessage = `최신 곡 목록을 가져오는 데 실패했습니다. (상태: ${musicSearchResponse.status})`;
             if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-            else if (musicSearchResponse.status === 400) errorMessage += `. 검색어 '${musicSearchBaseQuery}'를 확인해주세요.`;
+            // Removed specific error message for query string as it's now broader
 
             if (!criticalError) criticalError = errorMessage;
             else console.warn("Also failed to fetch music/search.json:", errorMessage);
@@ -372,7 +389,7 @@ function ResultContent() {
     };
 
     fetchSongData();
-  }, [userNameForApi]);
+  }, [userNameForApi]); // Removed searchParams as userNameForApi covers its changes
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -461,7 +478,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. music/search API가 모든 곡을 반환하지 않을 수 있습니다.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -567,3 +584,5 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
+    

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 export type Song = {
   id: string;
-  diff: string; // ULT, MAS, EXP, ADV, BAS
+  diff: string; // ULT, MAS, EXP, ADV, BAS (original casing)
   title: string;
   chartConstant: number | null; // 보면 정수
   currentScore: number;
@@ -20,16 +20,14 @@ export type Song = {
 type SongCardProps = {
   song: Song;
   calculationStrategy: CalculationStrategy; // 전략 prop 추가
-  // onClick?: (songId: string, diff: string) => void; // 추후 클릭 이벤트용
-  // isExcluded?: boolean; // 추후 제외된 곡 표시용
 };
 
 const difficultyColors: { [key: string]: string } = {
-  ULT: "text-[#9F5D67]", // 보라색 계열
-  MAS: "text-[#CE12CE]", // 마젠타/핫핑크 계열
-  EXP: "text-[#F10B0B]", // 빨간색 계열
-  ADV: "text-[#EF9F00]", // 주황색 계열
-  BAS: "text-[#40C540]", // 초록색 계열
+  ULT: "text-[#9F5D67]", 
+  MAS: "text-[#CE12CE]", 
+  EXP: "text-[#F10B0B]",
+  ADV: "text-[#EF9F00]", 
+  BAS: "text-[#40C540]",
   UNKNOWN: "text-muted-foreground",
 };
 
@@ -37,24 +35,20 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
   const scoreDifference = song.targetScore > 0 ? song.targetScore - song.currentScore : 0;
   const ratingDifference = song.targetRating > 0 ? parseFloat((song.targetRating - song.currentRating).toFixed(2)) : 0;
 
-  const getDifficultyDisplay = (diff: string) => {
+  const getDifficultyColorClass = (diff: string) => {
     const upperDiff = diff.toUpperCase();
     return difficultyColors[upperDiff] || difficultyColors.UNKNOWN;
   };
 
-  // 임시 테두리 로직: 보면정수 + 2.10 이상이면 갱신 힘든 것으로 간주 (빨강), 아니면 초록
-  // 실제 최고점은 1009000점 (보면정수 + 2.15)
-  const isMaxRatingApprox = song.chartConstant !== null && song.currentRating >= song.chartConstant + 2.10;
-  const borderColorClass = isMaxRatingApprox ? "border-red-500" : "border-green-500";
+  // 갱신 가능 여부 테두리: 점수 1,009,000 이상이면 빨강, 아니면 초록
+  const borderColorClass = song.currentScore >= 1009000 ? "border-red-500" : "border-green-500";
 
   return (
     <Card className={cn(
         "overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full border-2",
         borderColorClass
-        // song.isExcluded ? "opacity-50" : "" // 추후 제외된 곡 스타일
       )} 
       style={{ aspectRatio: '2 / 1' }}
-      // onClick={() => onClick?.(song.id, song.diff)} // 추후 클릭 이벤트
     >
       <CardContent className="p-0 flex h-full">
         <div className="w-1/3 relative h-full bg-muted flex items-center justify-center">
@@ -62,12 +56,16 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
         </div>
         <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
           <div>
-            <h3 className="text-sm font-semibold font-headline truncate text-foreground flex items-center">
+            <h3 className={cn(
+                "text-sm font-semibold font-headline truncate flex items-center",
+                getDifficultyColorClass(song.diff) // 곡명에 난이도 색상 적용
+              )}
+            >
               <Music2 className="w-4 h-4 mr-1.5 text-primary shrink-0" />
               {song.title}
             </h3>
-            <span className={cn("text-xs font-bold ml-1", getDifficultyDisplay(song.diff))}>
-              {song.diff.toUpperCase()}
+            <span className="text-xs font-bold ml-1 text-muted-foreground">
+              {song.diff} {/* 난이도 텍스트 (대문자 변환 없이) */}
             </span>
           </div>
           <div className="space-y-1.5 text-xs mt-1">
@@ -91,3 +89,5 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
     </Card>
   );
 }
+
+    
