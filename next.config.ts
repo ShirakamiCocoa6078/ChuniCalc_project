@@ -1,3 +1,4 @@
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
@@ -18,6 +19,9 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  env: {
+    CHUNIREC_API_TOKEN: process.env.CHUNIREC_API_TOKEN,
+  }
 };
 
 export default nextConfig;
