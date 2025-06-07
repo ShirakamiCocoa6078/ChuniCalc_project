@@ -20,7 +20,7 @@ const BEST_COUNT = 30;
 const NEW_COUNT = 20;
 
 const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 type CachedData<T> = {
   timestamp: number;
