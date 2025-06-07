@@ -66,7 +66,7 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
     id: apiSong.id,
     diff: apiSong.diff,
     title: apiSong.title,
-    // Use a generic placeholder, SongCard will not attempt to load an image
+    // This URL is a placeholder as SongCard does not attempt to load an image.
     jacketUrl: `https://placehold.co/120x120.png?text=Jkt`,
     currentScore: currentScore,
     currentRating: currentRating,
@@ -90,12 +90,12 @@ const difficultyOrder: { [key: string]: number } = {
   MAS: 4,
   EXP: 3,
   ADV: 2,
-  BAS: 1, 
+  BAS: 1,
 };
 
 const calculateNewSongs = (
-  allMusicEntries: MusicSearchApiEntry[], 
-  allUserRecords: ShowallApiSongEntry[],  
+  allMusicEntries: MusicSearchApiEntry[],
+  allUserRecords: ShowallApiSongEntry[],
   count: number
 ): Song[] => {
   if (!allMusicEntries || allMusicEntries.length === 0 || !allUserRecords || allUserRecords.length === 0) {
@@ -214,7 +214,8 @@ function ResultContent() {
       // music/search.json API는 특정 기간 이후 *업데이트/추가된* 곡을 반환합니다.
       // 이 목록 내에서 `release` 필드를 기준으로 TARGET_NEW_SONG_RELEASE_DATE 이후 곡을 추가 필터링합니다.
       // 이 since 날짜는 TARGET_NEW_SONG_RELEASE_DATE 이전이거나 충분히 과거여야 모든 관련 곡을 포함할 수 있습니다.
-      const musicSearchBaseQuery = "since:2024-01-01"; // 이 날짜는 TARGET_NEW_SONG_RELEASE_DATE보다 이전이어야 합니다.
+      // 예: TARGET_NEW_SONG_RELEASE_DATE가 "2024-12-12"라면, musicSearchBaseQuery는 "since:2024-01-01" 또는 더 이른 날짜.
+      const musicSearchBaseQuery = "since:2024-01-01";
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -254,7 +255,7 @@ function ResultContent() {
           else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (showall)`;
 
           if (!criticalError) criticalError = errorMessage;
-          else console.warn("Also failed to fetch showall.json:", errorMessage); 
+          else console.warn("Also failed to fetch showall.json:", errorMessage);
         } else {
           allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && typeof e.rating === 'number' && typeof e.score === 'number' && typeof e.is_played === 'boolean') || [];
         }
@@ -275,20 +276,20 @@ function ResultContent() {
             allMusicEntriesFromSearch = musicSearchData.filter((e: any): e is MusicSearchApiEntry =>
                 e !== null &&
                 typeof e.id === 'string' &&
-                typeof e.title === 'string' && 
+                typeof e.title === 'string' &&
                 typeof e.genre === 'string' &&
                 typeof e.release === 'string'
             ) || [];
         }
 
         if (criticalError) {
-            throw new Error(criticalError); 
+            throw new Error(criticalError);
         }
 
         // Calculate New 20 songs using the new logic
         if (allMusicEntriesFromSearch.length > 0 && allUserRecords.length > 0) {
             const calculatedNewSongs = calculateNewSongs(allMusicEntriesFromSearch, allUserRecords, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs); 
+            setNew20SongsData(calculatedNewSongs); // New 20 songs are already sorted as per new logic
         } else {
             setNew20SongsData([]);
             if (allMusicEntriesFromSearch.length === 0) console.warn("No music entries found from music/search API or it failed, impacting New 20 calculation.");
@@ -309,10 +310,13 @@ function ResultContent() {
     fetchSongData();
   }, [userNameForApi]);
 
+  // 화면 크기별 그리드 열 수 정의 (모바일 우선, PC에서 더 많은 열)
+  // 기본값 (가장 작은 화면)은 cn 함수에서 grid-cols-1로 설정됩니다.
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
-  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
+  // "Best30 + New20" 탭의 그리드 열 수 (lg 이상에서는 가로 배치, 그 이하는 세로 스택)
+  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; // md, xl 화면에서 열 수 증가
+  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // xl 화면에서 열 수 증가
 
 
   return (
@@ -377,8 +381,8 @@ function ResultContent() {
                   <CardContent>
                     {best30SongsData.length > 0 ? (
                       <div className={cn(
-                        "grid grid-cols-1 gap-4",
-                        best30GridCols
+                        "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
+                        best30GridCols // 화면 크기별 열 수 오버라이드
                       )}>
                         {best30SongsData.map((song) => (
                           <SongCard key={`best30-${song.id}-${song.diff}`} song={song} />
@@ -399,8 +403,8 @@ function ResultContent() {
                   <CardContent>
                      {new20SongsData.length > 0 ? (
                       <div className={cn(
-                        "grid grid-cols-1 gap-4",
-                        new20GridCols
+                        "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
+                        new20GridCols // 화면 크기별 열 수 오버라이드
                       )}>
                         {new20SongsData.map((song) => (
                           <SongCard key={`new20-${song.id}-${song.diff}`} song={song} />
@@ -423,8 +427,8 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
-                          "grid grid-cols-1 gap-4",
-                          combinedBest30GridCols
+                          "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
+                          combinedBest30GridCols // 화면 크기별 열 수 오버라이드
                         )}>
                           {best30SongsData.map((song) => (
                             <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} />
@@ -438,8 +442,8 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
                        {new20SongsData.length > 0 ? (
                         <div className={cn(
-                          "grid grid-cols-1 gap-4",
-                           combinedNew20GridCols
+                          "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
+                           combinedNew20GridCols // 화면 크기별 열 수 오버라이드
                         )}>
                           {new20SongsData.map((song) => (
                             <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} />
@@ -467,3 +471,5 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
+    
