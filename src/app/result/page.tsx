@@ -21,9 +21,9 @@ type RatingApiSongEntry = {
   diff: string;
   title: string;
   score: number;
-  rating: number;
+  rating: number; // API에서 제공하는 레이팅 (폴백용)
   genre?: string;
-  const?: number;
+  const?: number; // 보면 정수
   updated_at?: string;
 };
 
@@ -32,9 +32,9 @@ type ShowallApiSongEntry = {
   diff: string;
   level: number | string;
   title: string;
-  const: number;
+  const: number; // 보면 정수
   score: number;
-  rating: number;
+  rating: number; // API에서 제공하는 레이팅 (폴백용)
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
@@ -53,22 +53,82 @@ type MusicSearchApiEntry = {
   release: string; // "YYYY-MM-DD"
 };
 
+const calculateChunithmSongRating = (score: number, chartConstant: number | undefined | null): number => {
+  if (typeof chartConstant !== 'number' || chartConstant <= 0) {
+    return 0;
+  }
+
+  let ratingValue = 0;
+
+  if (score >= 1009000) { // SSS+
+    ratingValue = chartConstant + 2.15;
+  } else if (score >= 1007500) { // SSS (1,007,500 ~ 1,008,999)
+    // Max bonus: floor((1008999 - 1007500) / 100) * 0.01 = 14 * 0.01 = 0.14
+    ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
+  } else if (score >= 1005000) { // SS+ (1,005,000 ~ 1,007,499)
+    // Max bonus: floor((1007499 - 1005000) / 50) * 0.01 = 49 * 0.01 = 0.49
+    ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
+  } else if (score >= 1000000) { // SS (1,000,000 ~ 1,004,999)
+    // Max bonus: floor((1004999 - 1000000) / 100) * 0.01 = 49 * 0.01 = 0.49
+    ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
+  } else if (score >= 990000) { // S+ (990,000 ~ 999,999)
+    // Max bonus: floor((999999 - 990000) / 250) * 0.01 = 39 * 0.01 = 0.39
+    ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
+  } else if (score >= 975000) { // S (975,000 ~ 989,999)
+    // Max bonus: floor((989999 - 975000) / 250) * 0.01 = 59 * 0.01 = 0.59
+    ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+  } else if (score >= 950000) { // AAA
+    ratingValue = chartConstant - 1.50;
+  } else if (score >= 925000) { // AA
+    ratingValue = chartConstant - 3.00;
+  } else if (score >= 900000) { // A
+    ratingValue = chartConstant - 5.00;
+  } else if (score >= 800000) { // BBB
+    ratingValue = (chartConstant - 5.00) / 2.0;
+  } else { // C or below
+    ratingValue = 0;
+  }
+  return Math.max(0, parseFloat(ratingValue.toFixed(2)));
+};
 
 const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number): Song => {
-  const currentScore = apiSong.score;
-  const currentRating = apiSong.rating;
+  const score = apiSong.score;
+  const chartConst = apiSong.const;
+  let calculatedCurrentRating: number;
 
-  // Placeholder target scores/ratings - can be enhanced with AI later
-  const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
-  const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
+  const isConstUnknown = 'is_const_unknown' in apiSong && apiSong.is_const_unknown;
 
+  if (isConstUnknown) {
+    calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
+  } else if (typeof chartConst === 'number' && chartConst > 0 && typeof score === 'number') {
+    calculatedCurrentRating = calculateChunithmSongRating(score, chartConst);
+  } else {
+    calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
+  }
+  
+  const currentRating = calculatedCurrentRating;
+
+  // AI 추천 목표 점수 (기존 로직 유지)
+  const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
+  const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
+  
+  let targetRating: number;
+  if (isConstUnknown) {
+    // 보면 정수를 모르면, 현재 레이팅에서 약간의 향상치만 더함 (기존 로직과 유사하게)
+    targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
+  } else if (typeof chartConst === 'number' && chartConst > 0) {
+    targetRating = calculateChunithmSongRating(targetScore, chartConst);
+  } else {
+    // 보면 정수도 없고, API 레이팅도 없다면 현재 레이팅 기준으로 처리
+     targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
+  }
+  
   return {
     id: apiSong.id,
     diff: apiSong.diff,
     title: apiSong.title,
-    // This URL is a placeholder as SongCard does not attempt to load an image.
-    jacketUrl: `https://placehold.co/120x120.png?text=Jkt`,
-    currentScore: currentScore,
+    jacketUrl: `https://placehold.co/120x120.png?text=Jkt`, // 자켓 이미지 로딩 비활성화
+    currentScore: score,
     currentRating: currentRating,
     targetScore: targetScore,
     targetRating: targetRating,
@@ -127,15 +187,18 @@ const calculateNewSongs = (
     console.warn("User has not played any of the eligible new songs or scores are 0.");
     return [];
   }
+  
+  // 3. Map to Song type (this will apply the new rating calculation)
+  const mappedUserPlayedNewSongs = userPlayedEligibleNewSongs.map((record, index) => mapApiSongToAppSong(record, index));
 
-  // 3. Sort these user-played eligible new songs
+  // 4. Sort these user-played eligible new songs with calculated ratings
   //    Rating (desc), Score (desc), Difficulty (MAS > EXP > ADV > BAS)
-  userPlayedEligibleNewSongs.sort((a, b) => {
-    if (b.rating !== a.rating) {
-      return b.rating - a.rating;
+  mappedUserPlayedNewSongs.sort((a, b) => {
+    if (b.currentRating !== a.currentRating) { // Use calculated rating
+      return b.currentRating - a.currentRating;
     }
-    if (b.score !== a.score) {
-      return b.score - a.score;
+    if (b.currentScore !== a.currentScore) { // Use score from record
+      return b.currentScore - a.currentScore;
     }
     const diffAUpper = a.diff.toUpperCase();
     const diffBUpper = b.diff.toUpperCase();
@@ -144,10 +207,8 @@ const calculateNewSongs = (
     return diffBOrder - diffAOrder;
   });
 
-  // 4. Take top 'count' and map to Song type
-  return userPlayedEligibleNewSongs
-    .slice(0, count)
-    .map((record, index) => mapApiSongToAppSong(record, index));
+  // 5. Take top 'count'
+  return mappedUserPlayedNewSongs.slice(0, count);
 };
 
 
@@ -211,11 +272,7 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      // music/search.json API는 특정 기간 이후 *업데이트/추가된* 곡을 반환합니다.
-      // 이 목록 내에서 `release` 필드를 기준으로 TARGET_NEW_SONG_RELEASE_DATE 이후 곡을 추가 필터링합니다.
-      // 이 since 날짜는 TARGET_NEW_SONG_RELEASE_DATE 이전이거나 충분히 과거여야 모든 관련 곡을 포함할 수 있습니다.
-      // 예: TARGET_NEW_SONG_RELEASE_DATE가 "2024-12-12"라면, musicSearchBaseQuery는 "since:2024-01-01" 또는 더 이른 날짜.
-      const musicSearchBaseQuery = "since:2024-01-01";
+      const musicSearchBaseQuery = "since:2024-01-01"; // 이 날짜는 TARGET_NEW_SONG_RELEASE_DATE 이전이어야 함
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -226,7 +283,6 @@ function ResultContent() {
 
         let criticalError = null;
 
-        // Process rating_data.json (for Best 30)
         const ratingData = await ratingDataResponse.json();
         console.log('Chunirec rating_data.json API Response:', ratingData);
 
@@ -238,12 +294,11 @@ function ResultContent() {
           else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (rating_data)`;
           criticalError = errorMessage;
         } else {
-          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
+          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')) || [];
           const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index));
           setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         }
 
-        // Process showall.json (for New 20 calculation base)
         const showallData = await showallResponse.json();
         console.log('Chunirec showall.json API Response:', showallData);
         let allUserRecords: ShowallApiSongEntry[] = [];
@@ -257,10 +312,9 @@ function ResultContent() {
           if (!criticalError) criticalError = errorMessage;
           else console.warn("Also failed to fetch showall.json:", errorMessage);
         } else {
-          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && typeof e.rating === 'number' && typeof e.score === 'number' && typeof e.is_played === 'boolean') || [];
+          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && typeof e.rating === 'number' && typeof e.score === 'number' && typeof e.is_played === 'boolean' && typeof e.const === 'number') || [];
         }
 
-        // Process music/search.json (for New 20 calculation base)
         const musicSearchData = await musicSearchResponse.json();
         console.log('Chunirec music/search.json API Response:', musicSearchData);
         let allMusicEntriesFromSearch: MusicSearchApiEntry[] = [];
@@ -286,10 +340,9 @@ function ResultContent() {
             throw new Error(criticalError);
         }
 
-        // Calculate New 20 songs using the new logic
         if (allMusicEntriesFromSearch.length > 0 && allUserRecords.length > 0) {
             const calculatedNewSongs = calculateNewSongs(allMusicEntriesFromSearch, allUserRecords, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs); // New 20 songs are already sorted as per new logic
+            setNew20SongsData(calculatedNewSongs); 
         } else {
             setNew20SongsData([]);
             if (allMusicEntriesFromSearch.length === 0) console.warn("No music entries found from music/search API or it failed, impacting New 20 calculation.");
@@ -310,13 +363,10 @@ function ResultContent() {
     fetchSongData();
   }, [userNameForApi]);
 
-  // 화면 크기별 그리드 열 수 정의 (모바일 우선, PC에서 더 많은 열)
-  // 기본값 (가장 작은 화면)은 cn 함수에서 grid-cols-1로 설정됩니다.
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  // "Best30 + New20" 탭의 그리드 열 수 (lg 이상에서는 가로 배치, 그 이하는 세로 스택)
-  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; // md, xl 화면에서 열 수 증가
-  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // xl 화면에서 열 수 증가
+  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; 
+  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; 
 
 
   return (
@@ -381,8 +431,8 @@ function ResultContent() {
                   <CardContent>
                     {best30SongsData.length > 0 ? (
                       <div className={cn(
-                        "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
-                        best30GridCols // 화면 크기별 열 수 오버라이드
+                        "grid grid-cols-1 gap-4",
+                        best30GridCols
                       )}>
                         {best30SongsData.map((song) => (
                           <SongCard key={`best30-${song.id}-${song.diff}`} song={song} />
@@ -403,8 +453,8 @@ function ResultContent() {
                   <CardContent>
                      {new20SongsData.length > 0 ? (
                       <div className={cn(
-                        "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
-                        new20GridCols // 화면 크기별 열 수 오버라이드
+                        "grid grid-cols-1 gap-4",
+                        new20GridCols
                       )}>
                         {new20SongsData.map((song) => (
                           <SongCard key={`new20-${song.id}-${song.diff}`} song={song} />
@@ -427,8 +477,8 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
-                          "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
-                          combinedBest30GridCols // 화면 크기별 열 수 오버라이드
+                          "grid grid-cols-1 gap-4", 
+                          combinedBest30GridCols
                         )}>
                           {best30SongsData.map((song) => (
                             <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} />
@@ -442,8 +492,8 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
                        {new20SongsData.length > 0 ? (
                         <div className={cn(
-                          "grid grid-cols-1 gap-4", // 기본 1열 (모바일)
-                           combinedNew20GridCols // 화면 크기별 열 수 오버라이드
+                          "grid grid-cols-1 gap-4",
+                           combinedNew20GridCols
                         )}>
                           {new20SongsData.map((song) => (
                             <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} />
@@ -471,3 +521,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
