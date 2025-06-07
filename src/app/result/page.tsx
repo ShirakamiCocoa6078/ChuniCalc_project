@@ -12,7 +12,7 @@ import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTrian
 import { cn } from "@/lib/utils";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
-const BEST_COUNT = 30; // Though rating_data.json's best.entries is already 30
+const BEST_COUNT = 30; 
 const NEW_COUNT = 20; 
 
 type RatingApiSongEntry = {
@@ -21,9 +21,9 @@ type RatingApiSongEntry = {
   title: string;
   score: number;
   rating: number;
-  // genre: string; // available in rating_data.json best.entries
-  // const: number; // available
-  // updated_at: string; // available
+  genre?: string; 
+  const?: number; 
+  updated_at?: string; 
 };
 
 type ShowallApiSongEntry = {
@@ -57,7 +57,6 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
-  // Placeholder target scores/ratings - can be refined later
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
@@ -78,14 +77,20 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    // Secondary sort: higher target score difference first
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
   });
 };
 
-const calculateNewSongsByReleaseDate = (
+const difficultyOrder: { [key: string]: number } = {
+  MAS: 4,
+  EXP: 3,
+  ADV: 2,
+  BAS: 1, // "DAS"는 BAS (Basic)로 간주합니다.
+};
+
+const calculateNewSongs = (
   newlyReleasedSongs: MusicSearchApiEntry[],
   allUserRecords: ShowallApiSongEntry[],
   count: number
@@ -94,31 +99,28 @@ const calculateNewSongsByReleaseDate = (
     return [];
   }
 
-  const releaseDateMap = new Map<string, string>();
   const candidateNewReleaseSongIds = new Set<string>();
-
   newlyReleasedSongs.forEach(song => {
     if (song.genre !== "WORLD'S END") {
-      releaseDateMap.set(song.id, song.release);
       candidateNewReleaseSongIds.add(song.id);
     }
   });
 
   const userPlayedNewSongs = allUserRecords.filter(record => 
-    candidateNewReleaseSongIds.has(record.id) && record.score > 0
+    candidateNewReleaseSongIds.has(record.id) && record.is_played && record.score > 0
   );
 
-  // Sort: 1. Release Date (desc), 2. User Rating (desc), 3. User Score (desc)
+  // 정렬: 1. 유저 레이팅 (내림차순), 2. 유저 점수 (내림차순), 3. 난이도 (MAS > EXP > ADV > BAS 순)
   userPlayedNewSongs.sort((a, b) => {
-    const releaseA = releaseDateMap.get(a.id) || "0000-00-00";
-    const releaseB = releaseDateMap.get(b.id) || "0000-00-00";
-    if (releaseB !== releaseA) {
-      return new Date(releaseB).getTime() - new Date(releaseA).getTime();
-    }
     if (b.rating !== a.rating) {
       return b.rating - a.rating;
     }
-    return b.score - a.score;
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    const diffA = difficultyOrder[a.diff.toUpperCase()] || 0;
+    const diffB = difficultyOrder[b.diff.toUpperCase()] || 0;
+    return diffB - diffA; // 높은 난이도 우선
   });
   
   return userPlayedNewSongs.slice(0, count).map((record, index) => mapApiSongToAppSong(record, index));
@@ -176,7 +178,7 @@ function ResultContent() {
       }
 
       const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
-      if (!userNameParam && !searchParams.get("user_id")) { // user_id is not used, but keeping for future
+      if (!userNameParam && !searchParams.get("user_id")) { 
          setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
          setIsLoadingSongs(false);
          return;
@@ -185,9 +187,9 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      // Define the date for "since" query, e.g., start of the current year or a fixed recent date
-      // For example, "since:2024-01-01". User requested "since:2024-12-12" which is future, using a placeholder.
-      const sinceDateQuery = "since:2024-01-01"; // Placeholder, adjust as needed
+      // 참고: since:2024-12-12는 미래 시점이므로, 테스트를 위해 2024-01-01로 설정합니다.
+      // 실제 운영 시 이 날짜를 적절히 관리해야 합니다.
+      const sinceDateQuery = "since:2024-01-01"; 
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -226,10 +228,10 @@ function ResultContent() {
           if (showallResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 전체 곡 기록을 찾을 수 없습니다. (showall)`;
           else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (showall)`;
           
-          if (!criticalError) criticalError = errorMessage; // If rating_data was ok, this becomes critical for New20
-          else console.error("Also failed to fetch showall.json:", errorMessage); // Log if rating_data also failed
+          if (!criticalError) criticalError = errorMessage; 
+          else console.error("Also failed to fetch showall.json:", errorMessage); 
         } else {
-          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string') || [];
+          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string') || [];
         }
 
         // Process music/search.json (for New 20 calculation base)
@@ -259,10 +261,10 @@ function ResultContent() {
         
         // Calculate New 20 songs using the new logic
         if (newlyReleasedSongs.length > 0 && allUserRecords.length > 0) {
-            const calculatedNewSongs = calculateNewSongsByReleaseDate(newlyReleasedSongs, allUserRecords, NEW_COUNT);
-            setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); // Keep sorting by rating for display consistency
+            const calculatedNewSongs = calculateNewSongs(newlyReleasedSongs, allUserRecords, NEW_COUNT);
+            setNew20SongsData(sortSongsByRatingDesc(calculatedNewSongs)); 
         } else {
-            setNew20SongsData([]); // Set to empty if dependent data is missing
+            setNew20SongsData([]); 
             if (newlyReleasedSongs.length === 0) console.warn("No newly released songs found or music/search API failed.");
             if (allUserRecords.length === 0) console.warn("No user records found or showall API failed.");
         }
@@ -271,15 +273,15 @@ function ResultContent() {
       } catch (error) {
         console.error("Error fetching song data:", error);
         setErrorLoadingSongs(error instanceof Error ? error.message : "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.");
-        setBest30SongsData([]); // Clear data on critical error
-        setNew20SongsData([]);  // Clear data on critical error
+        setBest30SongsData([]); 
+        setNew20SongsData([]);  
       } finally {
         setIsLoadingSongs(false);
       }
     };
 
     fetchSongData();
-  }, [searchParams, userNameForApi]); // userNameForApi is a dependency for API calls
+  }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; 
@@ -440,3 +442,4 @@ export default function ResultPage() {
   );
 }
 
+    
