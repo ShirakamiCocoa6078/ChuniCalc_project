@@ -18,22 +18,20 @@ type ApiSongEntry = {
   title: string;
   score: number;
   rating: number;
-  // Chunirec API rating_data.json 응답에는 jacketUrl이 없음
-  // diff, const, genre 등 다른 유용한 정보도 포함될 수 있음
+  // jacketUrl은 API 응답에 없으므로, 아래 mapApiSongToAppSong에서 생성
 };
 
 const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
   const currentScore = apiSong.score;
   const currentRating = apiSong.rating;
 
-  // 목표 점수/레이팅 생성 로직 (기존 placeholder 로직 참고)
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
   return {
-    id: apiSong.id || `song-${index}`, // API ID를 사용
+    id: apiSong.id || `song-${index}`,
     title: apiSong.title,
-    jacketUrl: `https://chunirec.net/images/jacket/${apiSong.id}.png`, // 실제 자켓 URL로 변경
+    jacketUrl: `https://db.chunirec.net/music/${apiSong.id}`, // 새 URL 형식으로 변경
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -46,7 +44,6 @@ const sortSongs = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    // currentRating이 같을 경우, (targetScore - currentScore)가 큰 순서대로 (더 많이 올려야 하는 곡)
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
@@ -62,14 +59,14 @@ function ResultContent() {
 
   const [apiPlayerName, setApiPlayerName] = useState<string | null>(null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20는 비워둠 (API 연동 확인 중)
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPlayerProfile = async () => {
       if (!API_TOKEN || !userNameForApi || userNameForApi === "플레이어") {
-        setApiPlayerName(userNameForApi); 
+        setApiPlayerName(userNameForApi);
         return;
       }
 
@@ -82,15 +79,15 @@ function ResultContent() {
           if (data.player_name) {
             setApiPlayerName(data.player_name);
           } else {
-            setApiPlayerName(userNameForApi); 
+            setApiPlayerName(userNameForApi);
           }
         } else {
           console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi); 
+          setApiPlayerName(userNameForApi);
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi); 
+        setApiPlayerName(userNameForApi);
       }
     };
     fetchPlayerProfile();
@@ -108,7 +105,7 @@ function ResultContent() {
       }
 
       const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
-      if (!userNameParam && !searchParams.get("user_id")) { 
+      if (!userNameParam && !searchParams.get("user_id")) {
         setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
         setIsLoadingSongs(false);
         setBest30SongsData([]);
@@ -123,7 +120,7 @@ function ResultContent() {
         const response = await fetch(
           `https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`
         );
-        
+
         const data = await response.json();
         console.log('Chunirec rating_data.json API Response:', data);
 
@@ -147,11 +144,9 @@ function ResultContent() {
 
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         setBest30SongsData(sortSongs(bestEntries));
-        
-        // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음 (사용자 요청에 따라 비워둠)
-        // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
-        // setNew20SongsData(sortSongs(recentEntries));
-        setNew20SongsData([]); 
+
+        // New 20 (Recent 10) 데이터는 비워둠
+        setNew20SongsData([]);
 
 
       } catch (error) {

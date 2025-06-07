@@ -22,6 +22,12 @@ const nextConfig: NextConfig = {
         hostname: 'chunirec.net',
         port: '',
         pathname: '/images/jacket/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'db.chunirec.net',
+        port: '',
+        pathname: '/music/**',
       }
     ],
   },
