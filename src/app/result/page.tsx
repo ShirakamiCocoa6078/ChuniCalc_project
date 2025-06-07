@@ -30,7 +30,10 @@ function ResultContent() {
   const nickname = searchParams.get("nickname") || "Player";
   const currentRating = searchParams.get("current") || "N/A";
   const targetRating = searchParams.get("target") || "N/A";
-  const [xlColumnCount, setXlColumnCount] = useState<number>(5); // Default 5 columns for XL
+  
+  // cardSizeSetting stores the slider's raw value (3 to 7)
+  // 3 means smallest cards (most columns), 7 means largest cards (fewest columns)
+  const [cardSizeSetting, setCardSizeSetting] = useState<number>(5); 
 
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
   const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
@@ -40,7 +43,12 @@ function ResultContent() {
     setBest30SongsData(generatePlaceholderSongs(30));
     setNew20SongsData(generatePlaceholderSongs(20));
     setIsLoadingSongs(false);
-  }, []); // Empty dependency array ensures this runs once on mount (client-side)
+  }, []);
+
+  // Calculate the actual number of columns for XL screens based on cardSizeSetting
+  // Slider min 3 (small cards) maps to 7 columns
+  // Slider max 7 (large cards) maps to 3 columns
+  const actualXlColumnCount = (3 + 7) - cardSizeSetting;
 
   const getResponsiveCols = (baseXlCols: number) => {
     return {
@@ -51,11 +59,11 @@ function ResultContent() {
     };
   };
   
-  const best30Cols = getResponsiveCols(xlColumnCount);
-  const new20Cols = getResponsiveCols(Math.max(3, xlColumnCount -1)); 
+  const best30Cols = getResponsiveCols(actualXlColumnCount);
+  const new20Cols = getResponsiveCols(Math.max(3, actualXlColumnCount -1)); 
   
-  const comboBest30Cols = getResponsiveCols(Math.max(3, xlColumnCount -1)); 
-  const comboNew20Cols = getResponsiveCols(Math.max(2, xlColumnCount -2));
+  const comboBest30Cols = getResponsiveCols(Math.max(3, actualXlColumnCount -1)); 
+  const comboNew20Cols = getResponsiveCols(Math.max(2, actualXlColumnCount -2)); // Allows for potentially fewer columns if base is small
 
 
   return (
@@ -85,18 +93,20 @@ function ResultContent() {
 
         <div className="mb-6 p-4 bg-card border border-border rounded-lg shadow-sm">
           <Label htmlFor="cardSizeSlider" className="flex items-center text-md font-medium mb-2">
-            <Columns className="w-5 h-5 mr-2 text-primary" /> Card Size / Density
+            <Columns className="w-5 h-5 mr-2 text-primary" /> Card Size
           </Label>
           <Slider
             id="cardSizeSlider"
-            min={3}
-            max={7}
+            min={3} // Represents smallest card size setting (most columns)
+            max={7} // Represents largest card size setting (fewest columns)
             step={1}
-            value={[xlColumnCount]}
-            onValueChange={(value) => setXlColumnCount(value[0])}
+            value={[cardSizeSetting]}
+            onValueChange={(value) => setCardSizeSetting(value[0])}
             className="w-full max-w-sm"
           />
-          <p className="text-xs text-muted-foreground mt-1">Adjusts the number of cards per row on larger screens (3: Largest, 7: Smallest).</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Adjusts displayed card size. Lower values = smaller cards (more per row). Higher values = larger cards (fewer per row).
+          </p>
         </div>
 
         <Tabs defaultValue="best30" className="w-full">
@@ -206,3 +216,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+

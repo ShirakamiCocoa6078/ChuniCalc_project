@@ -1,11 +1,18 @@
+
 import type {Config} from 'tailwindcss';
 
-export default {
+const config = {
   darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  safelist: [
+    {
+      pattern: /grid-cols-(1|2|3|4|5|6|7)/,
+      variants: ['sm', 'md', 'lg', 'xl'],
+    },
   ],
   theme: {
     extend: {
@@ -102,3 +109,5 @@ export default {
   },
   plugins: [require('tailwindcss-animate')],
 } satisfies Config;
+
+export default config;
