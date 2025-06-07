@@ -66,7 +66,8 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
     id: apiSong.id,
     diff: apiSong.diff,
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Jkt'}`,
+    // Use a generic placeholder, SongCard will not attempt to load an image
+    jacketUrl: `https://placehold.co/120x120.png?text=Jkt`,
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -79,7 +80,6 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
-    // Secondary sort for Best 30 (if needed, e.g. potential score increase)
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
@@ -90,13 +90,12 @@ const difficultyOrder: { [key: string]: number } = {
   MAS: 4,
   EXP: 3,
   ADV: 2,
-  BAS: 1, // "DAS"는 BAS (Basic)로 간주합니다.
-  // WORLD'S END는 여기서 고려하지 않음 (장르 필터링됨)
+  BAS: 1, 
 };
 
 const calculateNewSongs = (
-  allMusicEntries: MusicSearchApiEntry[], // from music/search.json
-  allUserRecords: ShowallApiSongEntry[],  // from showall.json
+  allMusicEntries: MusicSearchApiEntry[], 
+  allUserRecords: ShowallApiSongEntry[],  
   count: number
 ): Song[] => {
   if (!allMusicEntries || allMusicEntries.length === 0 || !allUserRecords || allUserRecords.length === 0) {
@@ -107,6 +106,8 @@ const calculateNewSongs = (
   const eligibleNewMusic = allMusicEntries.filter(music => {
     return music.release > TARGET_NEW_SONG_RELEASE_DATE && music.genre !== "WORLD'S END";
   });
+  console.log("Eligible new music (after target release date & genre filter):", eligibleNewMusic);
+
 
   if (eligibleNewMusic.length === 0) {
     console.warn(`No music found released after ${TARGET_NEW_SONG_RELEASE_DATE} or matching genre criteria.`);
@@ -119,6 +120,8 @@ const calculateNewSongs = (
   const userPlayedEligibleNewSongs = allUserRecords.filter(record =>
     eligibleNewMusicIds.has(record.id) && record.is_played && record.score > 0
   );
+  console.log("User played eligible new songs (before sorting/slicing):", userPlayedEligibleNewSongs);
+
 
   if (userPlayedEligibleNewSongs.length === 0) {
     console.warn("User has not played any of the eligible new songs or scores are 0.");
@@ -210,7 +213,8 @@ function ResultContent() {
 
       // music/search.json API는 특정 기간 이후 *업데이트/추가된* 곡을 반환합니다.
       // 이 목록 내에서 `release` 필드를 기준으로 TARGET_NEW_SONG_RELEASE_DATE 이후 곡을 추가 필터링합니다.
-      const musicSearchBaseQuery = "since:2024-01-01";
+      // 이 since 날짜는 TARGET_NEW_SONG_RELEASE_DATE 이전이거나 충분히 과거여야 모든 관련 곡을 포함할 수 있습니다.
+      const musicSearchBaseQuery = "since:2024-01-01"; // 이 날짜는 TARGET_NEW_SONG_RELEASE_DATE보다 이전이어야 합니다.
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -250,7 +254,7 @@ function ResultContent() {
           else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (showall)`;
 
           if (!criticalError) criticalError = errorMessage;
-          else console.warn("Also failed to fetch showall.json:", errorMessage); // Log as warning if rating_data also failed
+          else console.warn("Also failed to fetch showall.json:", errorMessage); 
         } else {
           allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => e !== null && typeof e.id === 'string' && typeof e.diff === 'string' && typeof e.updated_at === 'string' && typeof e.rating === 'number' && typeof e.score === 'number' && typeof e.is_played === 'boolean') || [];
         }
@@ -271,20 +275,20 @@ function ResultContent() {
             allMusicEntriesFromSearch = musicSearchData.filter((e: any): e is MusicSearchApiEntry =>
                 e !== null &&
                 typeof e.id === 'string' &&
-                typeof e.title === 'string' && // Added title for completeness
+                typeof e.title === 'string' && 
                 typeof e.genre === 'string' &&
                 typeof e.release === 'string'
             ) || [];
         }
 
         if (criticalError) {
-            throw new Error(criticalError); // If rating_data or other critical parts failed, stop.
+            throw new Error(criticalError); 
         }
 
         // Calculate New 20 songs using the new logic
         if (allMusicEntriesFromSearch.length > 0 && allUserRecords.length > 0) {
             const calculatedNewSongs = calculateNewSongs(allMusicEntriesFromSearch, allUserRecords, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs); // Directly use the sorted list
+            setNew20SongsData(calculatedNewSongs); 
         } else {
             setNew20SongsData([]);
             if (allMusicEntriesFromSearch.length === 0) console.warn("No music entries found from music/search API or it failed, impacting New 20 calculation.");
@@ -303,7 +307,7 @@ function ResultContent() {
     };
 
     fetchSongData();
-  }, [searchParams, userNameForApi]); // Removed searchParams from dependency array if it causes re-fetches without actual param change
+  }, [userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -463,5 +467,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    

@@ -1,16 +1,14 @@
 
 "use client";
 
-import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { Music2, Star, Target as TargetIcon } from "lucide-react";
 
 export type Song = {
   id: string; // music_id
   diff: string; // difficulty (e.g., "MAS", "EXP")
   title: string;
-  jacketUrl: string;
+  jacketUrl: string; // This will now be a placeholder, not used for actual image loading
   currentScore: number;
   currentRating: number;
   targetScore: number;
@@ -28,28 +26,9 @@ export default function SongCard({ song }: SongCardProps) {
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full" style={{ aspectRatio: '2 / 1' }}>
       <CardContent className="p-0 flex h-full">
+        {/* Jacket image area - now intentionally blank */}
         <div className="w-1/3 relative h-full bg-muted flex items-center justify-center">
-          {song.jacketUrl && !song.jacketUrl.includes("placehold.co") && !song.jacketUrl.startsWith("/api/get-jacket-image") ? (
-             <Image
-              src={song.jacketUrl}
-              alt={`Jacket for ${song.title} (${song.diff})`}
-              layout="fill"
-              objectFit="cover"
-              data-ai-hint="album art"
-              onError={(e) => {
-                e.currentTarget.srcset = "https://placehold.co/120x120.png?text=Error";
-                e.currentTarget.src = "https://placehold.co/120x120.png?text=Error";
-              }}
-            />
-          ) : (
-             <Image
-              src={song.jacketUrl || "https://placehold.co/120x120.png?text=Jkt"}
-              alt={`Jacket for ${song.title} (${song.diff})`}
-              layout="fill"
-              objectFit="cover"
-              data-ai-hint="album art"
-            />
-          )}
+          {/* Intentionally left blank to not load any jacket image */}
         </div>
         <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
           <div>
