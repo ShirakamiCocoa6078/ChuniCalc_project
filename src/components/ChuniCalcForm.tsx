@@ -36,7 +36,7 @@ export default function ChuniCalcForm() {
         description: `Could not find rating for nickname: ${nickname}`,
         variant: "destructive",
       });
-      setCurrentRatingStr(""); // Clear if not found
+      setCurrentRatingStr(""); 
     }
   };
 
@@ -73,7 +73,7 @@ export default function ChuniCalcForm() {
         return;
     }
     
-    router.push(`/result?current=${currentRatingStr}&target=${targetRatingStr}`);
+    router.push(`/result?nickname=${encodeURIComponent(nickname)}&current=${currentRatingStr}&target=${targetRatingStr}`);
   };
 
   if (!isClient) {
