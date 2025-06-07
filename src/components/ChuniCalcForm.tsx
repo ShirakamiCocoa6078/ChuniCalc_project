@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Gauge, Target, User, Search } from "lucide-react";
+import { Gauge, Target, User, Search, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +40,7 @@ export default function ChuniCalcForm() {
     }
   };
 
-  const handleCalculateRedirect = (e: FormEvent) => {
+  const handleCalculateAndNavigate = (e: FormEvent) => {
     e.preventDefault();
 
     const current = parseFloat(currentRatingStr);
@@ -54,7 +54,6 @@ export default function ChuniCalcForm() {
         });
         return;
     }
-
 
     if (isNaN(current) || isNaN(target)) {
       toast({
@@ -74,8 +73,7 @@ export default function ChuniCalcForm() {
         return;
     }
     
-    // Redirect to an external site
-    window.location.href = 'https://chunirec.net';
+    router.push(`/result?current=${currentRatingStr}&target=${targetRatingStr}`);
   };
 
   if (!isClient) {
@@ -108,7 +106,7 @@ export default function ChuniCalcForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleCalculateRedirect} className="space-y-6">
+        <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
               <User className="mr-2 h-5 w-5 text-primary" /> Nickname
@@ -170,7 +168,7 @@ export default function ChuniCalcForm() {
           </div>
 
           <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
-            Proceed to Chunirec.net
+            Calculate and View Results <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </form>
       </CardContent>
