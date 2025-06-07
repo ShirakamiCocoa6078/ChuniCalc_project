@@ -12,30 +12,32 @@ import { Label } from "@/components/ui/label";
 import SongCard, { type Song } from "@/components/SongCard";
 import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-// import NewSongsData from '@/data/NewSongs.json'; // No longer used
 import { useToast } from "@/hooks/use-toast";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
-const NEW_SONGS_SLICE_START_INDEX = 1181; // 1182nd element is at index 1181
+const NEW_SONG_POOL_SIZE = 87; // Last 87 songs from music/showall.json
 
 const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
-const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const USER_DATA_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for user data
+const GLOBAL_MUSIC_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for global music list
+
+const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
 
 type CachedData<T> = {
   timestamp: number;
   data: T;
 };
 
-function getCachedData<T>(key: string): T | null {
+function getCachedData<T>(key: string, expiryMs: number = USER_DATA_CACHE_EXPIRY_MS): T | null {
   if (typeof window === 'undefined') return null;
   try {
     const item = localStorage.getItem(key);
     if (!item) return null;
     const cached = JSON.parse(item) as CachedData<T>;
-    if (Date.now() - cached.timestamp > CACHE_EXPIRY_MS) {
-      localStorage.removeItem(key); // Cache expired
+    if (Date.now() - cached.timestamp > expiryMs) {
+      localStorage.removeItem(key);
       console.log(`Cache expired and removed for key: ${key}`);
       return null;
     }
@@ -43,7 +45,7 @@ function getCachedData<T>(key: string): T | null {
     return cached.data;
   } catch (error) {
     console.error("Error reading from localStorage for key:", key, error);
-    localStorage.removeItem(key); // Remove corrupted data
+    localStorage.removeItem(key);
     return null;
   }
 }
@@ -70,37 +72,33 @@ type RatingApiSongEntry = {
   score: number;
   rating: number;
   genre?: string;
-  const?: number; // 보면 정수
+  const?: number;
   updated_at?: string;
 };
 
-// From NewSongs.json (No longer used directly for N20 definition, but type might be useful if structure is similar)
-// type DefinedNewSongEntry = {
-//   id: string;
-//   title: string;
-//   genre: string;
-//   artist: string;
-//   release: string; // YYYY-MM-DD
-// };
-
-// From showall.json API
+// This type will represent entries from both records/showall.json (user plays)
+// and music/showall.json (global song definitions).
+// Fields not present in music/showall.json will be undefined.
 type ShowallApiSongEntry = {
   id: string;
   diff: string;
-  level: number | string; // Can be like "13.5" or 13
   title: string;
-  const: number | null; // 보면 정수, can be null
-  score: number;
-  rating: number | null; // API provided rating, can be null
-  is_const_unknown: boolean;
-  is_clear: boolean;
-  is_fullcombo: boolean;
-  is_alljustice: boolean;
-  is_fullchain: boolean;
   genre: string;
-  updated_at: string; // Timestamp of last play/update for this record
-  is_played: boolean;
+  const: number | null;
+  level: number | string;
+  // Fields primarily from records/showall.json (user-specific)
+  score?: number; // Optional because music/showall.json won't have it
+  rating?: number | null; // Optional
+  is_played?: boolean; // Optional
+  updated_at?: string; // Optional
+  is_clear?: boolean; // Optional
+  is_fullcombo?: boolean; // Optional
+  is_alljustice?: boolean; // Optional
+  is_fullchain?: boolean; // Optional
+  // Field that might be in music/showall.json or inferred
+  is_const_unknown?: boolean;
 };
+
 
 export type CalculationStrategy = "average" | "peak" | "floor";
 
@@ -138,34 +136,36 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
   return Math.max(0, parseFloat(ratingValue.toFixed(2)));
 };
 
-const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number, chartConstantOverride?: number): Song => {
-  const score = apiSong.score;
+const mapApiSongToAppSong = (
+    apiSong: RatingApiSongEntry | ShowallApiSongEntry, // Accept broader type
+    _index: number,
+    chartConstantOverride?: number
+): Song => {
+  const score = typeof apiSong.score === 'number' ? apiSong.score : 0; // Default score to 0 if not present
 
   let effectiveChartConstant: number | null = null;
   if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
     effectiveChartConstant = chartConstantOverride;
   } else if (typeof apiSong.const === 'number' && apiSong.const > 0) {
     effectiveChartConstant = apiSong.const;
-  } else if ( // If const is unknown or invalid, try using level
-    'is_const_unknown' in apiSong && apiSong.is_const_unknown &&
-    'level' in apiSong && apiSong.level
+  } else if (
+    apiSong.is_const_unknown &&
+    typeof apiSong.level === 'string' || typeof apiSong.level === 'number'
   ) {
-    const parsedLevel = parseFloat(String(apiSong.level)); // apiSong.level can be string like "13.5"
+    const parsedLevel = parseFloat(String(apiSong.level));
     if (!isNaN(parsedLevel) && parsedLevel > 0) {
       effectiveChartConstant = parsedLevel;
     }
   }
 
   let calculatedCurrentRating: number;
-  if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && typeof score === 'number') {
+  if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && score > 0) {
     calculatedCurrentRating = calculateChunithmSongRating(score, effectiveChartConstant);
   } else {
-    // Fallback to API rating if calculation is not possible
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
   const currentRating = calculatedCurrentRating;
 
-  // Simplified target score logic for now, can be enhanced by strategies
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
 
@@ -173,7 +173,6 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0) {
     targetRating = calculateChunithmSongRating(targetScore, effectiveChartConstant);
   } else {
-     // Fallback if effectiveChartConstant is still not determined
      targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   }
 
@@ -181,7 +180,7 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
     id: apiSong.id,
     diff: apiSong.diff,
     title: apiSong.title,
-    chartConstant: effectiveChartConstant, // Ensure chartConstant is included
+    chartConstant: effectiveChartConstant,
     currentScore: score,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -190,11 +189,11 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
 };
 
 const difficultyOrder: { [key: string]: number } = {
-  ULT: 5, // ULTIMA is highest
-  MAS: 4, // MASTER
-  EXP: 3, // EXPERT
-  ADV: 2, // ADVANCED
-  BAS: 1, // BASIC
+  ULT: 5,
+  MAS: 4,
+  EXP: 3,
+  ADV: 2,
+  BAS: 1,
 };
 
 const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
@@ -211,53 +210,67 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
   });
 };
 
-
-// Calculates New 20 songs
 const calculateNewSongs = (
-  allUserRecords: ShowallApiSongEntry[], // User's all played songs from showall API
-  count: number // Typically NEW_COUNT (20)
+  definedSongPoolEntries: ShowallApiSongEntry[], // Last 87 from music/showall.json
+  allUserRecords: ShowallApiSongEntry[],       // User's plays from records/showall.json
+  count: number                                // Typically NEW_COUNT (20)
 ): Song[] => {
-  console.log("[N20_CALC] Starting New 20 calculation from showall.json slice.");
+  console.log("[N20_CALC] Starting New 20 calculation from global music list slice and user records.");
+  console.log(`[N20_CALC] Defined new song pool size: ${definedSongPoolEntries.length}`);
+
   if (!allUserRecords || allUserRecords.length === 0) {
     console.warn("[N20_CALC] User's play records (allUserRecords) are empty. Cannot calculate New 20.");
     return [];
   }
-
-  // Slice from the 1182nd element (index 1181) to the end
-  const newSongCandidatesFromShowall = allUserRecords.slice(NEW_SONGS_SLICE_START_INDEX);
-  console.log(`[N20_CALC] Sliced ${newSongCandidatesFromShowall.length} songs from showall.json (starting index ${NEW_SONGS_SLICE_START_INDEX}) as N20 candidates.`);
-
-  if (newSongCandidatesFromShowall.length === 0) {
-    console.warn("[N20_CALC] No songs found in the specified slice of showall.json or slice index out of bounds.");
+  if (!definedSongPoolEntries || definedSongPoolEntries.length === 0) {
+    console.warn("[N20_CALC] Defined new song pool is empty. Cannot calculate New 20.");
     return [];
   }
+
+  const userRecordsMap = new Map<string, ShowallApiSongEntry>();
+  allUserRecords.forEach(record => {
+    userRecordsMap.set(`${record.id}-${record.diff}`, record);
+  });
+  console.log(`[N20_CALC] Created user records map with ${userRecordsMap.size} entries.`);
+
+  const mappedUserPlayedNewSongs = definedSongPoolEntries.reduce((acc, definedSongEntry) => {
+    const userRecord = userRecordsMap.get(`${definedSongEntry.id}-${definedSongEntry.diff}`);
+
+    if (userRecord && userRecord.is_played && typeof userRecord.score === 'number' && userRecord.score > 0) {
+        const combinedEntry: ShowallApiSongEntry = {
+            id: definedSongEntry.id,
+            diff: definedSongEntry.diff,
+            title: definedSongEntry.title,
+            genre: definedSongEntry.genre,
+            const: definedSongEntry.const,
+            level: definedSongEntry.level,
+            is_const_unknown: typeof (definedSongEntry as any).is_const_unknown === 'boolean'
+                ? (definedSongEntry as any).is_const_unknown
+                : (definedSongEntry.const === null || definedSongEntry.const === 0),
+            score: userRecord.score, // User's specific score
+            rating: userRecord.rating, // User's API rating, mapApiSongToAppSong will recalculate
+            is_played: userRecord.is_played,
+            updated_at: userRecord.updated_at,
+            is_clear: userRecord.is_clear,
+            is_fullcombo: userRecord.is_fullcombo,
+            is_alljustice: userRecord.is_alljustice,
+            is_fullchain: userRecord.is_fullchain,
+        };
+        // Pass definedSongEntry.const as chartConstantOverride to ensure global definition is prioritized for const
+        acc.push(mapApiSongToAppSong(combinedEntry, acc.length, definedSongEntry.const ?? undefined));
+    }
+    return acc;
+  }, [] as Song[]);
   
-  // Filter for played songs with score > 0 (though showall records usually imply this)
-  const playedNewSongCandidates = newSongCandidatesFromShowall.filter(record =>
-    record.is_played && 
-    typeof record.score === 'number' && record.score > 0 &&
-    (typeof record.const === 'number' || record.const === null || typeof record.is_const_unknown === 'boolean') &&
-    ('level' in record) 
-  );
-  console.log(`[N20_CALC] Filtered ${playedNewSongCandidates.length} played new song candidates (score > 0).`);
-
-
-  if (playedNewSongCandidates.length === 0) {
-    console.warn("[N20_CALC] No valid played songs found in the N20 candidate slice from showall.json.");
-    return [];
-  }
-
-  const mappedUserPlayedNewSongs = playedNewSongCandidates.map((record, index) =>
-    mapApiSongToAppSong(record, index, record.const ?? undefined)
-  );
-  console.log(`[N20_CALC] Mapped N20 candidate songs with calculated ratings (count: ${mappedUserPlayedNewSongs.length}):`, mappedUserPlayedNewSongs.map(s => ({ title: s.title, id: s.id, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
+  console.log(`[N20_CALC] Found and mapped ${mappedUserPlayedNewSongs.length} played new songs based on the pool.`);
   
   const sortedUserPlayedNewSongs = sortSongsByRatingDesc(mappedUserPlayedNewSongs);
   
   const finalNew20 = sortedUserPlayedNewSongs.slice(0, count);
-  console.log(`[N20_CALC] Final Top ${count} New Songs (after sorting from showall slice):`, finalNew20.map(s => ({ title: s.title, id: s.id, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
+  console.log(`[N20_CALC] Final Top ${count} New Songs:`, finalNew20.map(s => ({ title: s.title, id: s.id, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
   return finalNew20;
 };
+
 
 type ProfileData = {
     player_name: string;
@@ -268,10 +281,13 @@ type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
-type ShowallApiResponse = {
+type ShowallApiResponse = { // For records/showall.json
     records?: ShowallApiSongEntry[];
 };
 
+type GlobalMusicApiResponse = { // For music/showall.json
+    records?: ShowallApiSongEntry[]; // Assuming structure is similar enough
+}
 
 function ResultContent() {
   const searchParams = useSearchParams();
@@ -299,11 +315,12 @@ function ResultContent() {
     if (typeof window !== 'undefined' && userNameForApi && userNameForApi !== "플레이어") {
         const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
         const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-        const showallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+        const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
-        localStorage.removeItem(showallKey);
-        console.log(`Cache cleared for user: ${userNameForApi}`);
+        localStorage.removeItem(userShowallKey);
+        // Note: GLOBAL_MUSIC_DATA_KEY is not cleared here by user action, it expires on its own.
+        console.log(`User-specific cache cleared for user: ${userNameForApi}`);
         toast({ title: "데이터 새로고침 중", description: "캐시를 지우고 API에서 최신 데이터를 가져옵니다." });
     }
     setRefreshNonce(prev => prev + 1);
@@ -329,31 +346,30 @@ function ResultContent() {
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-      const showallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+      const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
       const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
-      const cachedShowallData = getCachedData<ShowallApiResponse>(showallKey);
+      const cachedUserShowallData = getCachedData<ShowallApiResponse>(userShowallKey);
+      const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       
       let cacheTimestamp = 'N/A';
       if (clientHasMounted) { 
-        const cacheTimestampItem = localStorage.getItem(profileKey); // Any key for the user would do
-        if (cacheTimestampItem) {
+        const userCacheTimestampItem = localStorage.getItem(profileKey);
+        if (userCacheTimestampItem) {
             try {
-                const parsedItem = JSON.parse(cacheTimestampItem);
+                const parsedItem = JSON.parse(userCacheTimestampItem);
                 if (parsedItem && typeof parsedItem.timestamp === 'number') {
                     cacheTimestamp = new Date(parsedItem.timestamp).toLocaleString();
                 }
-            } catch (e) {
-                console.error("Error parsing cache timestamp from localStorage", e);
-            }
+            } catch (e) { console.error("Error parsing user cache timestamp", e); }
         }
       }
-      setLastRefreshed(cachedProfile ? cacheTimestamp : '캐시 없음');
+      setLastRefreshed(cachedProfile ? cacheTimestamp : '사용자 캐시 없음');
 
 
-      if (cachedProfile && cachedRatingData && cachedShowallData) {
-        console.log("Loading data from localStorage cache...");
+      if (cachedProfile && cachedRatingData && cachedUserShowallData && cachedGlobalMusicData) {
+        console.log("Loading all necessary data from localStorage cache...");
         setApiPlayerName(cachedProfile.player_name || userNameForApi);
 
         const bestEntriesApi = cachedRatingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
@@ -363,19 +379,20 @@ function ResultContent() {
         const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
 
-        const allUserRecordsFromCache = cachedShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
-            e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
-            typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) &&
-            typeof e.score === 'number' && typeof e.is_played === 'boolean' &&
-            (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') &&
-            typeof e.is_const_unknown === 'boolean' && ('level' in e) 
+        const allUserRecordsFromCache = cachedUserShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
+            e && e.id && e.diff && typeof e.is_played === 'boolean' && typeof e.score === 'number'
         ) || [];
         
-        if (allUserRecordsFromCache.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(allUserRecordsFromCache, NEW_COUNT);
+        const globalMusicRecords = cachedGlobalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
+            e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level
+        ) || [];
+
+        if (allUserRecordsFromCache.length > 0 && globalMusicRecords.length > 0) {
+            const newSongPool = globalMusicRecords.slice(-NEW_SONG_POOL_SIZE);
+            const calculatedNewSongs = calculateNewSongs(newSongPool, allUserRecordsFromCache, NEW_COUNT);
             setNew20SongsData(calculatedNewSongs);
         } else {
-            console.warn("Could not calculate New 20 from cache: User records from cache are insufficient.");
+            console.warn("Could not calculate New 20 from cache: User records or global music data from cache are insufficient.");
             setNew20SongsData([]);
         }
         toast({ title: "데이터 로드 완료", description: `로컬 캐시에서 ${userNameForApi}님의 데이터를 성공적으로 불러왔습니다.` });
@@ -383,77 +400,86 @@ function ResultContent() {
         return;
       }
 
-      console.log("Fetching data from API as cache is missing or expired...");
+      console.log("Fetching data from API as some cache is missing or expired...");
       try {
-        const [profileResponse, ratingDataResponse, showallResponse] = await Promise.all([
-          fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-          fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-          fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-        ]);
+        const apiRequests = [
+            fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
+            fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
+            fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
+            fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${API_TOKEN}`) // Global music list
+        ];
+
+        const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponse] = await Promise.all(apiRequests);
 
         let criticalError = null;
-        let profileData: ProfileData | null = null;
-        let ratingData: RatingApiResponse | null = null;
-        let showallData: ShowallApiResponse | null = null;
-
+        // Process Profile
         if (profileResponse.ok) {
-            profileData = await profileResponse.json();
-            setApiPlayerName(profileData!.player_name || userNameForApi);
-            setCachedData<ProfileData>(profileKey, profileData!);
+            const profileData = await profileResponse.json();
+            setApiPlayerName(profileData.player_name || userNameForApi);
+            setCachedData<ProfileData>(profileKey, profileData);
         } else {
             const errorJson = await profileResponse.json().catch(() => ({})); 
-            criticalError = `프로필 정보 로딩 실패 (상태: ${profileResponse.status}): ${errorJson.error?.message || profileResponse.statusText || '오류 메시지 없음'}`;
+            criticalError = `프로필 정보 로딩 실패 (상태: ${profileResponse.status}): ${errorJson.error?.message || profileResponse.statusText || '오류 없음'}`;
         }
         
+        // Process Rating Data (B30)
         if (ratingDataResponse.ok) {
-            ratingData = await ratingDataResponse.json();
-            const bestEntriesApi = ratingData!.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
-              e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
-              typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')
+            const ratingData = await ratingDataResponse.json();
+            const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
+              e && e.id && e.diff && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')
             ) || [];
             const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
             setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
-            setCachedData<RatingApiResponse>(ratingDataKey, ratingData!);
+            setCachedData<RatingApiResponse>(ratingDataKey, ratingData);
         } else {
             const errorJson = await ratingDataResponse.json().catch(() => ({}));
-            const errorMsg = `Best 30 정보 로딩 실패 (상태: ${ratingDataResponse.status}): ${errorJson.error?.message || ratingDataResponse.statusText || '오류 메시지 없음'}`;
+            const errorMsg = `Best 30 정보 로딩 실패 (상태: ${ratingDataResponse.status}): ${errorJson.error?.message || ratingDataResponse.statusText || '오류 없음'}`;
             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
 
+        // Process User Showall Data
         let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
-        if (showallResponse.ok) {
-            showallData = await showallResponse.json();
-            allUserRecordsFromApi = showallData!.records?.filter((e: any): e is ShowallApiSongEntry =>
-              e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
-              typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) &&
-              typeof e.score === 'number' && typeof e.is_played === 'boolean' &&
-              (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') &&
-              typeof e.is_const_unknown === 'boolean' && ('level' in e)
+        if (userShowallResponse.ok) {
+            const userShowallData = await userShowallResponse.json();
+            allUserRecordsFromApi = userShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
+              e && e.id && e.diff && typeof e.is_played === 'boolean' && typeof e.score === 'number' 
             ) || [];
-            setCachedData<ShowallApiResponse>(showallKey, showallData!);
+            setCachedData<ShowallApiResponse>(userShowallKey, userShowallData);
         } else {
-            const errorJson = await showallResponse.json().catch(() => ({}));
-            const errorMsg = `전체 곡 기록 로딩 실패 (상태: ${showallResponse.status}): ${errorJson.error?.message || showallResponse.statusText || '오류 메시지 없음'}`;
-            if (!criticalError && !showallResponse.url.includes("showall.json?region=jp2&user_name=undefined")) { 
-                 criticalError = errorMsg; 
-            } else if (criticalError && !showallResponse.url.includes("showall.json?region=jp2&user_name=undefined")) {
-                 console.warn(errorMsg);
-            }
+            const errorJson = await userShowallResponse.json().catch(() => ({}));
+            const errorMsg = `사용자 전체 곡 기록 로딩 실패 (상태: ${userShowallResponse.status}): ${errorJson.error?.message || userShowallResponse.statusText || '오류 없음'}`;
+            if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
+        
+        // Process Global Music Data
+        let globalMusicRecordsFromApi: ShowallApiSongEntry[] = [];
+        if (globalMusicResponse.ok) {
+            const globalMusicData = await globalMusicResponse.json();
+            globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
+               e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level
+            ) || [];
+            setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData);
+        } else {
+            const errorJson = await globalMusicResponse.json().catch(() => ({}));
+            const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponse.status}): ${errorJson.error?.message || globalMusicResponse.statusText || '오류 없음'}`;
+             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
+        }
+
 
         if (criticalError) {
           throw new Error(criticalError);
         }
 
-        if (allUserRecordsFromApi.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(allUserRecordsFromApi, NEW_COUNT);
+        if (allUserRecordsFromApi.length > 0 && globalMusicRecordsFromApi.length > 0) {
+            const newSongPool = globalMusicRecordsFromApi.slice(-NEW_SONG_POOL_SIZE);
+            const calculatedNewSongs = calculateNewSongs(newSongPool, allUserRecordsFromApi, NEW_COUNT);
             setNew20SongsData(calculatedNewSongs);
         } else {
-            console.warn("Could not calculate New 20 from API: User records from API are insufficient.");
+            console.warn("Could not calculate New 20 from API: User records or global music data from API are insufficient.");
             setNew20SongsData([]);
         }
         const newCacheTime = new Date().toLocaleString();
-        setLastRefreshed(newCacheTime);
+        setLastRefreshed(newCacheTime); // Reflects user data refresh time
         toast({ title: "데이터 로드 완료", description: `API에서 ${userNameForApi}님의 최신 데이터를 성공적으로 불러와 캐시했습니다. (${newCacheTime})` });
 
       } catch (error) {
@@ -473,7 +499,7 @@ function ResultContent() {
 
     fetchAndProcessData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, toast, clientHasMounted]); 
+  }, [userNameForApi, refreshNonce, toast, clientHasMounted]); // apiPlayerName removed from deps
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -509,12 +535,12 @@ function ResultContent() {
         <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-2">
             <p className="text-xs text-muted-foreground">
                 {clientHasMounted 
-                    ? (lastRefreshed && lastRefreshed !== '캐시 없음' ? `마지막 데이터 동기화: ${lastRefreshed}` : '캐시된 데이터가 없거나 만료되었습니다. API에서 가져옵니다.') 
+                    ? (lastRefreshed && lastRefreshed !== '사용자 캐시 없음' ? `사용자 데이터 동기화: ${lastRefreshed}` : '캐시된 사용자 데이터가 없거나 만료되었습니다.') 
                     : '동기화 상태 확인 중...'}
             </p>
             <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === "플레이어"}>
                 <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingSongs && "animate-spin")} />
-                데이터 새로고침
+                사용자 데이터 새로고침
             </Button>
         </div>
 
@@ -555,9 +581,9 @@ function ResultContent() {
 
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
-            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">Best 30</TabsTrigger>
-            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">New 20</TabsTrigger>
-            <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">Best30 + New20</TabsTrigger>
+            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best 30</TabsTrigger>
+            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger>
+            <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
@@ -566,8 +592,8 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted 
-                  ? (getCachedData(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`)
-                    ? '캐시를 갱신 중입니다...'
+                  ? (getCachedData(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) && getCachedData(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS)
+                    ? '캐시를 확인/갱신 중입니다...'
                     : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
                   : '데이터 상태 확인 중...'
                 }
@@ -581,7 +607,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요. 또는 API가 `q=` 파라미터 없이 호출되었을 때 Chunirec에서 모든 곡 목록을 반환하지 않을 수 있습니다. 이 경우 API 호출 방식 수정이 필요할 수 있습니다.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요. API에서 필요한 정보를 모두 가져오지 못했을 수 있습니다 (예: `music/showall.json` 또는 사용자 기록). 콘솔(F12)의 오류 메시지를 확인하세요.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -605,7 +631,7 @@ function ResultContent() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다.</p>
+                      <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다. (Chunirec API의 `rating_data.json` 응답을 확인해주세요)</p>
                     )}
                   </CardContent>
                 </Card>
@@ -627,7 +653,7 @@ function ResultContent() {
                         ))}
                       </div>
                      ) : (
-                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (사용자의 `showall.json` 데이터에서 1182번째 요소 이후의 곡이 없거나, 해당 곡들의 점수가 0이거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
+                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (Chunirec API의 `music/showall.json`에서 가져온 최신 {NEW_SONG_POOL_SIZE}곡 중 사용자가 플레이한 곡이 없거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그를 확인하세요.)</p>
                      )}
                   </CardContent>
                 </Card>
@@ -666,7 +692,7 @@ function ResultContent() {
                           ))}
                         </div>
                        ) : (
-                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (사용자의 `showall.json` 데이터에서 1182번째 요소 이후의 곡이 없거나, 해당 곡들의 점수가 0이거나, 관련 API 호출에 문제가 있을 수 있습니다.)</p>
+                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (Chunirec API의 `music/showall.json`에서 가져온 최신 {NEW_SONG_POOL_SIZE}곡 중 사용자가 플레이한 곡이 없거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그를 확인하세요.)</p>
                        )}
                     </div>
                   </CardContent>
@@ -688,4 +714,3 @@ export default function ResultPage() {
   );
 }
 
-    
