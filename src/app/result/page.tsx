@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import SongCard, { type Song } from "@/components/SongCard";
-import { User, Gauge, Target, Home, ArrowLeft, Columns } from "lucide-react";
+import { User, Gauge, Target, ArrowLeft, Columns } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const generatePlaceholderSongs = (count: number): Song[] => {
@@ -25,9 +25,6 @@ const generatePlaceholderSongs = (count: number): Song[] => {
   }));
 };
 
-const best30SongsData = generatePlaceholderSongs(30);
-const new20SongsData = generatePlaceholderSongs(20);
-
 function ResultContent() {
   const searchParams = useSearchParams();
   const nickname = searchParams.get("nickname") || "Player";
@@ -35,20 +32,28 @@ function ResultContent() {
   const targetRating = searchParams.get("target") || "N/A";
   const [xlColumnCount, setXlColumnCount] = useState<number>(5); // Default 5 columns for XL
 
-  // Calculate responsive column counts based on slider
+  const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
+  const [isLoadingSongs, setIsLoadingSongs] = useState(true);
+
+  useEffect(() => {
+    setBest30SongsData(generatePlaceholderSongs(30));
+    setNew20SongsData(generatePlaceholderSongs(20));
+    setIsLoadingSongs(false);
+  }, []); // Empty dependency array ensures this runs once on mount (client-side)
+
   const getResponsiveCols = (baseXlCols: number) => {
     return {
-      sm: Math.max(1, baseXlCols - 3), // Min 1 col on sm
-      md: Math.max(2, baseXlCols - 2), // Min 2 cols on md
-      lg: Math.max(3, baseXlCols - 1), // Min 3 cols on lg
-      xl: Math.max(3, baseXlCols)      // Min 3 cols on xl
+      sm: Math.max(1, baseXlCols - 3), 
+      md: Math.max(2, baseXlCols - 2), 
+      lg: Math.max(3, baseXlCols - 1), 
+      xl: Math.max(3, baseXlCols)      
     };
   };
   
   const best30Cols = getResponsiveCols(xlColumnCount);
-  const new20Cols = getResponsiveCols(Math.max(3, xlColumnCount -1)); // New20 typically has one less column or so
+  const new20Cols = getResponsiveCols(Math.max(3, xlColumnCount -1)); 
   
-  // For combined view, adjust based on available space
   const comboBest30Cols = getResponsiveCols(Math.max(3, xlColumnCount -1)); 
   const comboNew20Cols = getResponsiveCols(Math.max(2, xlColumnCount -2));
 
@@ -101,87 +106,93 @@ function ResultContent() {
             <TabsTrigger value="best30new20" className="py-2.5 text-sm sm:text-base">Best30 + New20</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="best30">
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline text-2xl">Best 30 Songs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className={cn(
-                  "grid grid-cols-1 gap-4",
-                  `sm:grid-cols-${best30Cols.sm}`,
-                  `md:grid-cols-${best30Cols.md}`,
-                  `lg:grid-cols-${best30Cols.lg}`,
-                  `xl:grid-cols-${best30Cols.xl}`
-                )}>
-                  {best30SongsData.map((song) => (
-                    <SongCard key={`best30-${song.id}`} song={song} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {isLoadingSongs ? (
+            <div className="flex items-center justify-center h-64">
+              <p className="text-xl text-muted-foreground">Loading song data...</p>
+            </div>
+          ) : (
+            <>
+              <TabsContent value="best30">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline text-2xl">Best 30 Songs</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={cn(
+                      "grid grid-cols-1 gap-4",
+                      `sm:grid-cols-${best30Cols.sm}`,
+                      `md:grid-cols-${best30Cols.md}`,
+                      `lg:grid-cols-${best30Cols.lg}`,
+                      `xl:grid-cols-${best30Cols.xl}`
+                    )}>
+                      {best30SongsData.map((song) => (
+                        <SongCard key={`best30-${song.id}`} song={song} />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-          <TabsContent value="new20">
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline text-2xl">New 20 Songs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className={cn(
-                  "grid grid-cols-1 gap-4",
-                  `sm:grid-cols-${new20Cols.sm}`,
-                  `md:grid-cols-${new20Cols.md}`,
-                  `lg:grid-cols-${new20Cols.lg}`,
-                  `xl:grid-cols-${new20Cols.xl}`
-                )}>
-                  {new20SongsData.map((song) => (
-                    <SongCard key={`new20-${song.id}`} song={song} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              <TabsContent value="new20">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline text-2xl">New 20 Songs</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className={cn(
+                      "grid grid-cols-1 gap-4",
+                      `sm:grid-cols-${new20Cols.sm}`,
+                      `md:grid-cols-${new20Cols.md}`,
+                      `lg:grid-cols-${new20Cols.lg}`,
+                      `xl:grid-cols-${new20Cols.xl}`
+                    )}>
+                      {new20SongsData.map((song) => (
+                        <SongCard key={`new20-${song.id}`} song={song} />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-          <TabsContent value="best30new20">
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-headline text-2xl">Best 30 + New 20 Songs</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col lg:flex-row gap-6">
-                <div className="lg:w-3/5">
-                  <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
-                  <div className={cn(
-                    "grid grid-cols-1 gap-4",
-                     // In combined view, Best30 might need fewer columns than when standalone
-                    `sm:grid-cols-${comboBest30Cols.sm}`,
-                    `md:grid-cols-${comboBest30Cols.md}`,
-                    `lg:grid-cols-${comboBest30Cols.lg}`,
-                    `xl:grid-cols-${comboBest30Cols.xl}`
-                  )}>
-                    {best30SongsData.map((song) => (
-                      <SongCard key={`combo-best30-${song.id}`} song={song} />
-                    ))}
-                  </div>
-                </div>
-                <div className="lg:w-2/5">
-                  <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
-                  <div className={cn(
-                    "grid grid-cols-1 gap-4",
-                     // In combined view, New20 might also need fewer columns
-                    `sm:grid-cols-${comboNew20Cols.sm}`,
-                    `md:grid-cols-${comboNew20Cols.md}`,
-                    `lg:grid-cols-${comboNew20Cols.lg}`,
-                    `xl:grid-cols-${comboNew20Cols.xl}`
-                  )}>
-                    {new20SongsData.map((song) => (
-                      <SongCard key={`combo-new20-${song.id}`} song={song} />
-                    ))}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+              <TabsContent value="best30new20">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="font-headline text-2xl">Best 30 + New 20 Songs</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col lg:flex-row gap-6">
+                    <div className="lg:w-3/5">
+                      <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
+                      <div className={cn(
+                        "grid grid-cols-1 gap-4",
+                        `sm:grid-cols-${comboBest30Cols.sm}`,
+                        `md:grid-cols-${comboBest30Cols.md}`,
+                        `lg:grid-cols-${comboBest30Cols.lg}`,
+                        `xl:grid-cols-${comboBest30Cols.xl}`
+                      )}>
+                        {best30SongsData.map((song) => (
+                          <SongCard key={`combo-best30-${song.id}`} song={song} />
+                        ))}
+                      </div>
+                    </div>
+                    <div className="lg:w-2/5">
+                      <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
+                      <div className={cn(
+                        "grid grid-cols-1 gap-4",
+                        `sm:grid-cols-${comboNew20Cols.sm}`,
+                        `md:grid-cols-${comboNew20Cols.md}`,
+                        `lg:grid-cols-${comboNew20Cols.lg}`,
+                        `xl:grid-cols-${comboNew20Cols.xl}`
+                      )}>
+                        {new20SongsData.map((song) => (
+                          <SongCard key={`combo-new20-${song.id}`} song={song} />
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </main>
@@ -195,5 +206,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    
