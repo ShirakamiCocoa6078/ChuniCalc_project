@@ -76,9 +76,6 @@ type RatingApiSongEntry = {
   updated_at?: string;
 };
 
-// This type will represent entries from both records/showall.json (user plays)
-// and music/showall.json (global song definitions).
-// Fields not present in music/showall.json will be undefined.
 type ShowallApiSongEntry = {
   id: string;
   diff: string;
@@ -86,16 +83,14 @@ type ShowallApiSongEntry = {
   genre: string;
   const: number | null;
   level: number | string;
-  // Fields primarily from records/showall.json (user-specific)
-  score?: number; // Optional because music/showall.json won't have it
-  rating?: number | null; // Optional
-  is_played?: boolean; // Optional
-  updated_at?: string; // Optional
-  is_clear?: boolean; // Optional
-  is_fullcombo?: boolean; // Optional
-  is_alljustice?: boolean; // Optional
-  is_fullchain?: boolean; // Optional
-  // Field that might be in music/showall.json or inferred
+  score?: number; 
+  rating?: number | null; 
+  is_played?: boolean; 
+  updated_at?: string; 
+  is_clear?: boolean; 
+  is_fullcombo?: boolean; 
+  is_alljustice?: boolean; 
+  is_fullchain?: boolean; 
   is_const_unknown?: boolean;
 };
 
@@ -137,11 +132,11 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
 };
 
 const mapApiSongToAppSong = (
-    apiSong: RatingApiSongEntry | ShowallApiSongEntry, // Accept broader type
+    apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
     _index: number,
     chartConstantOverride?: number
 ): Song => {
-  const score = typeof apiSong.score === 'number' ? apiSong.score : 0; // Default score to 0 if not present
+  const score = typeof apiSong.score === 'number' ? apiSong.score : 0; 
 
   let effectiveChartConstant: number | null = null;
   if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
@@ -150,7 +145,7 @@ const mapApiSongToAppSong = (
     effectiveChartConstant = apiSong.const;
   } else if (
     apiSong.is_const_unknown &&
-    typeof apiSong.level === 'string' || typeof apiSong.level === 'number'
+    (typeof apiSong.level === 'string' || typeof apiSong.level === 'number')
   ) {
     const parsedLevel = parseFloat(String(apiSong.level));
     if (!isNaN(parsedLevel) && parsedLevel > 0) {
@@ -211,9 +206,9 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
 };
 
 const calculateNewSongs = (
-  definedSongPoolEntries: ShowallApiSongEntry[], // Last 87 from music/showall.json
-  allUserRecords: ShowallApiSongEntry[],       // User's plays from records/showall.json
-  count: number                                // Typically NEW_COUNT (20)
+  definedSongPoolEntries: ShowallApiSongEntry[], 
+  allUserRecords: ShowallApiSongEntry[],       
+  count: number                                
 ): Song[] => {
   console.log("[N20_CALC] Starting New 20 calculation from global music list slice and user records.");
   console.log(`[N20_CALC] Defined new song pool size: ${definedSongPoolEntries.length}`);
@@ -242,13 +237,13 @@ const calculateNewSongs = (
             diff: definedSongEntry.diff,
             title: definedSongEntry.title,
             genre: definedSongEntry.genre,
-            const: definedSongEntry.const,
+            const: definedSongEntry.const, // Prioritize const from global definition
             level: definedSongEntry.level,
-            is_const_unknown: typeof (definedSongEntry as any).is_const_unknown === 'boolean'
-                ? (definedSongEntry as any).is_const_unknown
+            is_const_unknown: typeof (definedSongEntry as any).is_const_unknown === 'boolean' 
+                ? (definedSongEntry as any).is_const_unknown 
                 : (definedSongEntry.const === null || definedSongEntry.const === 0),
-            score: userRecord.score, // User's specific score
-            rating: userRecord.rating, // User's API rating, mapApiSongToAppSong will recalculate
+            score: userRecord.score, 
+            rating: userRecord.rating, 
             is_played: userRecord.is_played,
             updated_at: userRecord.updated_at,
             is_clear: userRecord.is_clear,
@@ -256,7 +251,6 @@ const calculateNewSongs = (
             is_alljustice: userRecord.is_alljustice,
             is_fullchain: userRecord.is_fullchain,
         };
-        // Pass definedSongEntry.const as chartConstantOverride to ensure global definition is prioritized for const
         acc.push(mapApiSongToAppSong(combinedEntry, acc.length, definedSongEntry.const ?? undefined));
     }
     return acc;
@@ -281,12 +275,12 @@ type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
-type ShowallApiResponse = { // For records/showall.json
+type ShowallApiResponse = { 
     records?: ShowallApiSongEntry[];
 };
 
-type GlobalMusicApiResponse = { // For music/showall.json
-    records?: ShowallApiSongEntry[]; // Assuming structure is similar enough
+type GlobalMusicApiResponse = { 
+    records?: ShowallApiSongEntry[]; 
 }
 
 function ResultContent() {
@@ -319,7 +313,6 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        // Note: GLOBAL_MUSIC_DATA_KEY is not cleared here by user action, it expires on its own.
         console.log(`User-specific cache cleared for user: ${userNameForApi}`);
         toast({ title: "데이터 새로고침 중", description: "캐시를 지우고 API에서 최신 데이터를 가져옵니다." });
     }
@@ -406,13 +399,13 @@ function ResultContent() {
             fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
             fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
             fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${API_TOKEN}`) // Global music list
+            fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${API_TOKEN}`) 
         ];
 
         const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponse] = await Promise.all(apiRequests);
 
         let criticalError = null;
-        // Process Profile
+        
         if (profileResponse.ok) {
             const profileData = await profileResponse.json();
             setApiPlayerName(profileData.player_name || userNameForApi);
@@ -422,7 +415,7 @@ function ResultContent() {
             criticalError = `프로필 정보 로딩 실패 (상태: ${profileResponse.status}): ${errorJson.error?.message || profileResponse.statusText || '오류 없음'}`;
         }
         
-        // Process Rating Data (B30)
+        
         if (ratingDataResponse.ok) {
             const ratingData = await ratingDataResponse.json();
             const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
@@ -437,7 +430,7 @@ function ResultContent() {
             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
 
-        // Process User Showall Data
+        
         let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
         if (userShowallResponse.ok) {
             const userShowallData = await userShowallResponse.json();
@@ -451,7 +444,7 @@ function ResultContent() {
             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
         
-        // Process Global Music Data
+        
         let globalMusicRecordsFromApi: ShowallApiSongEntry[] = [];
         if (globalMusicResponse.ok) {
             const globalMusicData = await globalMusicResponse.json();
@@ -479,7 +472,7 @@ function ResultContent() {
             setNew20SongsData([]);
         }
         const newCacheTime = new Date().toLocaleString();
-        setLastRefreshed(newCacheTime); // Reflects user data refresh time
+        setLastRefreshed(newCacheTime); 
         toast({ title: "데이터 로드 완료", description: `API에서 ${userNameForApi}님의 최신 데이터를 성공적으로 불러와 캐시했습니다. (${newCacheTime})` });
 
       } catch (error) {
@@ -499,7 +492,7 @@ function ResultContent() {
 
     fetchAndProcessData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, toast, clientHasMounted]); // apiPlayerName removed from deps
+  }, [userNameForApi, refreshNonce, clientHasMounted]); 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
