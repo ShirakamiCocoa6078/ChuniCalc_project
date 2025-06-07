@@ -175,9 +175,9 @@ const calculateNewSongs = (
     eligibleNewMusicIds.has(record.id) && 
     record.is_played && 
     record.score > 0 && 
-    (typeof record.rating === 'number' || record.rating === null) && // Allow null rating
+    (typeof record.rating === 'number' || record.rating === null) && 
     typeof record.score === 'number' && 
-    (typeof record.const === 'number' || record.const === null) // Allow null const
+    (typeof record.const === 'number' || record.const === null) 
   );
   console.log("User played eligible new songs (before sorting/slicing):", userPlayedEligibleNewSongs);
 
@@ -268,10 +268,7 @@ function ResultContent() {
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
-      // music/search.json API는 'since' 파라미터가 정확한 의미로 동작하지 않을 수 있으므로,
-      // 충분한 기간(예: 최근 1년)의 데이터를 가져와 클라이언트에서 'release' 필드로 직접 필터링합니다.
-      // TARGET_NEW_SONG_RELEASE_DATE ("2024-12-12")는 calculateNewSongs 함수 내부에서 사용됩니다.
-      const musicSearchBaseQuery = "since:2024-01-01"; // Fetch recent additions/updates to filter by release date later
+      const musicSearchBaseQuery = "since:2024-01-01"; 
 
       try {
         const [ratingDataResponse, showallResponse, musicSearchResponse] = await Promise.all([
@@ -347,7 +344,7 @@ function ResultContent() {
                 typeof e.id === 'string' &&
                 typeof e.title === 'string' &&
                 typeof e.genre === 'string' &&
-                typeof e.release === 'string' // Ensure release is a string
+                typeof e.release === 'string' 
             ) || [];
         }
 
@@ -570,5 +567,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    

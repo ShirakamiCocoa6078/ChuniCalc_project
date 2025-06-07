@@ -44,8 +44,8 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
 
   // 임시 테두리 로직: 보면정수 + 2.10 이상이면 갱신 힘든 것으로 간주 (빨강), 아니면 초록
   // 실제 최고점은 1009000점 (보면정수 + 2.15)
-  const isMaxRating लगभग = song.chartConstant !== null && song.currentRating >= song.chartConstant + 2.10;
-  const borderColorClass = isMaxRating ? "border-red-500" : "border-green-500";
+  const isMaxRatingApprox = song.chartConstant !== null && song.currentRating >= song.chartConstant + 2.10;
+  const borderColorClass = isMaxRatingApprox ? "border-red-500" : "border-green-500";
 
   return (
     <Card className={cn(
@@ -85,12 +85,9 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
                 {ratingDifference > 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{ratingDifference.toFixed(2)})</span>}
               </span>
             </div>
-            {/* "Max: ..." 문구 제거됨 */}
           </div>
         </div>
       </CardContent>
     </Card>
   );
 }
-
-    
