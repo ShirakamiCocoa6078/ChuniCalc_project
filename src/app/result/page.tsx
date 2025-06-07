@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const API_TOKEN = process.env.CHUNIREC_API_TOKEN;
 
 type ApiSongEntry = {
-  id: string;
+  id: string; // Music ID
   title: string;
   score: number;
   rating: number;
@@ -27,15 +27,13 @@ const mapApiSongToAppSong = (apiSong: ApiSongEntry, index: number): Song => {
   const currentRating = apiSong.rating;
 
   // 목표 점수/레이팅 생성 로직 (기존 placeholder 로직 참고)
-  // 실제 API 데이터에서는 targetScore, targetRating이 없으므로, 필요시 다른 로직으로 대체해야 함.
-  // 여기서는 현재 값에서 약간 높게 설정하여 표시.
   const targetScore = Math.max(currentScore, Math.min(1001000, currentScore + Math.floor(Math.random() * ( (1001000 - currentScore > 0 && currentScore > 0) ? (1001000 - currentScore)/10 : 10000) ) ) );
   const targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
 
   return {
-    id: apiSong.id || `song-${index}`,
+    id: apiSong.id || `song-${index}`, // API ID를 사용
     title: apiSong.title,
-    jacketUrl: `https://placehold.co/120x120.png?text=${apiSong.id ? apiSong.id.substring(0,4) : 'Song'}`,
+    jacketUrl: `https://chunirec.net/images/jacket/${apiSong.id}.png`, // 실제 자켓 URL로 변경
     currentScore: currentScore,
     currentRating: currentRating,
     targetScore: targetScore,
@@ -48,11 +46,13 @@ const sortSongs = (songs: Song[]): Song[] => {
     if (b.currentRating !== a.currentRating) {
       return b.currentRating - a.currentRating;
     }
+    // currentRating이 같을 경우, (targetScore - currentScore)가 큰 순서대로 (더 많이 올려야 하는 곡)
     const scoreDiffA = a.targetScore > 0 ? (a.targetScore - a.currentScore) : -Infinity;
     const scoreDiffB = b.targetScore > 0 ? (b.targetScore - a.currentScore) : -Infinity;
     return scoreDiffB - scoreDiffA;
   });
 };
+
 
 function ResultContent() {
   const searchParams = useSearchParams();
@@ -60,16 +60,16 @@ function ResultContent() {
   const currentRatingDisplay = searchParams.get("current") || "N/A";
   const targetRatingDisplay = searchParams.get("target") || "N/A";
 
-  const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi);
+  const [apiPlayerName, setApiPlayerName] = useState<string | null>(null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20는 비워둠 (API 연동 확인 중)
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPlayerProfile = async () => {
       if (!API_TOKEN || !userNameForApi || userNameForApi === "플레이어") {
-        setApiPlayerName(userNameForApi); // Fallback to URL nickname if no API call needed
+        setApiPlayerName(userNameForApi); 
         return;
       }
 
@@ -82,15 +82,15 @@ function ResultContent() {
           if (data.player_name) {
             setApiPlayerName(data.player_name);
           } else {
-            setApiPlayerName(userNameForApi); // Fallback if player_name not in response
+            setApiPlayerName(userNameForApi); 
           }
         } else {
           console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi); // Fallback on error
+          setApiPlayerName(userNameForApi); 
         }
       } catch (error) {
         console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi); // Fallback on error
+        setApiPlayerName(userNameForApi); 
       }
     };
     fetchPlayerProfile();
@@ -108,7 +108,7 @@ function ResultContent() {
       }
 
       const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
-      if (!userNameParam && !searchParams.get("user_id")) { // user_name과 user_id 둘 다 없으면
+      if (!userNameParam && !searchParams.get("user_id")) { 
         setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
         setIsLoadingSongs(false);
         setBest30SongsData([]);
@@ -123,9 +123,13 @@ function ResultContent() {
         const response = await fetch(
           `https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`
         );
+        
+        const data = await response.json();
+        console.log('Chunirec rating_data.json API Response:', data);
+
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = data || {};
           let errorMessage = `곡 정보를 가져오는 데 실패했습니다. (상태: ${response.status})`;
           if (errorData && errorData.error && errorData.error.message) {
             errorMessage += `: ${errorData.error.message}`;
@@ -133,24 +137,21 @@ function ResultContent() {
           if (response.status === 404) {
             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
           } else if (response.status === 403 && errorData.error?.code === 403 && errorData.error?.message?.includes("invalid token")) {
-             errorMessage = `Chunirec API 토큰이 유효하지 않습니다. 토큰을 확인해주세요. (오류 메시지: ${errorData.error.message})`;
+             errorMessage = `Chunirec API 토큰이 유효하지 않습니다. 토큰을 확인해주세요. (오류 메시지: ${errorData.error.message || '토큰 문제'})`;
           } else if (response.status === 403 ) {
-             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code}, 메시지: ${errorData.error?.message})`;
+             errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code}, 메시지: ${errorData.error?.message || '접근 권한 문제'})`;
           }
           throw new Error(errorMessage);
         }
 
-        const data = await response.json();
-        console.log('Chunirec rating_data.json API Response:', data);
-
 
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         setBest30SongsData(sortSongs(bestEntries));
-
-        // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음
+        
+        // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음 (사용자 요청에 따라 비워둠)
         // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         // setNew20SongsData(sortSongs(recentEntries));
-        setNew20SongsData([]); // New 20는 비워둠
+        setNew20SongsData([]); 
 
 
       } catch (error) {
@@ -167,10 +168,7 @@ function ResultContent() {
   }, [searchParams, userNameForApi]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  // New 20 탭은 20곡 기준으로, 5열까지 가능하게 설정 (화면 너비에 따라)
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-
-  // Combined view에서 Best 30 (lg:w-3/5)은 최대 3열, New 20 (lg:w-2/5)는 최대 2열
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3";
   const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2";
 
@@ -327,5 +325,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    

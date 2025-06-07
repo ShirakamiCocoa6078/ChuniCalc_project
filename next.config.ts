@@ -17,6 +17,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'chunirec.net',
+        port: '',
+        pathname: '/images/jacket/**',
+      }
     ],
   },
   env: {
