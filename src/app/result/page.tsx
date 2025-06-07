@@ -106,7 +106,7 @@ const calculateNewSongs = (
   const eligibleNewMusic = allMusicEntries.filter(music => {
     return music.release > TARGET_NEW_SONG_RELEASE_DATE && music.genre !== "WORLD'S END";
   });
-  console.log("Eligible new music (after target release date & genre filter):", eligibleNewMusic);
+  console.log(`Eligible new music (after target release date '${TARGET_NEW_SONG_RELEASE_DATE}' & genre filter):`, eligibleNewMusic);
 
 
   if (eligibleNewMusic.length === 0) {
@@ -345,10 +345,10 @@ function ResultContent() {
         </header>
 
         <Tabs defaultValue="best30" className="w-full">
-          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 mb-6 bg-muted p-1 rounded-lg">
-            <TabsTrigger value="best30" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">Best 30</TabsTrigger>
-            <TabsTrigger value="new20" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">New 20</TabsTrigger>
-            <TabsTrigger value="best30new20" className="px-2 py-3 text-sm whitespace-normal text-center sm:px-3 sm:py-2.5 sm:text-base sm:whitespace-nowrap sm:text-left">Best30 + New20</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
+            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">Best 30</TabsTrigger>
+            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">New 20</TabsTrigger>
+            <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm">Best30 + New20</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
