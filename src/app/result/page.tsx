@@ -15,10 +15,10 @@ const API_TOKEN = process.env.CHUNIREC_API_TOKEN;
 
 // API 응답 타입 (Chunirec API 문서 기반)
 type ApiSongEntry = {
-  id: string;
-  title: string;
-  score: number;
-  rating: number;
+  id: string; // 곡 ID
+  title: string; // 곡 제목
+  score: number; // 현재 점수
+  rating: number; // 현재 레이팅 값
   // jacketUrl은 API에 없으므로 placeholder 사용 예정
   // const, level 등 다른 유용한 정보도 포함 가능
 };
@@ -63,7 +63,7 @@ function ResultContent() {
   const targetRatingDisplay = searchParams.get("target") || "N/A";
   
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20 데이터 (현재는 비워둠)
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // New 20 데이터 (API 연동 대기)
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
 
@@ -72,18 +72,19 @@ function ResultContent() {
       if (!API_TOKEN) {
         setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다.");
         setIsLoadingSongs(false);
-        // Best30, New20 모두 빈 배열로 설정하여 "데이터 없음" 메시지 표시
         setBest30SongsData([]);
         setNew20SongsData([]);
         return;
       }
 
-      const userNameParam = nickname !== "플레이어" ? `&user_name=${encodeURIComponent(nickname)}` : "";
+      // user_name 파라미터가 URL에 명시적으로 제공되면 해당 값을 사용, 아니면 기본값 또는 빈 문자열 처리
+      const userNameFromQuery = searchParams.get("nickname");
+      const userNameParam = userNameFromQuery ? `&user_name=${encodeURIComponent(userNameFromQuery)}` : "";
 
       try {
         setIsLoadingSongs(true);
         setErrorLoadingSongs(null);
-        // Best 30 및 Recent (New) 데이터 가져오기
+        
         const response = await fetch(
           `https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`
         );
@@ -95,23 +96,27 @@ function ResultContent() {
                 errorMessage += `: ${errorData.error.message}`;
             }
             if (response.status === 404) {
-              errorMessage = `사용자 '${nickname}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
+              errorMessage = `사용자 '${userNameFromQuery || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. Chunirec에 데이터가 등록되어 있는지 확인해주세요.`;
             } else if (response.status === 403) {
-                errorMessage = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code})`;
+                errorMessage = `사용자 '${userNameFromQuery || '정보 없음'}'의 데이터에 접근할 권한이 없습니다. 비공개 사용자이거나 친구가 아닐 수 있습니다. (오류 코드: ${errorData.error?.code})`;
             }
           throw new Error(errorMessage);
         }
 
         const data = await response.json();
+        
+        // Temporary: Log API response for debugging. Remove after use.
+        // 만약 특정 유저(예: cocoa)의 응답을 보고 싶다면, 브라우저 주소창에 ?nickname=cocoa&... 와 같이 입력하고
+        // 개발자 도구의 콘솔 탭에서 아래 로그를 확인하세요.
+        console.log('Chunirec rating_data.json API Response:', data);
 
         // Best 30 데이터 처리
+        // API 응답에서 best.entries가 null일 수 있으므로 필터링 추가
         const bestEntries = data.best?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
         setBest30SongsData(sortSongs(bestEntries));
 
-        // New 20 (Recent 10) 데이터 처리 - 현재는 비워두고 API 문제 해결 후 연동 예정
-        // const recentEntries = data.recent?.entries?.filter((e: any) => e !== null).map(mapApiSongToAppSong) || [];
-        // setNew20SongsData(sortSongs(recentEntries)); // API 연동 시 주석 해제
-        setNew20SongsData([]); // New 20는 일단 비워둠
+        // New 20 (Recent 10) 데이터는 현재 API 연동하지 않음
+        setNew20SongsData([]); 
 
       } catch (error) {
         console.error("Error fetching song data:", error);
@@ -123,8 +128,14 @@ function ResultContent() {
       }
     };
 
-    fetchSongData();
-  }, [nickname]);
+    // 닉네임이 URL에 있을 때만 데이터 호출 (또는 기본 사용자 정보 로드 로직이 있다면 해당 조건에 맞게)
+    // if (nickname && nickname !== "플레이어") { // 닉네임이 있을때만 호출하고 싶다면 이 조건 사용
+       fetchSongData();
+    // } else { // 닉네임이 없으면 로딩 중단 및 메시지 표시 (선택사항)
+    //   setErrorLoadingSongs("닉네임 정보가 없어 곡 정보를 가져올 수 없습니다.");
+    //   setIsLoadingSongs(false);
+    // }
+  }, [searchParams]); // searchParams가 변경될 때마다 실행 (닉네임 변경 등)
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4"; // 20곡 기준
