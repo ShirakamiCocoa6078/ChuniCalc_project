@@ -1,7 +1,7 @@
 
 "use client";
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,26 +10,70 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard, { type Song } from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import NewSongsData from '@/data/NewSongs.json'; // Import NewSongs.json
+import NewSongsData from '@/data/NewSongs.json';
+import { useToast } from "@/hooks/use-toast";
 
 const API_TOKEN = process.env.NEXT_PUBLIC_CHUNIREC_API_TOKEN;
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
+
+const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+type CachedData<T> = {
+  timestamp: number;
+  data: T;
+};
+
+function getCachedData<T>(key: string): T | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const item = localStorage.getItem(key);
+    if (!item) return null;
+    const cached = JSON.parse(item) as CachedData<T>;
+    if (Date.now() - cached.timestamp > CACHE_EXPIRY_MS) {
+      localStorage.removeItem(key); // Cache expired
+      console.log(`Cache expired and removed for key: ${key}`);
+      return null;
+    }
+    console.log(`Cache hit for key: ${key}`);
+    return cached.data;
+  } catch (error) {
+    console.error("Error reading from localStorage for key:", key, error);
+    localStorage.removeItem(key); // Remove corrupted data
+    return null;
+  }
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const item: CachedData<T> = { timestamp: Date.now(), data };
+    localStorage.setItem(key, JSON.stringify(item));
+    console.log(`Data cached for key: ${key}`);
+  } catch (error) {
+    console.error("Error writing to localStorage for key:", key, error);
+    // Optionally, handle quota exceeded errors more gracefully
+    if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+        alert('로컬 저장 공간이 부족하여 데이터를 캐시할 수 없습니다. 일부 오래된 캐시를 삭제해보세요.');
+    }
+  }
+}
+
 
 type RatingApiSongEntry = {
   id: string;
   diff: string;
   title: string;
   score: number;
-  rating: number; // API-provided rating
+  rating: number;
   genre?: string;
-  const?: number; // 보면 정수
+  const?: number;
   updated_at?: string;
 };
 
-// Type for songs defined in NewSongs.json (similar to MusicSearchApiEntry)
 type DefinedNewSongEntry = {
   id: string;
   title: string;
@@ -41,11 +85,11 @@ type DefinedNewSongEntry = {
 type ShowallApiSongEntry = {
   id: string;
   diff: string;
-  level: number | string; 
+  level: number | string;
   title: string;
-  const: number | null; 
+  const: number | null;
   score: number;
-  rating: number | null; 
+  rating: number | null;
   is_const_unknown: boolean;
   is_clear: boolean;
   is_fullcombo: boolean;
@@ -68,15 +112,15 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
   if (score >= 1009000) { // SSS+
     ratingValue = chartConstant + 2.15;
   } else if (score >= 1007500) { // SSS
-    ratingValue = chartConstant + 2.00 + Math.min(0.15, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
+    ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
   } else if (score >= 1005000) { // SS+
-    ratingValue = chartConstant + 1.50 + Math.min(0.50, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
+    ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
   } else if (score >= 1000000) { // SS
-    ratingValue = chartConstant + 1.00 + Math.min(0.50, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
+    ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
   } else if (score >= 990000) { // S+
-    ratingValue = chartConstant + 0.60 + Math.min(0.40, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
+    ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
   } else if (score >= 975000) { // S
-    ratingValue = chartConstant + 0.00 + Math.min(0.60, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+    ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
   } else if (score >= 950000) { // AAA
     ratingValue = chartConstant - 1.50;
   } else if (score >= 925000) { // AA
@@ -88,25 +132,13 @@ const calculateChunithmSongRating = (score: number, chartConstant: number | unde
   } else { // C and below
     ratingValue = 0;
   }
-  // Ensure max values for additions are strictly adhered to
-  if (score >= 1007500 && score < 1009000) { // SSS
-      ratingValue = Math.min(chartConstant + 2.00 + 0.14, chartConstant + 2.00 + Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
-  } else if (score >= 1005000 && score < 1007500) { // SS+
-      ratingValue = Math.min(chartConstant + 1.50 + 0.49, chartConstant + 1.50 + Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
-  } else if (score >= 1000000 && score < 1005000) { // SS
-      ratingValue = Math.min(chartConstant + 1.00 + 0.49, chartConstant + 1.00 + Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
-  } else if (score >= 990000 && score < 1000000) { // S+
-      ratingValue = Math.min(chartConstant + 0.60 + 0.39, chartConstant + 0.60 + Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
-  } else if (score >= 975000 && score < 990000) { // S
-      ratingValue = Math.min(chartConstant + 0.00 + 0.59, chartConstant + 0.00 + Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
-  }
 
   return Math.max(0, parseFloat(ratingValue.toFixed(2)));
 };
 
 const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, _index: number, chartConstantOverride?: number): Song => {
   const score = apiSong.score;
-  
+
   let effectiveChartConstant: number | null = null;
   if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
     effectiveChartConstant = chartConstantOverride;
@@ -128,19 +160,19 @@ const mapApiSongToAppSong = (apiSong: RatingApiSongEntry | ShowallApiSongEntry, 
   } else {
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
-  
+
   const currentRating = calculatedCurrentRating;
 
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
-  
+
   let targetRating: number;
   if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0) {
     targetRating = calculateChunithmSongRating(targetScore, effectiveChartConstant);
   } else {
      targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
   }
-  
+
   return {
     id: apiSong.id,
     diff: apiSong.diff,
@@ -199,7 +231,7 @@ const calculateNewSongs = (
     console.warn("User has not played any of the songs defined in NewSongs.json, or scores/rating data missing for all played matches.");
     return [];
   }
-  
+
   const mappedUserPlayedNewSongs = userPlayedMatchingNewSongs.map((record, index) => mapApiSongToAppSong(record, index, record.const ?? undefined));
 
   mappedUserPlayedNewSongs.sort((a, b) => {
@@ -220,149 +252,186 @@ const calculateNewSongs = (
   return mappedUserPlayedNewSongs.slice(0, count);
 };
 
+type ProfileData = {
+    player_name: string;
+    // Add other fields from profile.json if needed
+};
+
+type RatingApiResponse = {
+    best?: { entries?: RatingApiSongEntry[] };
+    // Add other fields from rating_data.json if needed
+};
+
+type ShowallApiResponse = {
+    records?: ShowallApiSongEntry[];
+    // Add other fields from showall.json if needed
+};
+
 
 function ResultContent() {
   const searchParams = useSearchParams();
   const userNameForApi = searchParams.get("nickname") || "플레이어";
   const currentRatingDisplay = searchParams.get("current") || "N/A";
   const targetRatingDisplay = searchParams.get("target") || "N/A";
+  const { toast } = useToast();
 
-  const [apiPlayerName, setApiPlayerName] = useState<string | null>(null);
+  const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === "플레이어" ? "플레이어" : null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
   const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
 
-
-  useEffect(() => {
-    const fetchPlayerProfile = async () => {
-      if (!API_TOKEN || !userNameForApi || userNameForApi === "플레이어") {
-        setApiPlayerName(userNameForApi);
-        return;
-      }
-      try {
-        const response = await fetch(
-          `https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          if (data.player_name) {
-            setApiPlayerName(data.player_name);
-          } else {
-            setApiPlayerName(userNameForApi);
-          }
-        } else {
-          console.error("Failed to fetch player profile:", response.status);
-          setApiPlayerName(userNameForApi);
-        }
-      } catch (error) {
-        console.error("Error fetching player profile:", error);
-        setApiPlayerName(userNameForApi);
-      }
-    };
-    fetchPlayerProfile();
-  }, [userNameForApi]);
-
+  const handleRefreshData = () => {
+    if (typeof window !== 'undefined' && userNameForApi && userNameForApi !== "플레이어") {
+        const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
+        const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
+        const showallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+        localStorage.removeItem(profileKey);
+        localStorage.removeItem(ratingDataKey);
+        localStorage.removeItem(showallKey);
+        console.log(`Cache cleared for user: ${userNameForApi}`);
+        toast({ title: "데이터 새로고침 중", description: "캐시를 지우고 API에서 최신 데이터를 가져옵니다." });
+    }
+    setRefreshNonce(prev => prev + 1);
+  };
 
   useEffect(() => {
-    const fetchSongData = async () => {
+    const fetchAndProcessData = async () => {
       if (!API_TOKEN) {
         setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다.");
         setIsLoadingSongs(false);
         return;
       }
 
-      const userNameParam = userNameForApi ? `&user_name=${encodeURIComponent(userNameForApi)}` : "";
-      if (!userNameParam && !searchParams.get("user_id")) {
-         setErrorLoadingSongs("사용자 정보(닉네임 또는 ID)가 없어 곡 정보를 가져올 수 없습니다.");
-         setIsLoadingSongs(false);
-         return;
+      if (!userNameForApi || userNameForApi === "플레이어") {
+        setErrorLoadingSongs("사용자 닉네임이 제공되지 않아 데이터를 가져올 수 없습니다.");
+        setApiPlayerName("플레이어");
+        setIsLoadingSongs(false);
+        return;
       }
-
+      
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
 
+      const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
+      const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
+      const showallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+
+      const cachedProfile = getCachedData<ProfileData>(profileKey);
+      const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
+      const cachedShowallData = getCachedData<ShowallApiResponse>(showallKey);
+      
+      const cacheTimestamp = localStorage.getItem(profileKey) ? new Date(JSON.parse(localStorage.getItem(profileKey)!).timestamp).toLocaleString() : 'N/A';
+      setLastRefreshed(cachedProfile ? cacheTimestamp : '캐시 없음');
+
+      if (cachedProfile && cachedRatingData && cachedShowallData) {
+        console.log("Loading data from localStorage cache...");
+        setApiPlayerName(cachedProfile.player_name || userNameForApi);
+
+        const bestEntriesApi = cachedRatingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
+            e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
+            typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')
+        ) || [];
+        const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
+        setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
+
+        const allUserRecords = cachedShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
+            e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
+            typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) &&
+            typeof e.score === 'number' && typeof e.is_played === 'boolean' &&
+            (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') &&
+            typeof e.is_const_unknown === 'boolean' && ('level' in e)
+        ) || [];
+
+        const definedNewSongsList = NewSongsData.verse as DefinedNewSongEntry[];
+        if (definedNewSongsList.length > 0 && allUserRecords.length > 0) {
+            const calculatedNewSongs = calculateNewSongs(definedNewSongsList, allUserRecords, NEW_COUNT);
+            setNew20SongsData(calculatedNewSongs);
+        } else {
+            setNew20SongsData([]);
+        }
+        toast({ title: "데이터 로드 완료", description: `로컬 캐시에서 ${userNameForApi}님의 데이터를 성공적으로 불러왔습니다.` });
+        setIsLoadingSongs(false);
+        return;
+      }
+
+      console.log("Fetching data from API as cache is missing or expired...");
       try {
-        const [ratingDataResponse, showallResponse] = await Promise.all([
-          fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
-          fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2${userNameParam}&token=${API_TOKEN}`),
+        const [profileResponse, ratingDataResponse, showallResponse] = await Promise.all([
+          fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
+          fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
+          fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
         ]);
 
         let criticalError = null;
 
-        const ratingData = await ratingDataResponse.json();
-        console.log('Chunirec rating_data.json API Response:', ratingData);
-
-        if (!ratingDataResponse.ok) {
-          const errorData = ratingData || {};
-          let errorMessage = `곡 레이팅 정보를 가져오는 데 실패했습니다. (상태: ${ratingDataResponse.status})`;
-          if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-          if (ratingDataResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 레이팅 데이터를 찾을 수 없습니다. (rating_data)`;
-          else if (ratingDataResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (rating_data)`;
-          criticalError = errorMessage;
+        // Process Profile
+        const profileData = await profileResponse.json();
+        if (!profileResponse.ok) {
+          criticalError = `프로필 정보 로딩 실패 (상태: ${profileResponse.status}): ${profileData.error?.message || '오류 메시지 없음'}`;
         } else {
-          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry => 
-            e !== null && 
-            typeof e.id === 'string' && 
-            typeof e.diff === 'string' && 
-            typeof e.score === 'number' && 
-            (typeof e.rating === 'number' || typeof e.const === 'number')
+          setApiPlayerName(profileData.player_name || userNameForApi);
+          setCachedData<ProfileData>(profileKey, profileData);
+        }
+        
+        // Process Rating Data (Best 30)
+        const ratingData = await ratingDataResponse.json();
+        if (!ratingDataResponse.ok) {
+          const errorMsg = `Best 30 정보 로딩 실패 (상태: ${ratingDataResponse.status}): ${ratingData.error?.message || '오류 메시지 없음'}`;
+          if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
+        } else {
+          const bestEntriesApi = ratingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
+            e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
+            typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number')
           ) || [];
           const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
           setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
+          setCachedData<RatingApiResponse>(ratingDataKey, ratingData);
         }
 
+        // Process Showall Data (for New 20)
         const showallData = await showallResponse.json();
-        console.log('Chunirec showall.json API Response:', showallData);
-        let allUserRecords: ShowallApiSongEntry[] = [];
+        let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
         if (!showallResponse.ok) {
-          const errorData = showallData || {};
-          let errorMessage = `전체 곡 기록 정보를 가져오는 데 실패했습니다. (상태: ${showallResponse.status})`;
-           if (errorData.error && errorData.error.message) errorMessage += `: ${errorData.error.message}`;
-          if (showallResponse.status === 404) errorMessage = `사용자 '${userNameForApi || '정보 없음'}'의 전체 곡 기록을 찾을 수 없습니다. (showall)`;
-          else if (showallResponse.status === 403 && errorData.error?.code === 403) errorMessage = `Chunirec API 토큰이 유효하지 않거나, 사용자 '${userNameForApi || '정보 없음'}' 데이터 접근 권한이 없습니다. (showall)`;
-
-          if (!criticalError) criticalError = errorMessage;
-          else console.warn("Also failed to fetch showall.json:", errorMessage);
+          const errorMsg = `전체 곡 기록 로딩 실패 (상태: ${showallResponse.status}): ${showallData.error?.message || '오류 메시지 없음'}`;
+          if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         } else {
-          allUserRecords = showallData.records?.filter((e: any): e is ShowallApiSongEntry => 
-            e !== null && 
-            typeof e.id === 'string' && 
-            typeof e.diff === 'string' && 
-            typeof e.updated_at === 'string' && 
-            (typeof e.rating === 'number' || e.rating === null) && 
-            typeof e.score === 'number' && 
-            typeof e.is_played === 'boolean' && 
+          allUserRecordsFromApi = showallData.records?.filter((e: any): e is ShowallApiSongEntry =>
+            e !== null && typeof e.id === 'string' && typeof e.diff === 'string' &&
+            typeof e.updated_at === 'string' && (typeof e.rating === 'number' || e.rating === null) &&
+            typeof e.score === 'number' && typeof e.is_played === 'boolean' &&
             (typeof e.const === 'number' || e.const === null || typeof e.is_const_unknown === 'boolean') &&
-            typeof e.is_const_unknown === 'boolean' &&
-            ('level' in e) 
+            typeof e.is_const_unknown === 'boolean' && ('level' in e)
           ) || [];
+          setCachedData<ShowallApiResponse>(showallKey, showallData);
         }
-        
+
         if (criticalError) {
-            throw new Error(criticalError);
+          throw new Error(criticalError);
         }
-        
-        // Calculate New 20 songs using NewSongs.json and allUserRecords
-        // Assuming NewSongsData is { verse: [...] }
+
         const definedNewSongsList = NewSongsData.verse as DefinedNewSongEntry[];
-        if (definedNewSongsList.length > 0 && allUserRecords.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(definedNewSongsList, allUserRecords, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs); 
+        if (definedNewSongsList.length > 0 && allUserRecordsFromApi.length > 0) {
+            const calculatedNewSongs = calculateNewSongs(definedNewSongsList, allUserRecordsFromApi, NEW_COUNT);
+            setNew20SongsData(calculatedNewSongs);
         } else {
             setNew20SongsData([]);
-            if (definedNewSongsList.length === 0) console.warn("NewSongs.json is empty or not loaded correctly, impacting New 20 calculation.");
-            if (allUserRecords.length === 0) console.warn("No user records found from showall API or it failed, impacting New 20 calculation.");
         }
+        const newCacheTime = new Date().toLocaleString();
+        setLastRefreshed(newCacheTime);
+        toast({ title: "데이터 로드 완료", description: `API에서 ${userNameForApi}님의 최신 데이터를 성공적으로 불러와 캐시했습니다. (${newCacheTime})` });
 
       } catch (error) {
-        console.error("Error fetching song data:", error);
+        console.error("Error fetching song data from API:", error);
         let detailedErrorMessage = "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.";
         if (error instanceof Error) {
             detailedErrorMessage = error.message;
         }
         setErrorLoadingSongs(detailedErrorMessage);
+        setApiPlayerName(userNameForApi); // Fallback to input nickname on error
         setBest30SongsData([]);
         setNew20SongsData([]);
       } finally {
@@ -370,13 +439,14 @@ function ResultContent() {
       }
     };
 
-    fetchSongData();
-  }, [userNameForApi]); 
+    fetchAndProcessData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userNameForApi, refreshNonce]);
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; 
-  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; 
+  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4";
+  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
 
 
   return (
@@ -403,6 +473,16 @@ function ResultContent() {
             </div>
           </div>
         </header>
+        
+        <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+            <p className="text-xs text-muted-foreground">
+                {lastRefreshed && lastRefreshed !== '캐시 없음' ? `마지막 데이터 동기화: ${lastRefreshed}` : '캐시된 데이터가 없거나 만료되었습니다. API에서 가져옵니다.'}
+            </p>
+            <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === "플레이어"}>
+                <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingSongs && "animate-spin")} />
+                데이터 새로고침
+            </Button>
+        </div>
 
         <Card className="mb-6">
           <CardHeader>
@@ -450,7 +530,9 @@ function ResultContent() {
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
-              <p className="text-sm text-muted-foreground">Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.</p>
+              <p className="text-sm text-muted-foreground">
+                { (userNameForApi && getCachedData(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`)) ? '캐시를 갱신 중입니다...' : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.'}
+              </p>
             </div>
           ) : errorLoadingSongs ? (
              <Card className="border-destructive">
@@ -460,7 +542,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. NewSongs.json 파일이 올바르게 로드되었는지도 확인해주세요.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -522,7 +604,7 @@ function ResultContent() {
                       <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
-                          "grid grid-cols-1 gap-4", 
+                          "grid grid-cols-1 gap-4",
                           combinedBest30GridCols
                         )}>
                           {best30SongsData.map((song) => (
@@ -566,3 +648,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
