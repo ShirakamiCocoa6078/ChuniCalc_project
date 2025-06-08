@@ -2,32 +2,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap } from "lucide-react";
+import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical } from "lucide-react";
 
-// Assuming these types are available or defined elsewhere if needed for strong typing of fetched data
-type ShowallApiSongEntry = any; // Replace with actual type if available
-type GlobalMusicApiResponse = { records?: ShowallApiSongEntry[] };
-type UserShowallApiResponse = { records?: ShowallApiSongEntry[] };
+type GlobalMusicApiResponse = { records?: any[] };
+type UserShowallApiResponse = { records?: any[] };
 
+const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
 
 export default function AdvancedSettings() {
   const [localApiToken, setLocalApiToken] = useState("");
   const [cacheNickname, setCacheNickname] = useState("");
+  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
+  const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
+    setClientHasMounted(true);
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
       if (storedToken) {
         setLocalApiToken(storedToken);
       }
+      const devMode = localStorage.getItem(DEVELOPER_MODE_KEY);
+      setIsDeveloperMode(devMode === 'true');
     }
   }, []);
 
@@ -46,19 +52,25 @@ export default function AdvancedSettings() {
   const handleClearAllLocalData = () => {
     if (typeof window !== 'undefined') {
       let clearedCount = 0;
+      const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
-          localStorage.removeItem(key);
-          // To correctly remove all, re-check length and current key
-          i--; 
-          clearedCount++;
+          // Do not remove the developer mode setting itself
+          if (key !== DEVELOPER_MODE_KEY) {
+            keysToRemove.push(key);
+          }
         }
       }
-      // Re-fetch current local API token to display after clearing, if it was also cleared
-      const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
-      setLocalApiToken(storedToken || "");
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        clearedCount++;
+      });
 
+      // Re-fetch current local API token to display after clearing, if it was also cleared
+       const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
+       setLocalApiToken(storedToken || "");
+      
       toast({ title: "로컬 데이터 삭제 완료", description: `${clearedCount}개의 앱 관련 로컬 캐시 데이터가 삭제되었습니다.` });
     }
   };
@@ -111,16 +123,23 @@ export default function AdvancedSettings() {
     }
   };
 
+  const toggleDeveloperMode = (checked: boolean) => {
+    setIsDeveloperMode(checked);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DEVELOPER_MODE_KEY, String(checked));
+    }
+    toast({ title: "개발자 모드 " + (checked ? "활성화됨" : "비활성화됨") });
+  };
 
   return (
     <Card className="w-full max-w-md mt-12 mb-8 shadow-lg border-2 border-primary/20">
       <CardHeader>
         <CardTitle className="font-headline text-2xl flex items-center">
-          <DatabaseZap className="mr-2 h-6 w-6 text-primary" />
+          <Settings className="mr-2 h-6 w-6 text-primary" />
           고급 설정 및 데이터 관리
         </CardTitle>
         <CardDescription>
-          로컬 API 키 설정, 캐시 데이터 관리 등 고급 기능을 사용합니다.
+          로컬 API 키 설정, 캐시 데이터 관리, 개발자 모드 등 고급 기능을 사용합니다.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -140,6 +159,28 @@ export default function AdvancedSettings() {
             여기에 개인 Chunirec API 토큰을 입력하면, 앱 실행 시 우선적으로 이 키를 사용합니다. 비워두고 저장하면 제거됩니다.
           </p>
         </div>
+
+        <hr/>
+        
+        <div className="flex items-center space-x-2">
+          <Switch
+            id="developer-mode"
+            checked={isDeveloperMode}
+            onCheckedChange={toggleDeveloperMode}
+            disabled={!clientHasMounted}
+          />
+          <Label htmlFor="developer-mode" className="flex items-center font-medium">
+            <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> 개발자 모드
+          </Label>
+        </div>
+        {isDeveloperMode && clientHasMounted && (
+          <Button asChild variant="outline" className="w-full">
+            <Link href="/developer/api-test">
+              <DatabaseZap className="mr-2 h-4 w-4"/> API 테스트 페이지로 이동
+            </Link>
+          </Button>
+        )}
+
 
         <hr/>
 
@@ -173,7 +214,7 @@ export default function AdvancedSettings() {
             <Trash2 className="mr-2 h-4 w-4" /> 모든 로컬 캐시 데이터 삭제
           </Button>
           <p className="text-xs text-muted-foreground mt-1">
-            앱이 로컬 저장소에 저장한 모든 캐시 데이터 (API 응답, 사용자 설정 토큰 제외)를 삭제합니다.
+            앱이 로컬 저장소에 저장한 모든 캐시 데이터 (API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.
           </p>
         </div>
         
@@ -182,9 +223,10 @@ export default function AdvancedSettings() {
         <div className="text-sm">
             <h3 className="font-medium mb-1">문의 및 정보</h3>
             <p className="text-muted-foreground">버그 리포트 및 기타 문의: <a href="mailto:your-email@example.com" className="text-primary hover:underline">your-email@example.com</a></p>
-            <p className="text-xs text-muted-foreground mt-1">ChuniCalc v{process.env.npm_package_version || "1.0.0"}</p>
+            {clientHasMounted && (
+              <p className="text-xs text-muted-foreground mt-1">ChuniCalc v{process.env.npm_package_version || "1.0.0"}</p>
+            )}
         </div>
-
       </CardContent>
     </Card>
   );
