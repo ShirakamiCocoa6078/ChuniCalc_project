@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { ArrowLeft, Loader2, AlertTriangle, Send } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
@@ -30,6 +30,7 @@ interface UserApiTestState {
   rateLimitLimit: string | null;
   rateLimitRemaining: string | null;
   rateLimitReset: string | null;
+  searchTerm: string;
 }
 
 interface GlobalApiTestState {
@@ -39,16 +40,18 @@ interface GlobalApiTestState {
   rateLimitLimit: string | null;
   rateLimitRemaining: string | null;
   rateLimitReset: string | null;
+  searchTerm: string;
 }
 
 const initialUserApiTestState: UserApiTestState = {
   loading: false,
   error: null,
   data: null,
-  nickname: "cocoa", // Default nickname
+  nickname: "cocoa", 
   rateLimitLimit: null,
   rateLimitRemaining: null,
   rateLimitReset: null,
+  searchTerm: "",
 };
 
 const initialGlobalApiTestState: GlobalApiTestState = {
@@ -58,6 +61,7 @@ const initialGlobalApiTestState: GlobalApiTestState = {
   rateLimitLimit: null,
   rateLimitRemaining: null,
   rateLimitReset: null,
+  searchTerm: "",
 };
 
 export default function ApiTestPage() {
@@ -65,11 +69,11 @@ export default function ApiTestPage() {
   const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
 
-  const [profileState, setProfileState] = useState<UserApiTestState>(initialUserApiTestState);
-  const [ratingDataState, setRatingDataState] = useState<UserApiTestState>(initialUserApiTestState);
-  const [userShowallState, setUserShowallState] = useState<UserApiTestState>(initialUserApiTestState);
-  const [courseState, setCourseState] = useState<UserApiTestState>(initialUserApiTestState);
-  const [globalMusicState, setGlobalMusicState] = useState<GlobalApiTestState>(initialGlobalApiTestState);
+  const [profileState, setProfileState] = useState<UserApiTestState>({...initialUserApiTestState});
+  const [ratingDataState, setRatingDataState] = useState<UserApiTestState>({...initialUserApiTestState});
+  const [userShowallState, setUserShowallState] = useState<UserApiTestState>({...initialUserApiTestState});
+  const [courseState, setCourseState] = useState<UserApiTestState>({...initialUserApiTestState});
+  const [globalMusicState, setGlobalMusicState] = useState<GlobalApiTestState>({...initialGlobalApiTestState});
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -82,7 +86,7 @@ export default function ApiTestPage() {
   const handleFetch = async (
     endpoint: ApiEndpoint, 
     setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
-    nicknameFromState?: string // Pass nickname from component's state
+    nicknameFromState?: string 
   ) => {
     const apiToken = getApiToken();
     if (!apiToken) {
@@ -103,25 +107,28 @@ export default function ApiTestPage() {
     let url = `https://api.chunirec.net${endpoint}?token=${apiToken}`;
     if (requiresNickname && nicknameFromState) {
       url += `&region=jp2&user_name=${encodeURIComponent(nicknameFromState.trim())}`;
+    } else if (endpoint === "/2.0/music/showall.json") {
+      url += `&region=jp2`;
     }
+
 
     try {
       const response = await fetch(url);
-      const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" }})); // Handle non-JSON error responses
+      const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" }})); 
 
       const limit = response.headers.get('X-Rate-Limit-Limit');
       const remaining = response.headers.get('X-Rate-Limit-Remaining');
       const resetHeader = response.headers.get('X-Rate-Limit-Reset');
-      const resetString = resetHeader ? new Date(parseInt(resetHeader) * 1000).toLocaleString() : null;
+      const resetString = resetHeader ? new Date(parseInt(resetHeader) * 1000).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul'}) : null;
+
 
       if (!response.ok) {
-        // Even on error, try to set rate limit headers if present
          const errorMsg = `API 오류 (상태: ${response.status}): ${responseData.error?.message || JSON.stringify(responseData)}`;
          setState(prev => ({
           ...prev,
           loading: false,
           error: errorMsg,
-          data: responseData, // Show error response body if available
+          data: responseData, 
           rateLimitLimit: limit,
           rateLimitRemaining: remaining,
           rateLimitReset: resetString,
@@ -145,6 +152,22 @@ export default function ApiTestPage() {
       setState(prev => ({ ...prev, loading: false, error: errorMessage, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
       toast({ title: `${endpoint} 호출 실패`, description: errorMessage, variant: "destructive" });
     }
+  };
+
+  const displayFilteredData = (data: any, searchTerm: string | undefined): string => {
+    if (!data) return "";
+    const fullJsonString = JSON.stringify(data, null, 2);
+    if (!searchTerm || searchTerm.trim() === "") {
+      return fullJsonString;
+    }
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    const lines = fullJsonString.split('\n');
+    const filteredLines = lines.filter(line => line.toLowerCase().includes(lowerSearchTerm));
+    
+    if (filteredLines.length === 0) {
+        return "검색 결과가 없습니다.";
+    }
+    return filteredLines.join('\n');
   };
 
   if (!clientHasMounted) {
@@ -174,7 +197,8 @@ export default function ApiTestPage() {
     endpoint: ApiEndpoint,
     state: UserApiTestState | GlobalApiTestState,
     setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
-    requiresNickname: boolean
+    requiresNickname: boolean,
+    supportsSearch: boolean = false
   ) => {
     const currentNickname = requiresNickname ? (state as UserApiTestState).nickname : undefined;
     
@@ -182,6 +206,10 @@ export default function ApiTestPage() {
         if (requiresNickname) {
             (setState as React.Dispatch<React.SetStateAction<UserApiTestState>>)(prev => ({...prev, nickname: value}));
         }
+    }
+
+    const handleSearchTermChange = (value: string) => {
+        setState(prev => ({...prev, searchTerm: value }));
     }
 
     return (
@@ -207,12 +235,26 @@ export default function ApiTestPage() {
             데이터 가져오기
           </Button>
 
+          {supportsSearch && state.data && (
+            <div className="space-y-1 pt-2">
+              <Label htmlFor={`${endpoint}-search`} className="flex items-center">
+                <SearchIcon className="mr-2 h-4 w-4 text-muted-foreground" /> 응답 내용 검색
+              </Label>
+              <Input
+                id={`${endpoint}-search`}
+                value={state.searchTerm}
+                onChange={(e) => handleSearchTermChange(e.target.value)}
+                placeholder="검색할 문자열 입력..."
+              />
+            </div>
+          )}
+
           {(state.rateLimitLimit || state.rateLimitRemaining || state.rateLimitReset) && (
             <div className="mt-4 p-3 border rounded-md bg-muted/50 text-xs">
               <h4 className="font-semibold mb-1 text-sm">응답 헤더 정보:</h4>
               {state.rateLimitLimit && <p>X-Rate-Limit-Limit: {state.rateLimitLimit}</p>}
               {state.rateLimitRemaining && <p>X-Rate-Limit-Remaining: {state.rateLimitRemaining}</p>}
-              {state.rateLimitReset && <p>X-Rate-Limit-Reset: {state.rateLimitReset} (UTC+9)</p>}
+              {state.rateLimitReset && <p>X-Rate-Limit-Reset: {state.rateLimitReset} (Asia/Seoul)</p>}
             </div>
           )}
 
@@ -224,10 +266,10 @@ export default function ApiTestPage() {
           )}
           {state.data && (
             <div className="mt-2 space-y-1">
-              <Label>응답 데이터:</Label>
+              <Label>응답 데이터 {state.searchTerm && `(검색어: "${state.searchTerm}")`}:</Label>
               <Textarea
                 readOnly
-                value={JSON.stringify(state.data, null, 2)}
+                value={displayFilteredData(state.data, state.searchTerm)}
                 className="h-64 font-mono text-xs"
                 rows={15}
               />
@@ -250,13 +292,15 @@ export default function ApiTestPage() {
         </header>
 
         <div className="space-y-6">
-          {renderApiTestSection("사용자 프로필", "/2.0/records/profile.json", profileState, setProfileState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
-          {renderApiTestSection("사용자 레이팅 데이터 (Best 30 등)", "/2.0/records/rating_data.json", ratingDataState, setRatingDataState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
-          {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
-          {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
-          {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false)}
+          {renderApiTestSection("사용자 프로필", "/2.0/records/profile.json", profileState, setProfileState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, false)}
+          {renderApiTestSection("사용자 레이팅 데이터 (Best 30 등)", "/2.0/records/rating_data.json", ratingDataState, setRatingDataState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, true)}
+          {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, true)}
+          {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, false)}
+          {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false, true)}
         </div>
       </div>
     </main>
   );
 }
+
+    
