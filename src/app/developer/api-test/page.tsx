@@ -155,20 +155,35 @@ export default function ApiTestPage() {
   };
 
   const displayFilteredData = (data: any, searchTerm: string | undefined): string => {
-    if (!data) return "";
-    const fullJsonString = JSON.stringify(data, null, 2);
-    if (!searchTerm || searchTerm.trim() === "") {
-      return fullJsonString;
-    }
-    const lowerSearchTerm = searchTerm.toLowerCase();
-    const lines = fullJsonString.split('\n');
-    const filteredLines = lines.filter(line => line.toLowerCase().includes(lowerSearchTerm));
+    if (data === null || data === undefined) return ""; // Handles null or undefined data explicitly
     
-    if (filteredLines.length === 0) {
-        return "검색 결과가 없습니다.";
+    const originalStringifiedData = JSON.stringify(data, null, 2);
+    if (!searchTerm || searchTerm.trim() === "") {
+      return originalStringifiedData;
     }
-    return filteredLines.join('\n');
+
+    const lowerSearchTerm = searchTerm.toLowerCase();
+
+    if (Array.isArray(data)) {
+      const filteredArray = data.filter(item => 
+        JSON.stringify(item).toLowerCase().includes(lowerSearchTerm)
+      );
+      if (filteredArray.length > 0) {
+        return JSON.stringify(filteredArray, null, 2);
+      }
+    } else if (typeof data === 'object') { // data is not null here due to earlier check
+      if (originalStringifiedData.toLowerCase().includes(lowerSearchTerm)) {
+        return originalStringifiedData;
+      }
+    } else { // Primitive types
+      if (String(data).toLowerCase().includes(lowerSearchTerm)) {
+        return String(data);
+      }
+    }
+    
+    return "검색 결과가 없습니다.";
   };
+
 
   if (!clientHasMounted) {
     return (
@@ -302,5 +317,3 @@ export default function ApiTestPage() {
     </main>
   );
 }
-
-    
