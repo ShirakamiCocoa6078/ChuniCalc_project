@@ -19,20 +19,45 @@ type ApiEndpoint =
   | "/2.0/records/profile.json"
   | "/2.0/records/rating_data.json"
   | "/2.0/records/showall.json"
+  | "/2.0/records/course.json"
   | "/2.0/music/showall.json";
 
-interface ApiTestState {
+interface UserApiTestState {
   loading: boolean;
   error: string | null;
   data: any | null;
   nickname: string;
+  rateLimitLimit: string | null;
+  rateLimitRemaining: string | null;
+  rateLimitReset: string | null;
 }
 
-const initialApiTestState: ApiTestState = {
+interface GlobalApiTestState {
+  loading: boolean;
+  error: string | null;
+  data: any | null;
+  rateLimitLimit: string | null;
+  rateLimitRemaining: string | null;
+  rateLimitReset: string | null;
+}
+
+const initialUserApiTestState: UserApiTestState = {
   loading: false,
   error: null,
   data: null,
-  nickname: "",
+  nickname: "cocoa", // Default nickname
+  rateLimitLimit: null,
+  rateLimitRemaining: null,
+  rateLimitReset: null,
+};
+
+const initialGlobalApiTestState: GlobalApiTestState = {
+  loading: false,
+  error: null,
+  data: null,
+  rateLimitLimit: null,
+  rateLimitRemaining: null,
+  rateLimitReset: null,
 };
 
 export default function ApiTestPage() {
@@ -40,10 +65,11 @@ export default function ApiTestPage() {
   const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
 
-  const [profileState, setProfileState] = useState<ApiTestState>(initialApiTestState);
-  const [ratingDataState, setRatingDataState] = useState<ApiTestState>(initialApiTestState);
-  const [userShowallState, setUserShowallState] = useState<ApiTestState>(initialApiTestState);
-  const [globalMusicState, setGlobalMusicState] = useState<Omit<ApiTestState, 'nickname'>>({ loading: false, error: null, data: null });
+  const [profileState, setProfileState] = useState<UserApiTestState>(initialUserApiTestState);
+  const [ratingDataState, setRatingDataState] = useState<UserApiTestState>(initialUserApiTestState);
+  const [userShowallState, setUserShowallState] = useState<UserApiTestState>(initialUserApiTestState);
+  const [courseState, setCourseState] = useState<UserApiTestState>(initialUserApiTestState);
+  const [globalMusicState, setGlobalMusicState] = useState<GlobalApiTestState>(initialGlobalApiTestState);
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -55,8 +81,8 @@ export default function ApiTestPage() {
 
   const handleFetch = async (
     endpoint: ApiEndpoint, 
-    setState: React.Dispatch<React.SetStateAction<ApiTestState | Omit<ApiTestState, 'nickname'>>>,
-    nickname?: string
+    setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
+    nicknameFromState?: string // Pass nickname from component's state
   ) => {
     const apiToken = getApiToken();
     if (!apiToken) {
@@ -64,31 +90,59 @@ export default function ApiTestPage() {
       setState(prev => ({ ...prev, loading: false, error: "API 토큰이 없습니다." }));
       return;
     }
-
-    if ((endpoint !== "/2.0/music/showall.json") && (!nickname || nickname.trim() === "")) {
+    
+    const requiresNickname = endpoint !== "/2.0/music/showall.json";
+    if (requiresNickname && (!nicknameFromState || nicknameFromState.trim() === "")) {
        toast({ title: "닉네임 필요", description: "이 엔드포인트에는 사용자 닉네임이 필요합니다.", variant: "destructive" });
-       (setState as React.Dispatch<React.SetStateAction<ApiTestState>>)(prev => ({ ...prev, loading: false, error: "닉네임이 필요합니다." }));
+       setState(prev => ({ ...prev, loading: false, error: "닉네임이 필요합니다." }));
        return;
     }
 
-    setState(prev => ({ ...prev, loading: true, error: null, data: null }));
+    setState(prev => ({ ...prev, loading: true, error: null, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
 
     let url = `https://api.chunirec.net${endpoint}?token=${apiToken}`;
-    if (endpoint !== "/2.0/music/showall.json" && nickname) {
-      url += `&region=jp2&user_name=${encodeURIComponent(nickname.trim())}`;
+    if (requiresNickname && nicknameFromState) {
+      url += `&region=jp2&user_name=${encodeURIComponent(nicknameFromState.trim())}`;
     }
 
     try {
       const response = await fetch(url);
-      const responseData = await response.json();
+      const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" }})); // Handle non-JSON error responses
+
+      const limit = response.headers.get('X-Rate-Limit-Limit');
+      const remaining = response.headers.get('X-Rate-Limit-Remaining');
+      const resetHeader = response.headers.get('X-Rate-Limit-Reset');
+      const resetString = resetHeader ? new Date(parseInt(resetHeader) * 1000).toLocaleString() : null;
+
       if (!response.ok) {
-        throw new Error(`API 오류 (상태: ${response.status}): ${responseData.error?.message || JSON.stringify(responseData)}`);
+        // Even on error, try to set rate limit headers if present
+         const errorMsg = `API 오류 (상태: ${response.status}): ${responseData.error?.message || JSON.stringify(responseData)}`;
+         setState(prev => ({
+          ...prev,
+          loading: false,
+          error: errorMsg,
+          data: responseData, // Show error response body if available
+          rateLimitLimit: limit,
+          rateLimitRemaining: remaining,
+          rateLimitReset: resetString,
+        }));
+        toast({ title: `${endpoint} 호출 실패`, description: errorMsg, variant: "destructive" });
+        return; 
       }
-      setState(prev => ({ ...prev, loading: false, data: responseData }));
+
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        data: responseData,
+        error: null,
+        rateLimitLimit: limit,
+        rateLimitRemaining: remaining,
+        rateLimitReset: resetString,
+      }));
       toast({ title: `${endpoint} 호출 성공`, description: "데이터를 성공적으로 가져왔습니다." });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "알 수 없는 API 오류";
-      setState(prev => ({ ...prev, loading: false, error: errorMessage }));
+      setState(prev => ({ ...prev, loading: false, error: errorMessage, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
       toast({ title: `${endpoint} 호출 실패`, description: errorMessage, variant: "destructive" });
     }
   };
@@ -118,14 +172,15 @@ export default function ApiTestPage() {
   const renderApiTestSection = (
     title: string,
     endpoint: ApiEndpoint,
-    state: ApiTestState | Omit<ApiTestState, 'nickname'>,
-    setState: React.Dispatch<React.SetStateAction<ApiTestState | Omit<ApiTestState, 'nickname'>>>,
+    state: UserApiTestState | GlobalApiTestState,
+    setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
     requiresNickname: boolean
   ) => {
-    const currentNickname = (state as ApiTestState).nickname; // Type assertion
-    const setNicknameForState = (value: string) => {
+    const currentNickname = requiresNickname ? (state as UserApiTestState).nickname : undefined;
+    
+    const handleNicknameChangeForState = (value: string) => {
         if (requiresNickname) {
-            (setState as React.Dispatch<React.SetStateAction<ApiTestState>>)(prev => ({...prev, nickname: value}));
+            (setState as React.Dispatch<React.SetStateAction<UserApiTestState>>)(prev => ({...prev, nickname: value}));
         }
     }
 
@@ -142,8 +197,8 @@ export default function ApiTestPage() {
               <Input
                 id={`${endpoint}-nickname`}
                 value={currentNickname}
-                onChange={(e) => setNicknameForState(e.target.value)}
-                placeholder="예: chunirec"
+                onChange={(e) => handleNicknameChangeForState(e.target.value)}
+                placeholder="예: cocoa"
               />
             </div>
           )}
@@ -151,6 +206,16 @@ export default function ApiTestPage() {
             {state.loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             데이터 가져오기
           </Button>
+
+          {(state.rateLimitLimit || state.rateLimitRemaining || state.rateLimitReset) && (
+            <div className="mt-4 p-3 border rounded-md bg-muted/50 text-xs">
+              <h4 className="font-semibold mb-1 text-sm">응답 헤더 정보:</h4>
+              {state.rateLimitLimit && <p>X-Rate-Limit-Limit: {state.rateLimitLimit}</p>}
+              {state.rateLimitRemaining && <p>X-Rate-Limit-Remaining: {state.rateLimitRemaining}</p>}
+              {state.rateLimitReset && <p>X-Rate-Limit-Reset: {state.rateLimitReset} (UTC+9)</p>}
+            </div>
+          )}
+
           {state.error && (
             <div className="mt-2 text-sm text-destructive bg-destructive/10 p-3 rounded-md">
               <p className="font-semibold">오류:</p>
@@ -185,10 +250,11 @@ export default function ApiTestPage() {
         </header>
 
         <div className="space-y-6">
-          {renderApiTestSection("사용자 프로필", "/2.0/records/profile.json", profileState, setProfileState, true)}
-          {renderApiTestSection("사용자 레이팅 데이터 (Best 30 등)", "/2.0/records/rating_data.json", ratingDataState, setRatingDataState, true)}
-          {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState, true)}
-          {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState, false)}
+          {renderApiTestSection("사용자 프로필", "/2.0/records/profile.json", profileState, setProfileState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
+          {renderApiTestSection("사용자 레이팅 데이터 (Best 30 등)", "/2.0/records/rating_data.json", ratingDataState, setRatingDataState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
+          {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
+          {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true)}
+          {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false)}
         </div>
       </div>
     </main>
