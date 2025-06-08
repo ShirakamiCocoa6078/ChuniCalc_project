@@ -15,11 +15,11 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
+import NewSongsData from '@/data/NewSongs.json';
+
 
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
-const NEW_SONG_START_DATE = "2024-12-12";
-const EXCLUDED_GENRE_FOR_NEW_SONGS = "WORLD'S END";
 
 
 type ProfileData = {
@@ -173,15 +173,15 @@ const calculateNewSongs = (
   allUserRecords: ShowallApiSongEntry[],
   count: number
 ): Song[] => {
-  console.log("[N20_CALC] Starting New 20 calculation.");
-  console.log(`[N20_CALC] Defined new song pool size (after filtering global music): ${definedSongPoolEntries.length}`);
+  console.log("[N20_CALC] Starting New 20 calculation using titles from NewSongs.json.");
+  console.log(`[N20_CALC] Defined new song pool (from global music, based on NewSongs.json titles): ${definedSongPoolEntries.length} entries (across all difficulties).`);
 
   if (!allUserRecords || allUserRecords.length === 0) {
     console.warn("[N20_CALC] User's play records (allUserRecords) are empty. Cannot calculate New 20.");
     return [];
   }
   if (!definedSongPoolEntries || definedSongPoolEntries.length === 0) {
-    console.warn("[N20_CALC] Defined new song pool (from filtered global music) is empty. Cannot calculate New 20.");
+    console.warn("[N20_CALC] Defined new song pool (from NewSongs.json titles matching global music) is empty. Cannot calculate New 20.");
     return [];
   }
 
@@ -220,14 +220,14 @@ const calculateNewSongs = (
     return acc;
   }, [] as Song[]);
 
-  console.log(`[N20_CALC] Found and mapped ${mappedUserPlayedNewSongs.length} played new songs based on the filtered pool.`);
-  console.log("[N20_CALC] Mapped user played new songs (before sorting):", mappedUserPlayedNewSongs.map(s => ({ title: s.title, id: s.id, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
+  console.log(`[N20_CALC] Found and mapped ${mappedUserPlayedNewSongs.length} played new songs based on the NewSongs.json derived pool.`);
+  console.log("[N20_CALC] Mapped user played new songs (before sorting):", mappedUserPlayedNewSongs.map(s => ({ title: s.title, id: s.id, diff: s.diff, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
 
 
   const sortedUserPlayedNewSongs = sortSongsByRatingDesc(mappedUserPlayedNewSongs);
 
   const finalNew20 = sortedUserPlayedNewSongs.slice(0, count);
-  console.log(`[N20_CALC] Final Top ${count} New Songs (after sorting):`, finalNew20.map(s => ({ title: s.title, id: s.id, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
+  console.log(`[N20_CALC] Final Top ${count} New Songs (after sorting):`, finalNew20.map(s => ({ title: s.title, id: s.id, diff: s.diff, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
   return finalNew20;
 };
 
@@ -244,13 +244,6 @@ type GlobalMusicApiResponse = {
     records?: ShowallApiSongEntry[];
 }
 
-function getCurrentDateFormatted(): string {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
-    const day = today.getDate().toString().padStart(2, '0');
-    return `${year}-${month}-${day}`;
-}
 
 function ResultContent() {
   const searchParams = useSearchParams();
@@ -352,18 +345,20 @@ function ResultContent() {
             e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && e.release
         ) || [];
         
-        const currentDateStr = getCurrentDateFormatted();
-        const dynamicNewSongPool = globalMusicRecordsFromCache.filter(song =>
-            song.release && song.release >= NEW_SONG_START_DATE && song.release <= currentDateStr && song.genre !== EXCLUDED_GENRE_FOR_NEW_SONGS
+        const newSongTitlesFromDataFile = NewSongsData.titles || [];
+        console.log(`[N20_CALC] Titles to look for from NewSongs.json: ${newSongTitlesFromDataFile.length}`);
+        
+        const definedSongPoolFromTitles = globalMusicRecordsFromCache.filter(globalSong => 
+            newSongTitlesFromDataFile.includes(globalSong.title)
         );
-        console.log(`[N20_CALC] Dynamic new song pool from CACHED global music (size: ${dynamicNewSongPool.length}), based on dates ${NEW_SONG_START_DATE} to ${currentDateStr} and genre != ${EXCLUDED_GENRE_FOR_NEW_SONGS}`);
+        console.log(`[N20_CALC] Dynamic new song pool from CACHED global music (based on NewSongs.json titles): ${definedSongPoolFromTitles.length} entries (across all difficulties)`);
 
 
-        if (allUserRecordsFromCache.length > 0 && dynamicNewSongPool.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(dynamicNewSongPool, allUserRecordsFromCache, NEW_COUNT);
+        if (allUserRecordsFromCache.length > 0 && definedSongPoolFromTitles.length > 0) {
+            const calculatedNewSongs = calculateNewSongs(definedSongPoolFromTitles, allUserRecordsFromCache, NEW_COUNT);
             setNew20SongsData(calculatedNewSongs);
         } else {
-            console.warn("Could not calculate New 20 from cache: User records or filtered global music data from cache are insufficient.");
+            console.warn("Could not calculate New 20 from cache: User records or new song pool from cache (via NewSongs.json) are insufficient.");
             setNew20SongsData([]);
         }
         toast({ title: "데이터 로드 완료", description: `로컬 캐시에서 ${userNameForApi}님의 데이터를 성공적으로 불러왔습니다.` });
@@ -429,7 +424,7 @@ function ResultContent() {
             globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
                e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && e.release
             ) || [];
-            setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData);
+            setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
         } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
             const errorJson = await globalMusicResponseOrNull.json().catch(() => ({}));
             const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponseOrNull.status}): ${errorJson.error?.message || globalMusicResponseOrNull.statusText || '오류 없음'}`;
@@ -441,18 +436,20 @@ function ResultContent() {
           throw new Error(criticalError);
         }
         
-        const currentDateStr = getCurrentDateFormatted();
-        const dynamicNewSongPoolFromApi = globalMusicRecordsFromApi.filter(song =>
-            song.release && song.release >= NEW_SONG_START_DATE && song.release <= currentDateStr && song.genre !== EXCLUDED_GENRE_FOR_NEW_SONGS
+        const newSongTitlesFromDataFileApi = NewSongsData.titles || [];
+        console.log(`[N20_CALC] Titles to look for from NewSongs.json (API path): ${newSongTitlesFromDataFileApi.length}`);
+
+        const definedSongPoolFromTitlesApi = globalMusicRecordsFromApi.filter(globalSong =>
+            newSongTitlesFromDataFileApi.includes(globalSong.title)
         );
-        console.log(`[N20_CALC] Dynamic new song pool from API-fetched/updated global music (size: ${dynamicNewSongPoolFromApi.length}), based on dates ${NEW_SONG_START_DATE} to ${currentDateStr} and genre != ${EXCLUDED_GENRE_FOR_NEW_SONGS}`);
+        console.log(`[N20_CALC] Dynamic new song pool from API-fetched/updated global music (based on NewSongs.json titles): ${definedSongPoolFromTitlesApi.length} entries (across all difficulties)`);
 
 
-        if (allUserRecordsFromApi.length > 0 && dynamicNewSongPoolFromApi.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(dynamicNewSongPoolFromApi, allUserRecordsFromApi, NEW_COUNT);
+        if (allUserRecordsFromApi.length > 0 && definedSongPoolFromTitlesApi.length > 0) {
+            const calculatedNewSongs = calculateNewSongs(definedSongPoolFromTitlesApi, allUserRecordsFromApi, NEW_COUNT);
             setNew20SongsData(calculatedNewSongs);
         } else {
-            console.warn("Could not calculate New 20 from API: User records or filtered global music data from API are insufficient.");
+            console.warn("Could not calculate New 20 from API: User records or new song pool from API (via NewSongs.json) are insufficient.");
             setNew20SongsData([]);
         }
         const newCacheTime = new Date().toLocaleString();
@@ -630,7 +627,7 @@ function ResultContent() {
                         ))}
                       </div>
                      ) : (
-                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (글로벌 악곡 목록(`music/showall.json`)에서 지정된 기간 내에 출시되고 WORLD'S END 장르가 아니며, 사용자가 플레이한 곡이 없거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
+                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 제목이 글로벌 악곡 목록에 없거나, 해당 곡을 플레이하지 않았거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
                      )}
                   </CardContent>
                 </Card>
@@ -669,7 +666,7 @@ function ResultContent() {
                           ))}
                         </div>
                        ) : (
-                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (글로벌 악곡 목록(`music/showall.json`)에서 지정된 기간 내에 출시되고 WORLD'S END 장르가 아니며, 사용자가 플레이한 곡이 없거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
+                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 제목이 글로벌 악곡 목록에 없거나, 해당 곡을 플레이하지 않았거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
                        )}
                     </div>
                   </CardContent>
@@ -690,3 +687,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+

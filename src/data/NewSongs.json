@@ -1,305 +1,47 @@
 {
-  "verse": [
-      {
-          "title": "inkar-usi",
-          "artist": "DIA「Arcaea」",
-          "genre": "VARIETY",
-          "id": "e32a43b927533a97",
-          "release": "2024-12-19"
-      },
-      {
-          "title": "Tie me down gently",
-          "artist": "溝口ゆうま feat. 大瀬良あい「Arcaea」",
-          "genre": "VARIETY",
-          "id": "f63f5e15491bc11e",
-          "release": "2024-12-19"
-      },
-      {
-          "title": "Ringed Genesis",
-          "artist": "Edelritter「Arcaea」",
-          "genre": "VARIETY",
-          "id": "52b14ef1bd756d74",
-          "release": "2024-12-19"
-      },
-      {
-          "title": "Tempestissimo",
-          "artist": "t+pazolite「Arcaea」",
-          "genre": "VARIETY",
-          "id": "1ec01a60c17e6d42",
-          "release": "2024-12-19"
-      },
-      {
-          "title": "ジョハリ",
-          "artist": "Nornis",
-          "genre": "POPS&ANIME",
-          "id": "ed43797ab5b42adf",
-          "release": "2025-01-23"
-      },
-      {
-          "title": "シリウスの輝きのように",
-          "artist": "鳳 ここな(CV.石見舞菜香)、静香(CV.長谷川育美)、カトリナ・グリーベル(CV.天城サリー)、新妻八恵(CV.長縄まりあ)、柳場ぱんだ(CV.大空直美)、流石知冴(CV.佐々木李子)「ワールドダイスター 夢のステラリウム」",
-          "genre": "POPS&ANIME",
-          "id": "5d240d92ca42830b",
-          "release": "2025-05-08"
-      },
-      {
-          "title": "I Wanna",
-          "artist": "静香(CV.長谷川育美)「ワールドダイスター 夢のステラリウム」",
-          "genre": "POPS&ANIME",
-          "id": "f92c51987647ffe1",
-          "release": "2025-05-08"
-      },
-      {
-          "title": "革命ダンス",
-          "artist": "柳場ぱんだ(CV:大空直美)、与那国緋花里(CV:下地紫野)「ワールドダイスター 夢のステラリウム」",
-          "genre": "POPS&ANIME",
-          "id": "bca36e9ba4d8336d",
-          "release": "2025-05-08"
-      },
-      {
-          "title": "イガク",
-          "artist": "原口沙輔 feat.重音テト",
-          "genre": "niconico",
-          "id": "dbee754756b3a1b7",
-          "release": "2025-05-08"
-      },
-      {
-          "title": "ザムザ",
-          "artist": "てにをは",
-          "genre": "niconico",
-          "id": "7c801573fbc87114",
-          "release": "2025-05-08"
-      },
-      {
-          "title": "激烈!!!!ファミレスガールは帰しま1000!!!!",
-          "artist": "南ノ南 feat.9Lana",
-          "genre": "ORIGINAL",
-          "id": "a0b7dc96d884c2e1",
-          "release": "2025-01-09"
-      },
-      {
-          "title": "〚隔絶〛 ～Flame of Determination",
-          "artist": "TERU FOX × Yukino feat. Iris",
-          "genre": "ORIGINAL",
-          "id": "1656a65038b77dd5",
-          "release": "2025-02-06"
-      },
-      {
-          "title": "〚献身〛 ～Paradox of Choice",
-          "artist": "Jehezukiel × KURORAK (feat. HideKy)",
-          "genre": "ORIGINAL",
-          "id": "06d9611f04e613c1",
-          "release": "2025-02-06"
-      },
-      {
-          "title": "〚盲従〛 ～Fantasia Sonata Flower",
-          "artist": "P3-Studio",
-          "genre": "ORIGINAL",
-          "id": "8f359588a06cb650",
-          "release": "2025-02-06"
-      },
-      {
-          "title": "〚空虚〛 ～Pyrophilia",
-          "artist": "Black Box × Spyro Kong",
-          "genre": "ORIGINAL",
-          "id": "3ae161ef36f1c93e",
-          "release": "2025-02-06"
-      },
-      {
-          "title": "We don't need tears!",
-          "artist": "舞ヶ原シンセ研究会",
-          "genre": "イロドリミドリ",
-          "id": "82aebe958a48c4d1",
-          "release": "2025-02-06"
-      },
-      {
-          "title": "あいのうた",
-          "artist": "大漠波新",
-          "genre": "niconico",
-          "id": "2c518ebb77671272",
-          "release": "2025-01-09"
-      },
-      {
-          "title": "夜もすがら君想ふ (10th Anniv.)",
-          "artist": "TOKOTOKO（西沢さんP）",
-          "genre": "niconico",
-          "id": "676f2c9784876471",
-          "release": "2025-01-09"
-      },
-      {
-          "title": "ジェヘナ",
-          "artist": "wotaku",
-          "genre": "niconico",
-          "id": "14c14ff0776a413a",
-          "release": "2025-01-09"
-      },
-      {
-          "title": "Lostwizz",
-          "artist": "s-don",
-          "genre": "ゲキマイ",
-          "id": "64da80704f092f66",
-          "release": "2025-01-23"
-      },
-      {
-          "title": "Aether Crest: Celestial",
-          "artist": "void (Mournfinale) × 水野健治",
-          "genre": "ORIGINAL",
-          "id": "722cf9686d28fea2",
-          "release": "2025-02-27"
-      },
-      {
-          "title": "Crush the Dystopia",
-          "artist": "MintJam vs Masahiro \"Godspeed\" Aoki",
-          "genre": "ORIGINAL",
-          "id": "30a46f3d9345af4d",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "人マニア",
-          "artist": "原口沙輔 feat.重音テト",
-          "genre": "niconico",
-          "id": "0214045b0e1107cd",
-          "release": "2025-03-20"
-      },
-      {
-          "title": "オーバーライド",
-          "artist": "吉田夜世",
-          "genre": "niconico",
-          "id": "d9041e9e0944d2cb",
-          "release": "2025-03-20"
-      },
-      {
-          "title": "ライアーダンサー",
-          "artist": "マサラダ",
-          "genre": "niconico",
-          "id": "6f3decdf6fd4d5a6",
-          "release": "2025-03-20"
-      },
-      {
-          "title": "黒塗り世界宛て書簡",
-          "artist": "フロクロ",
-          "genre": "niconico",
-          "id": "1d03c1b6975a5134",
-          "release": "2025-03-20"
-      },
-      {
-          "title": "本能的 Survivor",
-          "artist": "曲：eba／歌：⊿TRiEDGE [高瀬 梨緒(CV：久保 ユリカ)、結城 莉玖(CV：朝日奈 丸佳)、藍原 椿(CV：橋本 ちなみ)]",
-          "genre": "ゲキマイ",
-          "id": "8cfec1658c5372e9",
-          "release": "2025-03-27"
-      },
-      {
-          "title": "INFiNiTE ENERZY -Overdoze-",
-          "artist": "Reku Mochizuki",
-          "genre": "VARIETY",
-          "id": "908e3778d95a0665",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "Nyan Cat",
-          "artist": "daniwellP feat. 桃音モモ",
-          "genre": "niconico",
-          "id": "f18e2f28823276a9",
-          "release": "2025-04-01"
-      },
-      {
-          "title": "ONLY YOUR STARS!（Trickstar Ver.）",
-          "artist": "歌：Trickstar 作詞：松井洋平　作曲/編曲：中土智博（APDREAM）",
-          "genre": "POPS&ANIME",
-          "id": "5296c64f0761b64a",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "BRAND NEW STARS!! (ALKALOID ver.)",
-          "artist": "歌：ALKALOID 作詞：こだまさおり　作曲：桑原聖（Arte Refact）、編曲：脇眞富（Arte Refact）",
-          "genre": "POPS&ANIME",
-          "id": "1f97974d28d62cfc",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "One with One (Eden ver.)",
-          "artist": "歌：Eden 作詞：こだま さおり　作曲 / 編曲：佐藤 厚仁（Dream Monster）",
-          "genre": "POPS&ANIME",
-          "id": "1844aa0f9fce10dd",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "Surprising Thanks!! (Crazy:B ver.)",
-          "artist": "歌：Crazy:B 作詞：松井洋平　作曲 / 編曲：伊藤和馬 (Arte Refact)",
-          "genre": "POPS&ANIME",
-          "id": "75decd9502d63764",
-          "release": "2025-03-06"
-      },
-      {
-          "title": "殺屋中毒",
-          "artist": "cresc.",
-          "genre": "POPS&ANIME",
-          "id": "6efd3921eedf86cf",
-          "release": "2025-04-10"
-      },
-      {
-          "title": "ラビットホール",
-          "artist": "DECO*27",
-          "genre": "niconico",
-          "id": "b777046a2958ba7e",
-          "release": "2025-04-24"
-      },
-      {
-          "title": "あいたい星人",
-          "artist": "DECO*27",
-          "genre": "niconico",
-          "id": "78073235e4bf28ec",
-          "release": "2025-04-24"
-      },
-      {
-          "title": "ハオ",
-          "artist": "DECO*27",
-          "genre": "niconico",
-          "id": "5263fbed16a156ef",
-          "release": "2025-04-24"
-      },
-      {
-          "title": "躯樹の墓守",
-          "artist": "隣の庭は青い(庭師+Aoi)",
-          "genre": "ゲキマイ",
-          "id": "f1912b75135ec1bd",
-          "release": "2025-04-24"
-      },
-      {
-          "title": "旅星に渇く",
-          "artist": "Yu-dachi",
-          "genre": "ORIGINAL",
-          "id": "77bdec3e104b3aec",
-          "release": "2025-04-10"
-      },
-      {
-          "title": "ずんずんサファリ",
-          "artist": "ずんずんサファリ",
-          "genre": "ORIGINAL",
-          "id": "5b5402d31e6ee21e",
-          "release": "2025-04-10"
-      },
-      {
-          "title": "jaQup",
-          "artist": "owl＊tree",
-          "genre": "ORIGINAL",
-          "id": "ffaa64992600ecde",
-          "release": "2025-04-10"
-      },
-      {
-          "title": "HeinousЯeaper",
-          "artist": "seatrus",
-          "genre": "ORIGINAL",
-          "id": "a974c543ca464494",
-          "release": "2025-04-10"
-      },
-      {
-          "title": "We Are Us(IOSYS TRAX Remix)",
-          "artist": "舞ヶ原シンセ研究会",
-          "genre": "イロドリミドリ",
-          "id": "751fa94f0c42909f",
-          "release": "2025-05-20"
-      }
+  "titles": [
+    "inkar-usi",
+    "Tie me down gently",
+    "Ringed Genesis",
+    "Tempestissimo",
+    "ジョハリ",
+    "シリウスの輝きのように",
+    "I Wanna",
+    "革命ダンス",
+    "イガク",
+    "ザムザ",
+    "激烈!!!!ファミレスガールは帰しま1000!!!!",
+    "〚隔絶〛 ～Flame of Determination",
+    "〚献身〛 ～Paradox of Choice",
+    "〚盲従〛 ～Fantasia Sonata Flower",
+    "〚空虚〛 ～Pyrophilia",
+    "We don't need tears!",
+    "あいのうた",
+    "夜もすがら君想ふ (10th Anniv.)",
+    "ジェヘナ",
+    "Lostwizz",
+    "Aether Crest: Celestial",
+    "Crush the Dystopia",
+    "人マニア",
+    "オーバーライド",
+    "ライアーダンサー",
+    "黒塗り世界宛て書簡",
+    "本能的 Survivor",
+    "INFiNiTE ENERZY -Overdoze-",
+    "Nyan Cat",
+    "ONLY YOUR STARS!（Trickstar Ver.）",
+    "BRAND NEW STARS!! (ALKALOID ver.)",
+    "One with One (Eden ver.)",
+    "Surprising Thanks!! (Crazy:B ver.)",
+    "殺屋中毒",
+    "ラビットホール",
+    "あいたい星人",
+    "ハオ",
+    "躯樹の墓守",
+    "旅星に渇く",
+    "ずんずんサファリ",
+    "jaQup",
+    "HeinousЯeaper",
+    "We Are Us(IOSYS TRAX Remix)"
   ]
 }
