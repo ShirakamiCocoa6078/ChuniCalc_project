@@ -13,7 +13,7 @@ import { getApiToken } from "@/lib/get-api-token";
 import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, BarChartHorizontal } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
-import type { ShowallApiSongEntry, Song } from "@/app/result/page"; // Import types
+import type { ShowallApiSongEntry, Song } from "@/app/result/page"; 
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
 const NEW_20_DEBUG_COUNT = 20;
@@ -55,10 +55,10 @@ interface New20DebugState {
   definedNewSongPool: ShowallApiSongEntry[] | null;
   playedNewSongs: Song[] | null;
   top20Result: Song[] | null;
-  step1Output: string; // Titles from NewSongs.json
-  step2Output: string; // Defined new song pool (JSON)
-  step3Output: string; // Played new songs (JSON)
-  step4Output: string; // Top 20 new songs (JSON)
+  step1Output: string; 
+  step2Output: string; 
+  step3Output: string; 
+  step4Output: string; 
   error: string | null;
 }
 
@@ -99,7 +99,7 @@ const initialNew20DebugState: New20DebugState = {
   error: null,
 };
 
-// Helper functions (copied or adapted from result/page.tsx)
+
 const difficultyOrder: { [key: string]: number } = {
   ULT: 5, MAS: 4, EXP: 3, ADV: 2, BAS: 1,
 };
@@ -233,12 +233,16 @@ export default function ApiTestPage() {
       setNew20Debug(prev => ({ ...prev, error: "전역 음악 데이터가 로드되지 않았습니다."}));
       return;
     }
-    const newSongTitles = NewSongsData.titles?.verse || [];
-    const pool = new20Debug.globalMusic.filter(song => newSongTitles.includes(song.title));
+    const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+    const newSongTitles = newSongTitlesRaw.map(t => t.trim());
+    
+    const pool = new20Debug.globalMusic.filter(song => 
+        song.title && newSongTitles.includes(song.title.trim())
+    );
     setNew20Debug(prev => ({
       ...prev,
       definedNewSongPool: pool,
-      step1Output: `NewSongs.json의 verse 목록에서 ${newSongTitles.length}개의 제목 로드 완료.`,
+      step1Output: `NewSongs.json의 verse 목록에서 ${newSongTitles.length}개의 (trimmed) 제목 로드 완료.`,
       step2Output: `정의된 신곡 풀: ${pool.length} 항목 (모든 난이도 포함)\n${JSON.stringify(pool.slice(0, 5).map(s => ({ title: s.title, id: s.id, diff: s.diff, const: s.const })), null, 2)}...\n(전체 목록은 콘솔 확인)`,
       step3Output: "플레이한 신곡 필터링 전",
       step4Output: "상위 20곡 선정 전",
@@ -261,17 +265,17 @@ export default function ApiTestPage() {
     const played = new20Debug.definedNewSongPool.reduce((acc, definedSong) => {
       const userRecord = userRecordsMap.get(`${definedSong.id}-${definedSong.diff.toUpperCase()}`);
       if (userRecord && typeof userRecord.score === 'number' && userRecord.score > 0) {
-        // Create a combined entry for mapping, ensuring we use the 'const' from the defined pool (global music)
+        
         const combinedEntry: ShowallApiSongEntry = {
-            ...definedSong, // Base properties from global music
-            score: userRecord.score, // Score from user record
+            ...definedSong, 
+            score: userRecord.score, 
             is_played: userRecord.is_played,
             updated_at: userRecord.updated_at,
             is_clear: userRecord.is_clear,
             is_fullcombo: userRecord.is_fullcombo,
             is_alljustice: userRecord.is_alljustice,
             is_fullchain: userRecord.is_fullchain,
-            // rating will be recalculated by mapApiSongToAppSongForDebug
+            
         };
         acc.push(mapApiSongToAppSongForDebug(combinedEntry, definedSong.const ?? undefined) as Song);
       }
