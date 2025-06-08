@@ -38,7 +38,7 @@ type RatingApiSongEntry = {
   updated_at?: string;
 };
 
-type ShowallApiSongEntry = {
+export type ShowallApiSongEntry = {
   id: string;
   diff: string;
   title: string;
@@ -342,11 +342,11 @@ function ResultContent() {
         ) || [];
 
         const globalMusicRecordsFromCache = cachedGlobalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
-            e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && e.release
+            e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string') // Ensure release is present
         ) || [];
         
-        const newSongTitlesFromDataFile = NewSongsData.titles || [];
-        console.log(`[N20_CALC] Titles to look for from NewSongs.json: ${newSongTitlesFromDataFile.length}`);
+        const newSongTitlesFromDataFile = NewSongsData.titles?.verse || [];
+        console.log(`[N20_CALC] Titles to look for from NewSongs.json (verse): ${newSongTitlesFromDataFile.length}`);
         
         const definedSongPoolFromTitles = globalMusicRecordsFromCache.filter(globalSong => 
             newSongTitlesFromDataFile.includes(globalSong.title)
@@ -422,7 +422,7 @@ function ResultContent() {
         if (globalMusicResponseOrNull && globalMusicResponseOrNull.ok) {
             const globalMusicData = await globalMusicResponseOrNull.json();
             globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
-               e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && e.release
+               e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string') // Ensure release is present
             ) || [];
             setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
         } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
@@ -436,8 +436,8 @@ function ResultContent() {
           throw new Error(criticalError);
         }
         
-        const newSongTitlesFromDataFileApi = NewSongsData.titles || [];
-        console.log(`[N20_CALC] Titles to look for from NewSongs.json (API path): ${newSongTitlesFromDataFileApi.length}`);
+        const newSongTitlesFromDataFileApi = NewSongsData.titles?.verse || [];
+        console.log(`[N20_CALC] Titles to look for from NewSongs.json (verse API path): ${newSongTitlesFromDataFileApi.length}`);
 
         const definedSongPoolFromTitlesApi = globalMusicRecordsFromApi.filter(globalSong =>
             newSongTitlesFromDataFileApi.includes(globalSong.title)
@@ -471,9 +471,11 @@ function ResultContent() {
       }
     };
 
-    fetchAndProcessData();
+    if (clientHasMounted) { // Only run fetch if client has mounted
+      fetchAndProcessData();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, clientHasMounted]);
+  }, [userNameForApi, refreshNonce, clientHasMounted]); // Removed toast from dependencies
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
