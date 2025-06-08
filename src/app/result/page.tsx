@@ -14,7 +14,7 @@ import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTrian
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
 
 const BEST_COUNT = 30;
 const NEW_COUNT = 20;
@@ -45,7 +45,7 @@ type ShowallApiSongEntry = {
   genre: string;
   const: number | null;
   level: number | string;
-  release?: string; // Present in music/showall.json
+  release?: string; 
   score?: number;
   rating?: number | null;
   is_played?: boolean;
@@ -187,7 +187,6 @@ const calculateNewSongs = (
 
   const userRecordsMap = new Map<string, ShowallApiSongEntry>();
   allUserRecords.forEach(record => {
-    // Key by song_id AND difficulty to correctly match specific charts
     userRecordsMap.set(`${record.id}-${record.diff.toUpperCase()}`, record);
   });
   console.log(`[N20_CALC] Created user records map with ${userRecordsMap.size} entries.`);
@@ -208,9 +207,8 @@ const calculateNewSongs = (
                 ? (definedSongEntry as any).is_const_unknown
                 : (definedSongEntry.const === null || definedSongEntry.const === 0),
             score: userRecord.score,
-            // Rating from userRecord might be stale or based on different const, so we recalculate
-            rating: null, // Let mapApiSongToAppSong recalculate
-            is_played: userRecord.is_played, // This will be true if we found a record
+            rating: null, 
+            is_played: userRecord.is_played, 
             updated_at: userRecord.updated_at,
             is_clear: userRecord.is_clear,
             is_fullcombo: userRecord.is_fullcombo,
@@ -281,7 +279,6 @@ function ResultContent() {
         const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
         const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
         const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
-        // Note: We do NOT clear GLOBAL_MUSIC_DATA_KEY here by user action
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
@@ -313,7 +310,7 @@ function ResultContent() {
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
       const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
-      const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
+      
 
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
@@ -323,7 +320,7 @@ function ResultContent() {
 
       let cacheTimestamp = 'N/A';
       if (clientHasMounted) {
-        const userCacheTimestampItem = localStorage.getItem(profileKey); // Check one of the user-specific keys
+        const userCacheTimestampItem = localStorage.getItem(profileKey); 
         if (userCacheTimestampItem) {
             try {
                 const parsedItem = JSON.parse(userCacheTimestampItem);
@@ -348,7 +345,7 @@ function ResultContent() {
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
 
         const allUserRecordsFromCache = cachedUserShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
-            e && e.id && e.diff && typeof e.score === 'number' // Removed is_played check, score > 0 is main filter later
+            e && e.id && e.diff && typeof e.score === 'number' 
         ) || [];
 
         const globalMusicRecordsFromCache = cachedGlobalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
@@ -433,7 +430,7 @@ function ResultContent() {
                e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && e.release
             ) || [];
             setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData);
-        } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { // If fetch was attempted and failed
+        } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
             const errorJson = await globalMusicResponseOrNull.json().catch(() => ({}));
             const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponseOrNull.status}): ${errorJson.error?.message || globalMusicResponseOrNull.statusText || '오류 없음'}`;
              if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
@@ -693,6 +690,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-
-    

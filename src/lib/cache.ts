@@ -4,6 +4,7 @@
 export const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
 export const USER_DATA_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for user data
 export const GLOBAL_MUSIC_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for global music list
+export const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
 
 export type CachedData<T> = {
   timestamp: number;
