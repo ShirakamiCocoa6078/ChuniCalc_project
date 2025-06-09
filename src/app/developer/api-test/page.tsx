@@ -10,8 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
+import type { ShowallApiSongEntry, Song as AppSongType } from "@/app/result/page"; // For N20 debug
+import NewSongsData from '@/data/NewSongs.json'; // For N20 debug
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
 
@@ -64,11 +66,52 @@ const initialGlobalApiTestState: GlobalApiTestState = {
   searchTerm: "",
 };
 
-// Helper function for smallest enclosing block, used for global music search
+// N20 Debug State
+interface New20DebugState {
+  nickname: string;
+  loadingStep: string | null; // e.g., "step1", "step2"
+  error: string | null;
+  
+  step1NewSongTitlesRaw: string[]; // Titles from NewSongs.json
+  step1Output: string; // Summary of loaded titles
+
+  // Store data for subsequent steps (will be added later)
+  // globalMusicDataForN20: ShowallApiSongEntry[] | null;
+  // userRecordsForN20: ShowallApiSongEntry[] | null;
+  // definedNewSongPoolForN20: ShowallApiSongEntry[] | null;
+  // playedNewSongsForN20: AppSongType[] | null;
+  // top20NewSongsForN20: AppSongType[] | null;
+
+  // step2Output: string; // For global music data
+  // step3Output: string; // For user records data
+  // step4Output: string; // For defined new song pool
+  // step5Output: string; // For played new songs
+  // step6Output: string; // For top 20 new songs
+}
+
+const initialNew20DebugState: New20DebugState = {
+  nickname: "cocoa",
+  loadingStep: null,
+  error: null,
+  step1NewSongTitlesRaw: [],
+  step1Output: "아직 실행되지 않음.",
+  // globalMusicDataForN20: null,
+  // userRecordsForN20: null,
+  // definedNewSongPoolForN20: null,
+  // playedNewSongsForN20: null,
+  // top20NewSongsForN20: null,
+  // step2Output: "아직 실행되지 않음.",
+  // step3Output: "아직 실행되지 않음.",
+  // step4Output: "아직 실행되지 않음.",
+  // step5Output: "아직 실행되지 않음.",
+  // step6Output: "아직 실행되지 않음.",
+};
+
+
+// Helper for smallest enclosing block
 const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): string | null => {
     const lowerTerm = term.toLowerCase();
     
-    // Find all occurrences of the term
     let matchIndices: number[] = [];
     let i = -1;
     while ((i = jsonDataStr.toLowerCase().indexOf(lowerTerm, i + 1)) !== -1) {
@@ -80,29 +123,26 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
     let smallestValidBlock: string | null = null;
 
     for (const matchIndex of matchIndices) {
-        // Search backwards for '{' or '['
         for (let startIdx = matchIndex; startIdx >= 0; startIdx--) {
             if (jsonDataStr[startIdx] === '{' || jsonDataStr[startIdx] === '[') {
                 const startChar = jsonDataStr[startIdx];
                 const endChar = startChar === '{' ? '}' : ']';
                 let balance = 0;
-                // Search forwards for matching '}' or ']'
                 for (let endIdx = startIdx; endIdx < jsonDataStr.length; endIdx++) {
                     if (jsonDataStr[endIdx] === startChar) balance++;
                     else if (jsonDataStr[endIdx] === endChar) balance--;
 
-                    if (balance === 0) { // Found a balanced block
+                    if (balance === 0) { 
                         const currentBlock = jsonDataStr.substring(startIdx, endIdx + 1);
-                        // Check if this block actually contains the (case-insensitive) term
                         if (currentBlock.toLowerCase().includes(lowerTerm)) {
                             try {
-                                JSON.parse(currentBlock); // Validate if it's a valid JSON block
+                                JSON.parse(currentBlock); 
                                 if (!smallestValidBlock || currentBlock.length < smallestValidBlock.length) {
                                     smallestValidBlock = currentBlock;
                                 }
-                            } catch (e) { /* ignore invalid JSON snippets */ }
+                            } catch (e) { /* ignore */ }
                         }
-                        break; // Move to next potential start char for this matchIndex
+                        break; 
                     }
                 }
             }
@@ -115,14 +155,16 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
 const displayFilteredData = (
     data: any, 
     searchTerm: string | undefined, 
-    endpoint: ApiEndpoint
+    endpoint: ApiEndpoint | "N20_DEBUG" // Added N20_DEBUG type
 ): { content: string; summary?: string } => {
   if (data === null || data === undefined) return { content: "" };
   
   const lowerSearchTerm = searchTerm?.toLowerCase().trim();
-  const originalStringifiedData = JSON.stringify(data, null, 2);
+  // Ensure data is stringified for N20_DEBUG as well if it's not already a string.
+  // For other endpoints, it's typically an object/array.
+  const originalStringifiedData = typeof data === 'string' && endpoint === "N20_DEBUG" ? data : JSON.stringify(data, null, 2);
 
-  // Line-numbering logic for user rating data and user showall records
+
   if (endpoint === "/2.0/records/rating_data.json" || endpoint === "/2.0/records/showall.json") {
     const lines = originalStringifiedData.split('\n');
     const numDigits = String(lines.length).length;
@@ -141,7 +183,7 @@ const displayFilteredData = (
     
     const content = processedLines.join('\n');
 
-    if (lowerSearchTerm) { // Only create summary if there was a search term
+    if (lowerSearchTerm) { 
         if (matchingLineNumbers.length > 0) {
             const maxLinesToShowInSummary = 5;
             const linesToShow = matchingLineNumbers.slice(0, maxLinesToShowInSummary).join(', ');
@@ -157,32 +199,35 @@ const displayFilteredData = (
     return { content, summary: summaryText };
   }
 
-  // Smallest block logic for global music list
   if (endpoint === "/2.0/music/showall.json") {
     if (!lowerSearchTerm || lowerSearchTerm === "") {
         return { content: originalStringifiedData };
     }
 
     let searchResultContent: string;
-    if (Array.isArray(data)) {
+    const dataToSearch = typeof data === 'string' ? JSON.parse(data) : data; // Parse if string
+
+    if (Array.isArray(dataToSearch)) {
         const matchedResults: string[] = [];
-        data.forEach(item => {
+        dataToSearch.forEach(item => {
             const itemStr = JSON.stringify(item, null, 2);
             if (itemStr.toLowerCase().includes(lowerSearchTerm)) {
                 const smallestBlock = findSmallestEnclosingBlockHelper(itemStr, lowerSearchTerm);
                 matchedResults.push(smallestBlock || itemStr); 
             }
         });
-        searchResultContent = matchedResults.length > 0 ? matchedResults.join('\n\n') : `"${searchTerm}" not found.`;
-    } else if (typeof data === 'object' && data !== null) { 
-        if (originalStringifiedData.toLowerCase().includes(lowerSearchTerm)) {
-            const smallest = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm);
-            searchResultContent = smallest || originalStringifiedData;
+        searchResultContent = matchedResults.length > 0 ? matchedResults.map(r => JSON.stringify(JSON.parse(r), null, 2)).join('\n\n---\n\n') : `"${searchTerm}" not found.`;
+
+    } else if (typeof dataToSearch === 'object' && dataToSearch !== null) { 
+        const stringifiedObject = JSON.stringify(dataToSearch, null, 2);
+        if (stringifiedObject.toLowerCase().includes(lowerSearchTerm)) {
+            const smallest = findSmallestEnclosingBlockHelper(stringifiedObject, lowerSearchTerm);
+            searchResultContent = smallest ? JSON.stringify(JSON.parse(smallest),null,2) : stringifiedObject;
         } else {
             searchResultContent = `"${searchTerm}" not found.`;
         }
     } else {
-        searchResultContent = originalStringifiedData; // Should not happen if data is not null/undefined
+        searchResultContent = originalStringifiedData; 
     }
     return { 
         content: searchResultContent, 
@@ -204,6 +249,7 @@ export default function ApiTestPage() {
   const [userShowallState, setUserShowallState] = useState<UserApiTestState>({...initialUserApiTestState});
   const [courseState, setCourseState] = useState<UserApiTestState>({...initialUserApiTestState});
   const [globalMusicState, setGlobalMusicState] = useState<GlobalApiTestState>({...initialGlobalApiTestState});
+  const [new20Debug, setNew20Debug] = useState<New20DebugState>({...initialNew20DebugState});
   
 
   useEffect(() => {
@@ -293,6 +339,32 @@ export default function ApiTestPage() {
       toast({ title: `${endpoint} 호출 실패`, description: errorMessage, variant: "destructive" });
     }
   };
+
+
+  // --- N20 Debug Functions ---
+  const handleLoadTitlesFromNewSongsJson = () => {
+    setNew20Debug(prev => ({ ...prev, loadingStep: "step1", error: null }));
+    try {
+      const titlesFromVerse = NewSongsData.titles?.verse || [];
+      const processedTitles = titlesFromVerse.map(t => t.trim().toLowerCase());
+      
+      const outputSummary = `NewSongs.json ('verse')에서 ${processedTitles.length}개의 제목 로드 완료.\n샘플: ${processedTitles.slice(0,5).join(', ')}`;
+      console.log(`[N20_DEBUG_STEP_1] Loaded titles from NewSongs.json:`, processedTitles);
+
+      setNew20Debug(prev => ({
+        ...prev,
+        step1NewSongTitlesRaw: processedTitles,
+        step1Output: outputSummary,
+        loadingStep: null,
+      }));
+      toast({ title: "N20 디버그 (1단계) 성공", description: "NewSongs.json에서 제목을 로드했습니다." });
+    } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : "알 수 없는 오류";
+      setNew20Debug(prev => ({ ...prev, error: `1단계 오류: ${errorMsg}`, loadingStep: null }));
+      toast({ title: "N20 디버그 (1단계) 실패", description: errorMsg, variant: "destructive" });
+    }
+  };
+  // --- End N20 Debug Functions ---
 
 
   if (!clientHasMounted) {
@@ -410,6 +482,73 @@ export default function ApiTestPage() {
     );
   };
 
+  const renderNew20DebugSection = () => {
+    const { nickname, loadingStep, error, step1Output } = new20Debug;
+    // const step2Result = displayFilteredData(new20Debug.step2Output, undefined, "N20_DEBUG");
+    // Add more displayResult calls for other steps as they get implemented
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>New 20 상세 분석 도구</CardTitle>
+          <CardDescription>New 20 곡 목록 생성 과정을 단계별로 확인합니다.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-1">
+            <Label htmlFor="n20-debug-nickname">사용자 닉네임 (user_name)</Label>
+            <Input
+              id="n20-debug-nickname"
+              value={nickname}
+              onChange={(e) => setNew20Debug(prev => ({ ...prev, nickname: e.target.value }))}
+              placeholder="예: cocoa"
+            />
+          </div>
+
+          {error && (
+            <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+              <p className="font-semibold">오류:</p>
+              <pre className="whitespace-pre-wrap break-all">{error}</pre>
+            </div>
+          )}
+
+          {/* Step 1: Load Titles from NewSongs.json */}
+          <div className="space-y-2 p-3 border rounded-md">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary" />1단계: NewSongs.json 제목 로드</h3>
+              <Button onClick={handleLoadTitlesFromNewSongsJson} disabled={loadingStep === "step1"} size="sm">
+                {loadingStep === "step1" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                실행
+              </Button>
+            </div>
+            <Textarea
+              readOnly
+              value={step1Output}
+              className="h-24 font-mono text-xs"
+              rows={3}
+              placeholder="1단계 결과가 여기에 표시됩니다."
+            />
+          </div>
+          
+          {/* Future steps will be added here */}
+          {/* Example for a future step (placeholder) */}
+          {/*
+          <div className="space-y-2 p-3 border rounded-md">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold flex items-center"><ListChecks className="mr-2 h-5 w-5 text-primary" />2단계: 전역 악곡 목록 로드</h3>
+              <Button onClick={() => {}} disabled={loadingStep === "step2"} size="sm">
+                {loadingStep === "step2" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                실행
+              </Button>
+            </div>
+            <Textarea readOnly value={"아직 구현되지 않음"} className="h-24 font-mono text-xs" />
+          </div>
+          */}
+
+        </CardContent>
+      </Card>
+    );
+  };
+
 
   return (
     <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
@@ -427,6 +566,7 @@ export default function ApiTestPage() {
           {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, true)}
           {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, false)}
           {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false, true)}
+          {isDeveloperMode && renderNew20DebugSection()}
         </div>
       </div>
     </main>

@@ -15,11 +15,11 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
-// import NewSongsData from '@/data/NewSongs.json'; // NewSongs.json no longer used
+import NewSongsData from '@/data/NewSongs.json';
 
 
 const BEST_COUNT = 30;
-// const NEW_COUNT = 20; // NEW_COUNT no longer used
+const NEW_COUNT = 20;
 
 
 type ProfileData = {
@@ -173,13 +173,13 @@ type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
-type ShowallApiResponse = {
-    records?: ShowallApiSongEntry[];
-};
+// type ShowallApiResponse = { // This was removed as part of N20 logic removal, re-add if needed by N20
+//     records?: ShowallApiSongEntry[];
+// };
 
-type GlobalMusicApiResponse = {
-    records?: ShowallApiSongEntry[];
-}
+// type GlobalMusicApiResponse = { // This was removed as part of N20 logic removal, re-add if needed by N20
+//     records?: ShowallApiSongEntry[];
+// }
 
 
 function ResultContent() {
@@ -191,7 +191,7 @@ function ResultContent() {
 
   const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === "플레이어" ? "플레이어" : null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  // const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // N20 state removed
+  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
@@ -212,6 +212,8 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
+        // Also clear global music cache if you want to force refresh it
+        // localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); 
         console.log(`User-specific cache cleared for user: ${userNameForApi}`);
         toast({ title: "데이터 새로고침 중", description: "사용자 관련 캐시를 지우고 API에서 최신 데이터를 가져옵니다." });
     }
@@ -239,14 +241,15 @@ function ResultContent() {
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-      // const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`; // User showall key still needed for B30 if it changes source
       
+      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
+      console.log(`[N20_STEP_1_RESULT_PAGE] Titles from NewSongs.json (verse) for matching (trimmed, lowercased, count: ${newSongTitlesToMatch.length}):`, newSongTitlesToMatch.slice(0, 5));
+      // Subsequent N20 steps will use newSongTitlesToMatch
 
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
       const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
-      // const cachedUserShowallData = getCachedData<ShowallApiResponse>(userShowallKey); // N20 data source removed
-      // const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // N20 data source removed
 
       let cacheTimestamp = 'N/A';
       if (clientHasMounted) {
@@ -263,7 +266,7 @@ function ResultContent() {
       setLastRefreshed(cachedProfile ? cacheTimestamp : '사용자 캐시 없음');
 
 
-      if (cachedProfile && cachedRatingData) { // Removed N20 related cache checks
+      if (cachedProfile && cachedRatingData) { 
         console.log("Loading Best30 data from localStorage cache...");
         setApiPlayerName(cachedProfile.player_name || userNameForApi);
 
@@ -274,8 +277,8 @@ function ResultContent() {
         const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
         
-        // N20 calculation removed
-        // setNew20SongsData([]); 
+        // N20: For now, setting to empty. Will be populated in subsequent steps.
+        setNew20SongsData([]); 
 
         toast({ title: "데이터 로드 완료", description: `로컬 캐시에서 ${userNameForApi}님의 데이터를 성공적으로 불러왔습니다.` });
         setIsLoadingSongs(false);
@@ -287,11 +290,8 @@ function ResultContent() {
         const apiRequests = [
             fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
             fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            // fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`), // N20 API call removed
-            // cachedGlobalMusicData ? Promise.resolve(null) : fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${API_TOKEN}`) // N20 API call removed
         ];
 
-        // const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponseOrNull] = await Promise.all(apiRequests);
         const [profileResponse, ratingDataResponse] = await Promise.all(apiRequests);
 
 
@@ -321,41 +321,12 @@ function ResultContent() {
             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
 
-        // N20 API data handling removed
-        // let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
-        // if (userShowallResponse && userShowallResponse.ok) { // Check if userShowallResponse exists
-        //     const userShowallData = await userShowallResponse.json();
-        //     allUserRecordsFromApi = userShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
-        //       e && e.id && e.diff && typeof e.score === 'number'
-        //     ) || [];
-        //     setCachedData<ShowallApiResponse>(userShowallKey, userShowallData);
-        // } else if (userShowallResponse) { // Check if userShowallResponse exists
-        //     const errorJson = await userShowallResponse.json().catch(() => ({}));
-        //     const errorMsg = `사용자 전체 곡 기록 로딩 실패 (상태: ${userShowallResponse.status}): ${errorJson.error?.message || userShowallResponse.statusText || '오류 없음'}`;
-        //     if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
-        // }
-
-
-        // let globalMusicRecordsFromApi: ShowallApiSongEntry[] = cachedGlobalMusicData?.records || [];
-        // if (globalMusicResponseOrNull && globalMusicResponseOrNull.ok) {
-        //     const globalMusicData = await globalMusicResponseOrNull.json();
-        //     globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
-        //        e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string')
-        //     ) || [];
-        //     setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
-        // } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
-        //     const errorJson = await globalMusicResponseOrNull.json().catch(() => ({}));
-        //     const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponseOrNull.status}): ${errorJson.error?.message || globalMusicResponseOrNull.statusText || '오류 없음'}`;
-        //      if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
-        // }
-
-
         if (criticalError) {
           throw new Error(criticalError);
         }
         
-        // N20 calculation removed
-        // setNew20SongsData([]);
+        // N20: For now, setting to empty. Will be populated in subsequent steps.
+        setNew20SongsData([]);
 
         const newCacheTime = new Date().toLocaleString();
         setLastRefreshed(newCacheTime);
@@ -370,7 +341,7 @@ function ResultContent() {
         setErrorLoadingSongs(detailedErrorMessage);
         if (!apiPlayerName && userNameForApi !== "플레이어") setApiPlayerName(userNameForApi);
         setBest30SongsData([]);
-        // setNew20SongsData([]); // N20 state removed
+        setNew20SongsData([]);
       } finally {
         setIsLoadingSongs(false);
       }
@@ -383,9 +354,9 @@ function ResultContent() {
   }, [userNameForApi, refreshNonce, clientHasMounted]); 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  // const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; // N20 UI removed
+  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4";
-  // const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // N20 UI removed
+  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
 
 
   return (
@@ -461,11 +432,10 @@ function ResultContent() {
         </Card>
 
         <Tabs defaultValue="best30" className="w-full">
-          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 gap-1 mb-6 bg-muted p-1 rounded-lg">
+          <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
             <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best 30</TabsTrigger>
-            {/* <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger> */}
-            {/* <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger> */}
-             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 (Combined View)</TabsTrigger>
+            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger>
+            <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
@@ -474,7 +444,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted
-                  ? (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) // Removed global music cache check for N20
+                  ? (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`)
                     ? '캐시를 확인/갱신 중입니다...'
                     : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
                   : '데이터 상태 확인 중...'
@@ -519,25 +489,36 @@ function ResultContent() {
                 </Card>
               </TabsContent>
 
-              {/* <TabsContent value="new20">
+              <TabsContent value="new20">
                 <Card>
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">New 20 곡</CardTitle>
                   </CardHeader>
                   <CardContent>
-                       <p className="text-muted-foreground">New 20 기능이 임시로 제거되었습니다.</p>
+                       {new20SongsData.length > 0 ? (
+                         <div className={cn(
+                           "grid grid-cols-1 gap-4",
+                           new20GridCols
+                         )}>
+                           {new20SongsData.map((song) => (
+                             <SongCard key={`new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                           ))}
+                         </div>
+                       ) : (
+                         <p className="text-muted-foreground">New 20 곡 데이터가 없거나 아직 계산 중입니다. NewSongs.json 설정 및 다음 단계들을 확인하세요.</p>
+                       )}
                   </CardContent>
                 </Card>
-              </TabsContent> */}
+              </TabsContent>
 
               <TabsContent value="combined">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Best 30 곡 (통합 보기)</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Best 30 + New 20 (통합 보기)</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col lg:flex-row gap-6">
-                    <div className="lg:w-full"> {/* Changed to full width for B30 only */}
-                      {/* <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3> */}
+                    <div className="lg:w-3/5"> 
+                      <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
@@ -551,10 +532,21 @@ function ResultContent() {
                          <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다.</p>
                       )}
                     </div>
-                    {/* <div className="lg:w-2/5">
+                    <div className="lg:w-2/5">
                       <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
-                       <p className="text-muted-foreground">New 20 기능이 임시로 제거되었습니다.</p>
-                    </div> */}
+                       {new20SongsData.length > 0 ? (
+                         <div className={cn(
+                           "grid grid-cols-1 gap-4",
+                           combinedNew20GridCols
+                         )}>
+                           {new20SongsData.map((song) => (
+                             <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                           ))}
+                         </div>
+                       ) : (
+                         <p className="text-muted-foreground">New 20 곡 데이터가 없거나 아직 계산 중입니다.</p>
+                       )}
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -573,4 +565,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
