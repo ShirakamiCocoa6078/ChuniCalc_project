@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon, FileSearch } from "lucide-react";
-import { LOCAL_STORAGE_PREFIX, getCachedData, setCachedData, GLOBAL_MUSIC_DATA_KEY, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { LOCAL_STORAGE_PREFIX, getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import type { ShowallApiSongEntry as AppShowallApiSongEntry, Song as AppSongType } from "@/app/result/page"; 
 import NewSongsData from '@/data/NewSongs.json';
 
@@ -110,8 +110,8 @@ const initialReleaseFilterTestState: ReleaseFilterTestState = {
 
 interface SongByIdFetcherState {
     songIdToFetch: string;
-    fetchedSongData: AppShowallApiSongEntry | null; // The specific song found by ID
-    rawMusicShowallRecords: AppShowallApiSongEntry[] | null; // All records from music/showall.json
+    fetchedSongData: AppShowallApiSongEntry | null; 
+    rawMusicShowallRecords: AppShowallApiSongEntry[] | string | null; // Can be array or string (for malformed response)
     loading: boolean;
     error: string | null;
     outputSummary: string;
@@ -204,11 +204,17 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
 const displayFilteredData = (
     data: any,
     searchTerm: string | undefined,
-    endpoint: ApiEndpoint | "N20_DEBUG_GLOBAL" | "N20_DEBUG_USER" | "N20_DEBUG_POOL" | "RELEASE_FILTER_RAW" | "RELEASE_FILTER_RESULT" | "SONG_BY_ID_RESULT"
+    endpoint: ApiEndpoint | "N20_DEBUG_GLOBAL" | "N20_DEBUG_USER" | "N20_DEBUG_POOL" | "RELEASE_FILTER_RAW" | "RELEASE_FILTER_RESULT" | "SONG_BY_ID_RESULT" | "SONG_BY_ID_RAW"
 ): { content: string; summary?: string } => {
   if (data === null || data === undefined) return { content: "" };
 
   const lowerSearchTerm = searchTerm?.toLowerCase().trim();
+  
+  // For SONG_BY_ID_RAW, if data is string, display as is. Otherwise, stringify.
+  if (endpoint === "SONG_BY_ID_RAW") {
+    return { content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) };
+  }
+  
   const originalStringifiedData = JSON.stringify(data, null, 2);
 
 
@@ -587,8 +593,40 @@ export default function ApiTestPage() {
         return;
     }
     setSongByIdFetcher(prev => ({ ...prev, loading: true, error: null, fetchedSongData: null, rawMusicShowallRecords: null, outputSummary: "전체 악곡 목록 로드 중..."}));
+    
     try {
         const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
+
+        if (!globalMusicApiResponse || typeof globalMusicApiResponse !== 'object') {
+            const errorDetail = "API 응답이 없거나 유효한 객체 형식이 아닙니다 (music/showall.json).";
+            console.error("[SongByID] Invalid API response structure:", globalMusicApiResponse);
+            setSongByIdFetcher(prev => ({ 
+                ...prev, 
+                loading: false, 
+                error: errorDetail, 
+                fetchedSongData: null, 
+                rawMusicShowallRecords: typeof globalMusicApiResponse === 'string' ? globalMusicApiResponse : JSON.stringify(globalMusicApiResponse, null, 2), 
+                outputSummary: `오류: ${errorDetail}`
+            }));
+            toast({title: "API 응답 오류", description: errorDetail, variant: "destructive"});
+            return; 
+        }
+        
+        if (globalMusicApiResponse.records !== undefined && !Array.isArray(globalMusicApiResponse.records)) {
+            const errorDetail = "API 응답의 'records' 필드가 배열이 아닙니다 (music/showall.json).";
+            console.error("[SongByID] API response '.records' field is not an array:", globalMusicApiResponse.records);
+             setSongByIdFetcher(prev => ({ 
+                ...prev, 
+                loading: false, 
+                error: errorDetail, 
+                fetchedSongData: null, 
+                rawMusicShowallRecords: JSON.stringify(globalMusicApiResponse, null, 2), 
+                outputSummary: `오류: ${errorDetail} 전체 API 응답을 확인하세요.`
+            }));
+            toast({title: "API 데이터 형식 오류", description: errorDetail, variant: "destructive"});
+            return;
+        }
+
         const rawApiRecords = globalMusicApiResponse.records || []; 
 
         console.log(`[SongByID] Raw globalMusicApiResponse.records count: ${rawApiRecords?.length ?? 'undefined'}`);
@@ -596,7 +634,15 @@ export default function ApiTestPage() {
             console.log("[SongByID] Sample raw records from API (first 2):", rawApiRecords.slice(0, 2));
         }
         
-        setSongByIdFetcher(prev => ({ ...prev, rawMusicShowallRecords: rawApiRecords, outputSummary: "전체 악곡 목록 로드 완료. ID 검색 중..." }));
+        let initialSummary = "";
+        if (rawApiRecords.length > 0) {
+            initialSummary = "전체 악곡 목록 로드 완료. ID 검색 중...";
+        } else if (globalMusicApiResponse.records === undefined) {
+            initialSummary = "API 응답에 'records' 필드가 없습니다. 전체 API 응답을 확인하세요. ID 검색을 시도합니다...";
+        } else { // globalMusicApiResponse.records is []
+            initialSummary = "전체 악곡 목록(music/showall.json)에 레코드가 비어있습니다. ID 검색을 시도합니다...";
+        }
+        setSongByIdFetcher(prev => ({ ...prev, rawMusicShowallRecords: rawApiRecords, outputSummary: initialSummary }));
         
         const allMusicRecordsFiltered = rawApiRecords.filter((e: any, index: number): e is AppShowallApiSongEntry => {
             const isValid = e && 
@@ -633,30 +679,37 @@ export default function ApiTestPage() {
             setSongByIdFetcher(prev => ({
                 ...prev,
                 loading: false,
-                fetchedSongData: foundSong, // This is the validated and found song
+                fetchedSongData: foundSong, 
                 error: null,
-                outputSummary: `전체 music/showall.json 레코드가 아래에 표시됩니다. ID '${trimmedSongIdToFetch}' 악곡 발견: ${foundSong.title}`,
+                outputSummary: `${prev.outputSummary.split(" ID 검색")[0]}. ID '${trimmedSongIdToFetch}' 악곡 발견: ${foundSong.title}`,
             }));
             toast({ title: "악곡 발견", description: `ID ${trimmedSongIdToFetch}에 해당하는 악곡 '${foundSong.title}'을(를) 전체 목록 내에서 찾았습니다.`});
         } else {
             console.error(`[SongByID] ID search failed.
             Input ID (trimmed): "${trimmedSongIdToFetch}" (type: ${typeof trimmedSongIdToFetch})
             Total records searched (after filtering for search): ${allMusicRecordsFiltered.length}`);
+            
+            let finalSummary = "";
+            const baseSummary = songByIdFetcher.rawMusicShowallRecords && Array.isArray(songByIdFetcher.rawMusicShowallRecords) && songByIdFetcher.rawMusicShowallRecords.length > 0
+                ? `전체 music/showall.json 레코드가 아래에 표시됩니다.`
+                : `전체 악곡 목록(music/showall.json)에 레코드가 없거나 API 응답에 records 필드가 없어 표시할 전체 목록이 없습니다.`;
+
             if (allMusicRecordsFiltered.length > 0) {
-                console.log("[SongByID] Sample IDs from filtered records for search (first 10):");
-                allMusicRecordsFiltered.slice(0, 10).forEach(s => console.log(`- ID: "${s.id}" (type: ${typeof s.id})`));
+                 finalSummary = `${baseSummary} ID '${trimmedSongIdToFetch}' 악곡을 찾지 못했습니다.`;
             } else if (rawApiRecords?.length > 0) {
                  console.log("[SongByID] No records remained after filtering for search, but raw API response had records. Check filter logic and SongByID_FilterDebug logs.");
+                 finalSummary = `${baseSummary} 유효한 형식의 악곡이 없어 ID '${trimmedSongIdToFetch}' 악곡을 검색할 수 없었습니다. (콘솔 FilterDebug 로그 확인)`;
             } else {
                 console.log("[SongByID] No records found in raw API response (globalMusicApiResponse.records was empty or undefined).");
+                finalSummary = `${baseSummary} ID '${trimmedSongIdToFetch}' 악곡을 찾지 못했습니다.`;
             }
 
             setSongByIdFetcher(prev => ({
                 ...prev,
                 loading: false,
                 fetchedSongData: null,
-                error: `ID '${trimmedSongIdToFetch}' (으)로 music/showall.json 에서 특정 곡을 찾지 못했습니다. 아래 전체 목록을 확인하세요. (브라우저 콘솔 로그를 확인하세요)`,
-                outputSummary: `전체 music/showall.json 레코드가 아래에 표시됩니다. ID '${trimmedSongIdToFetch}' 악곡을 찾지 못했습니다.`,
+                error: `ID '${trimmedSongIdToFetch}' (으)로 music/showall.json 에서 특정 곡을 찾지 못했습니다. (브라우저 콘솔 로그를 확인하세요)`,
+                outputSummary: finalSummary,
             }));
             toast({ title: "악곡 없음", description: `ID '${trimmedSongIdToFetch}'에 해당하는 악곡을 찾을 수 없습니다. (콘솔 로그를 확인하세요)`, variant: "destructive"});
         }
@@ -948,12 +1001,12 @@ export default function ApiTestPage() {
                     className="h-20 font-mono text-xs bg-muted/30"
                     placeholder="조회 결과 요약"
                 />
-                {rawMusicShowallRecords && (
+                {rawMusicShowallRecords !== null && ( // Show Textarea if rawMusicShowallRecords is not null (can be [] or string)
                     <div>
-                        <Label>전체 music/showall.json 레코드:</Label>
+                        <Label>전체 music/showall.json 레코드 (또는 API 응답):</Label>
                         <Textarea
                             readOnly
-                            value={JSON.stringify(rawMusicShowallRecords, null, 2)}
+                            value={displayFilteredData(rawMusicShowallRecords, undefined, "SONG_BY_ID_RAW").content}
                             className="h-96 font-mono text-xs mt-1"
                             rows={20}
                         />
@@ -1001,3 +1054,4 @@ export default function ApiTestPage() {
     </main>
   );
 }
+
