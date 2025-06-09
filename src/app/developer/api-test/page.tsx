@@ -12,11 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-// import NewSongsData from '@/data/NewSongs.json'; // NewSongs.json no longer used
-// import type { ShowallApiSongEntry, Song } from "@/app/result/page"; // Types from result/page.tsx no longer needed for N20 debug
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
-// const NEW_20_DEBUG_COUNT = 20; // N20 debug constant removed
 
 type ApiEndpoint = 
   | "/2.0/records/profile.json"
@@ -46,9 +43,6 @@ interface GlobalApiTestState {
   searchTerm: string;
 }
 
-// N20 Debug state removed
-// interface New20DebugState { ... }
-
 const initialUserApiTestState: UserApiTestState = {
   loading: false,
   error: null,
@@ -70,14 +64,112 @@ const initialGlobalApiTestState: GlobalApiTestState = {
   searchTerm: "",
 };
 
-// N20 Debug initial state removed
-// const initialNew20DebugState: New20DebugState = { ... };
+// Helper function for smallest enclosing block, used for global music search
+const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): string | null => {
+    const lowerTerm = term.toLowerCase();
+    let matchIndex = jsonDataStr.toLowerCase().indexOf(lowerTerm);
+    if (matchIndex === -1) return null;
 
-// N20 calculation helper functions removed
-// const difficultyOrder: { [key: string]: number } = { ... };
-// const calculateChunithmSongRatingForDebug = ( ... ): number => { ... };
-// const mapApiSongToAppSongForDebug = ( ... ): Omit<Song, 'targetScore' | 'targetRating'> => { ... };
-// const sortSongsByRatingDescForDebug = ( ... ): Omit<Song, 'targetScore' | 'targetRating'>[] => { ... };
+    let bestBlock: string | null = null;
+
+    for (let i = matchIndex; i >= 0; i--) {
+        if (jsonDataStr[i] === '{' || jsonDataStr[i] === '[') {
+            const startChar = jsonDataStr[i];
+            const endChar = startChar === '{' ? '}' : ']';
+            let balance = 0;
+            for (let j = i; j < jsonDataStr.length; j++) {
+                if (jsonDataStr[j] === startChar) balance++;
+                else if (jsonDataStr[j] === endChar) balance--;
+
+                if (balance === 0) {
+                    const currentBlock = jsonDataStr.substring(i, j + 1);
+                    if (currentBlock.toLowerCase().includes(lowerTerm)) {
+                        try {
+                            JSON.parse(currentBlock); 
+                            if (!bestBlock || currentBlock.length < bestBlock.length) {
+                                bestBlock = currentBlock;
+                            }
+                        } catch (e) { /* ignore invalid block */ }
+                    }
+                    break; 
+                }
+            }
+        }
+    }
+    return bestBlock;
+};
+
+
+const displayFilteredData = (data: any, searchTerm: string | undefined, endpoint: ApiEndpoint): string => {
+  if (data === null || data === undefined) return "";
+  
+  const lowerSearchTerm = searchTerm?.toLowerCase().trim();
+  const originalStringifiedData = JSON.stringify(data, null, 2);
+
+  // Line-numbering logic for user rating data and user showall records
+  if (endpoint === "/2.0/records/rating_data.json" || endpoint === "/2.0/records/showall.json") {
+    const lines = originalStringifiedData.split('\n');
+    const numDigits = String(lines.length).length;
+
+    if (!lowerSearchTerm || lowerSearchTerm === "") { // No search term, just number lines
+        return lines.map((line, index) => {
+            const lineNumber = index + 1;
+            return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
+        }).join('\n');
+    }
+
+    let matchFoundOnAnyLine = false;
+    const processedLinesWithSearch = lines.map((line, index) => {
+      const lineNumber = index + 1;
+      if (line.toLowerCase().includes(lowerSearchTerm)) {
+        matchFoundOnAnyLine = true;
+        return `* ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
+      } else {
+        return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
+      }
+    });
+
+    if (!matchFoundOnAnyLine) {
+      const allNumberedLines = lines.map((line, index) => {
+        const lineNumber = index + 1;
+        return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
+      }).join('\n');
+      return `"${searchTerm}" not found.\n\n${allNumberedLines}`;
+    }
+    return processedLinesWithSearch.join('\n');
+  }
+
+  // If no search term for other endpoints, return original stringified data
+  if (!lowerSearchTerm || lowerSearchTerm === "") {
+    return originalStringifiedData;
+  }
+
+  // Smallest block logic for global music list
+  if (endpoint === "/2.0/music/showall.json") {
+    if (Array.isArray(data)) {
+        const matchedResults: string[] = [];
+        data.forEach(item => {
+            const itemStr = JSON.stringify(item, null, 2);
+            if (itemStr.toLowerCase().includes(lowerSearchTerm)) {
+                const smallestBlock = findSmallestEnclosingBlockHelper(itemStr, lowerSearchTerm);
+                matchedResults.push(smallestBlock || itemStr); 
+            }
+        });
+        if (matchedResults.length > 0) {
+            return matchedResults.join('\n\n'); 
+        }
+    } else if (typeof data === 'object' && data !== null) { 
+        if (originalStringifiedData.toLowerCase().includes(lowerSearchTerm)) {
+            const smallest = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm);
+            return smallest || originalStringifiedData;
+        }
+    }
+    return `"${searchTerm}" not found.`;
+  }
+  
+  // Default for non-searchable endpoints (if somehow reached with a search term)
+  return originalStringifiedData; 
+};
 
 
 export default function ApiTestPage() {
@@ -91,8 +183,6 @@ export default function ApiTestPage() {
   const [courseState, setCourseState] = useState<UserApiTestState>({...initialUserApiTestState});
   const [globalMusicState, setGlobalMusicState] = useState<GlobalApiTestState>({...initialGlobalApiTestState});
   
-  // N20 Debug state hook removed
-  // const [new20Debug, setNew20Debug] = useState<New20DebugState>(initialNew20DebugState);
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -101,15 +191,6 @@ export default function ApiTestPage() {
       setIsDeveloperMode(devMode === 'true');
     }
   }, []);
-
-  // N20 Debug API fetch function removed
-  // const fetchApiForDebug = useCallback(async ( ... ): Promise<ShowallApiSongEntry[] | null> => { ... }, [toast]);
-
-  // N20 Debug step handler functions removed
-  // const handleLoadDebugData = async () => { ... };
-  // const handleDefineNewSongPool = () => { ... };
-  // const handleFilterPlayedNewSongs = () => { ... };
-  // const handleGetTop20NewSongs = () => { ... };
 
 
   const handleFetch = async (
@@ -189,37 +270,6 @@ export default function ApiTestPage() {
       setState(prev => ({ ...prev, loading: false, error: errorMessage, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
       toast({ title: `${endpoint} 호출 실패`, description: errorMessage, variant: "destructive" });
     }
-  };
-
-  const displayFilteredData = (data: any, searchTerm: string | undefined): string => {
-    if (data === null || data === undefined) return "";
-    
-    const originalStringifiedData = JSON.stringify(data, null, 2);
-    if (!searchTerm || searchTerm.trim() === "") {
-      return originalStringifiedData;
-    }
-
-    const lowerSearchTerm = searchTerm.toLowerCase().trim();
-
-    if (Array.isArray(data)) {
-      const filteredArray = data.filter(item => 
-        JSON.stringify(item).toLowerCase().includes(lowerSearchTerm)
-      );
-      if (filteredArray.length > 0) {
-        return JSON.stringify(filteredArray, null, 2);
-      }
-    } else if (typeof data === 'object') {
-      // For single objects, if it contains the search term, show the whole object
-      if (originalStringifiedData.toLowerCase().includes(lowerSearchTerm)) {
-        return originalStringifiedData;
-      }
-    } else { // For primitive types (string, number, boolean)
-      if (String(data).toLowerCase().includes(lowerSearchTerm)) {
-        return String(data);
-      }
-    }
-    
-    return "검색 결과가 없습니다.";
   };
 
 
@@ -322,7 +372,7 @@ export default function ApiTestPage() {
               <Label>응답 데이터 {state.searchTerm && `(검색어: "${state.searchTerm}")`}:</Label>
               <Textarea
                 readOnly
-                value={displayFilteredData(state.data, state.searchTerm)}
+                value={displayFilteredData(state.data, state.searchTerm, endpoint)}
                 className="h-64 font-mono text-xs"
                 rows={15}
               />
@@ -332,9 +382,6 @@ export default function ApiTestPage() {
       </Card>
     );
   };
-
-  // N20 Debug section render function removed
-  // const renderNew20DebugSection = () => { ... };
 
 
   return (
@@ -353,11 +400,8 @@ export default function ApiTestPage() {
           {renderApiTestSection("사용자 전체 곡 기록", "/2.0/records/showall.json", userShowallState, setUserShowallState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, true)}
           {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, false)}
           {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false, true)}
-          {/* N20 Debug section render call removed */}
-          {/* {renderNew20DebugSection()} */}
         </div>
       </div>
     </main>
   );
 }
-
