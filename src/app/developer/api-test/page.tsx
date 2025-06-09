@@ -72,12 +72,12 @@ interface New20DebugState {
   loadingStep: string | null; // e.g., "step1a", "step1b", "step2"
   error: string | null;
 
-  step1NewSongTitlesRaw: string[]; // Trimmed, lowercased titles from NewSongs.json
-  step1Output: string; // Combined output for step 1a and 1b
+  step1NewSongTitlesRaw: string[]; 
+  step1Output: string; 
 
-  globalMusicDataForN20: AppShowallApiSongEntry[] | null; // Raw AppShowallApiSongEntry from music/showall.json
+  globalMusicDataForN20: AppShowallApiSongEntry[] | null; 
 
-  step2DefinedSongPoolRaw: AppShowallApiSongEntry[] | null; // Matched songs (AppShowallApiSongEntry)
+  step2DefinedSongPoolRaw: AppShowallApiSongEntry[] | null; 
   step2Output: string;
 }
 
@@ -249,7 +249,7 @@ const displayFilteredData = (
         const stringifiedObject = JSON.stringify(dataToSearch, null, 2);
         if (stringifiedObject.toLowerCase().includes(lowerSearchTerm)) {
             const smallest = findSmallestEnclosingBlockHelper(stringifiedObject, lowerSearchTerm);
-            searchResultContent = smallest
+             searchResultContent = smallest
                 ? (() => {
                     try {
                         return JSON.stringify(JSON.parse(smallest), null, 2);
@@ -406,15 +406,15 @@ export default function ApiTestPage() {
         setNew20Debug(prev => ({
             ...prev,
             step1NewSongTitlesRaw: processedTitles,
-            step1Output: titleLoadSummary + "\n" + (prev.step1Output.split('\n').slice(1).join('\n') || "1-2단계: 전체 악곡 목록 로드 실행 대기 중."), // Preserve 1-2 output if exists
-            globalMusicDataForN20: null, // Clear global music if titles are reloaded
-            step2DefinedSongPoolRaw: null, // Clear defined pool
-            step2Output: initialNew20DebugState.step2Output, // Reset step 2 output
+            step1Output: titleLoadSummary + "\n" + (prev.step1Output.split('\n').slice(1).join('\n') || "1-2단계: 전체 악곡 목록 로드 실행 대기 중."),
+            globalMusicDataForN20: null, 
+            step2DefinedSongPoolRaw: null, 
+            step2Output: initialNew20DebugState.step2Output, 
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-1단계) 성공", description: "NewSongs.json 제목을 로드했습니다." });
     } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "알 수 없는 오류";
+        const errorMsg = String(e);
         setNew20Debug(prev => ({ ...prev, error: `1-1단계 오류: ${errorMsg}`, loadingStep: null, step1Output: `1-1단계 오류: ${errorMsg}` }));
         toast({ title: "N20 디버그 (1-1단계) 실패", description: errorMsg, variant: "destructive" });
     }
@@ -442,13 +442,13 @@ export default function ApiTestPage() {
             ...prev,
             globalMusicDataForN20: globalMusicRecords,
             step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + `\n1-2단계: ${globalMusicSummary}`,
-            step2DefinedSongPoolRaw: null, // Clear defined pool if global music is reloaded
-            step2Output: initialNew20DebugState.step2Output, // Reset step 2 output
+            step2DefinedSongPoolRaw: null, 
+            step2Output: initialNew20DebugState.step2Output, 
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-2단계) 성공", description: "전체 악곡 목록을 로드하고 상태에 저장했습니다." });
     } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "알 수 없는 오류";
+        const errorMsg = String(e);
         console.error("[N20_DEBUG_STEP_1.2_ERROR] Error in handleLoadGlobalMusicForN20:", e);
         setNew20Debug(prev => ({ ...prev, error: `1-2단계 오류: ${errorMsg}`, loadingStep: null, step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + `\n1-2단계 오류: ${errorMsg}` }));
         toast({ title: "N20 디버그 (1-2단계) 실패", description: errorMsg, variant: "destructive" });
@@ -473,9 +473,6 @@ export default function ApiTestPage() {
             if (globalSong.title) {
                 const apiTitleTrimmedLower = globalSong.title.trim().toLowerCase();
                 const isIncluded = new20Debug.step1NewSongTitlesRaw.includes(apiTitleTrimmedLower);
-                // if (new20Debug.step1NewSongTitlesRaw.some(t => apiTitleTrimmedLower.includes(t) || t.includes(apiTitleTrimmedLower))) { // For debugging partial matches
-                //     console.log(`Partial match debug: API Title: "${apiTitleTrimmedLower}", NewSong Title: a title from step1NewSongTitlesRaw`);
-                // }
                 return isIncluded;
             }
             return false;
@@ -493,7 +490,7 @@ export default function ApiTestPage() {
         toast({ title: "N20 디버그 (2단계) 성공", description: "정의된 신곡 풀을 생성했습니다." });
 
     } catch (e) {
-        const errorMsg = e instanceof Error ? e.message : "알 수 없는 오류";
+        const errorMsg = String(e);
         console.error("[N20_DEBUG_STEP_2_ERROR] Error in handleDefineNewSongPoolFromGlobalMusic:", e);
         setNew20Debug(prev => ({ ...prev, error: `2단계 오류: ${errorMsg}`, loadingStep: null, step2Output: `오류: ${errorMsg}` }));
         toast({ title: "N20 디버그 (2단계) 실패", description: errorMsg, variant: "destructive" });
@@ -513,17 +510,14 @@ export default function ApiTestPage() {
 
       const targetDateStr = '2024-12-12';
       const targetDate = new Date(targetDateStr);
-      targetDate.setHours(0,0,0,0); // Normalize target date to start of day
+      targetDate.setHours(0,0,0,0); 
 
       const filteredSongs = allMusicRecords.filter(song => {
         if (!song.release) return false;
         try {
           const releaseDate = new Date(song.release);
-          releaseDate.setHours(0,0,0,0); // Normalize release date to start of day
+          releaseDate.setHours(0,0,0,0); 
           const isAfter = releaseDate.getTime() >= targetDate.getTime();
-          // if (song.title.includes("some specific title for debug")) { // Example debug log
-          //    console.log(`[ReleaseFilterDebug] Song: ${song.title}, Release: ${song.release}, Parsed: ${releaseDate}, Target: ${targetDate}, IsAfter: ${isAfter}`);
-          // }
           return isAfter;
         } catch (dateError) {
           console.warn(`[ReleaseFilter] Could not parse release date for song ${song.id} (${song.title}): ${song.release}`, dateError);
@@ -542,7 +536,7 @@ export default function ApiTestPage() {
       toast({title: "릴리즈 날짜 필터링 성공", description: resultSummary});
 
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : "알 수 없는 오류";
+      const errorMsg = String(e);
       setReleaseFilterTest(prev => ({ ...prev, loading: false, error: errorMsg, summary: `오류: ${errorMsg}`}));
       toast({title: "릴리즈 날짜 필터링 실패", description: errorMsg, variant: "destructive"});
     }
@@ -647,10 +641,10 @@ export default function ApiTestPage() {
           )}
           {state.data && (
             <div className="mt-2 space-y-1">
-              <Label>응답 데이터 {displayResult.summary && `(검색어: "${state.searchTerm}")`}:</Label>
-              {displayResult.summary && (
+               <Label>응답 데이터 {displayResult.summary && `(검색어: "${state.searchTerm}")`}:</Label>
+               {displayResult.summary && (
                  <p className="text-sm text-muted-foreground mb-1 italic">{displayResult.summary}</p>
-              )}
+               )}
               <Textarea
                 readOnly
                 value={displayResult.content}
@@ -691,7 +685,6 @@ export default function ApiTestPage() {
             </div>
           )}
 
-          {/* Step 1: Load Titles from NewSongs.json AND Global Music Data */}
           <div className="space-y-2 p-4 border rounded-md shadow-sm">
              <h3 className="font-semibold text-lg flex items-center"><FileJson className="mr-2 h-5 w-5 text-primary" />1단계: 데이터 로드</h3>
             <div className="flex flex-col sm:flex-row gap-2 mb-2">
@@ -719,7 +712,6 @@ export default function ApiTestPage() {
             )}
           </div>
 
-          {/* Step 2: Define New Song Pool from Global Music Data */}
           <div className="space-y-2 p-4 border rounded-md shadow-sm">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-semibold text-lg flex items-center"><Server className="mr-2 h-5 w-5 text-primary" />2단계: 전체 악곡 목록에서 신곡 정의</h3>
@@ -818,4 +810,3 @@ export default function ApiTestPage() {
     </main>
   );
 }
-
