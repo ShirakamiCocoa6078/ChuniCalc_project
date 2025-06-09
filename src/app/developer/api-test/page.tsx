@@ -67,41 +67,57 @@ const initialGlobalApiTestState: GlobalApiTestState = {
 // Helper function for smallest enclosing block, used for global music search
 const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): string | null => {
     const lowerTerm = term.toLowerCase();
-    let matchIndex = jsonDataStr.toLowerCase().indexOf(lowerTerm);
-    if (matchIndex === -1) return null;
+    
+    // Find all occurrences of the term
+    let matchIndices: number[] = [];
+    let i = -1;
+    while ((i = jsonDataStr.toLowerCase().indexOf(lowerTerm, i + 1)) !== -1) {
+        matchIndices.push(i);
+    }
 
-    let bestBlock: string | null = null;
+    if (matchIndices.length === 0) return null;
 
-    for (let i = matchIndex; i >= 0; i--) {
-        if (jsonDataStr[i] === '{' || jsonDataStr[i] === '[') {
-            const startChar = jsonDataStr[i];
-            const endChar = startChar === '{' ? '}' : ']';
-            let balance = 0;
-            for (let j = i; j < jsonDataStr.length; j++) {
-                if (jsonDataStr[j] === startChar) balance++;
-                else if (jsonDataStr[j] === endChar) balance--;
+    let smallestValidBlock: string | null = null;
 
-                if (balance === 0) {
-                    const currentBlock = jsonDataStr.substring(i, j + 1);
-                    if (currentBlock.toLowerCase().includes(lowerTerm)) {
-                        try {
-                            JSON.parse(currentBlock); 
-                            if (!bestBlock || currentBlock.length < bestBlock.length) {
-                                bestBlock = currentBlock;
-                            }
-                        } catch (e) { /* ignore invalid block */ }
+    for (const matchIndex of matchIndices) {
+        // Search backwards for '{' or '['
+        for (let startIdx = matchIndex; startIdx >= 0; startIdx--) {
+            if (jsonDataStr[startIdx] === '{' || jsonDataStr[startIdx] === '[') {
+                const startChar = jsonDataStr[startIdx];
+                const endChar = startChar === '{' ? '}' : ']';
+                let balance = 0;
+                // Search forwards for matching '}' or ']'
+                for (let endIdx = startIdx; endIdx < jsonDataStr.length; endIdx++) {
+                    if (jsonDataStr[endIdx] === startChar) balance++;
+                    else if (jsonDataStr[endIdx] === endChar) balance--;
+
+                    if (balance === 0) { // Found a balanced block
+                        const currentBlock = jsonDataStr.substring(startIdx, endIdx + 1);
+                        // Check if this block actually contains the (case-insensitive) term
+                        if (currentBlock.toLowerCase().includes(lowerTerm)) {
+                            try {
+                                JSON.parse(currentBlock); // Validate if it's a valid JSON block
+                                if (!smallestValidBlock || currentBlock.length < smallestValidBlock.length) {
+                                    smallestValidBlock = currentBlock;
+                                }
+                            } catch (e) { /* ignore invalid JSON snippets */ }
+                        }
+                        break; // Move to next potential start char for this matchIndex
                     }
-                    break; 
                 }
             }
         }
     }
-    return bestBlock;
+    return smallestValidBlock;
 };
 
 
-const displayFilteredData = (data: any, searchTerm: string | undefined, endpoint: ApiEndpoint): string => {
-  if (data === null || data === undefined) return "";
+const displayFilteredData = (
+    data: any, 
+    searchTerm: string | undefined, 
+    endpoint: ApiEndpoint
+): { content: string; summary?: string } => {
+  if (data === null || data === undefined) return { content: "" };
   
   const lowerSearchTerm = searchTerm?.toLowerCase().trim();
   const originalStringifiedData = JSON.stringify(data, null, 2);
@@ -110,42 +126,44 @@ const displayFilteredData = (data: any, searchTerm: string | undefined, endpoint
   if (endpoint === "/2.0/records/rating_data.json" || endpoint === "/2.0/records/showall.json") {
     const lines = originalStringifiedData.split('\n');
     const numDigits = String(lines.length).length;
+    let summaryText: string | undefined = undefined;
+    const matchingLineNumbers: number[] = [];
 
-    if (!lowerSearchTerm || lowerSearchTerm === "") { // No search term, just number lines
-        return lines.map((line, index) => {
-            const lineNumber = index + 1;
-            return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
-        }).join('\n');
-    }
-
-    let matchFoundOnAnyLine = false;
-    const processedLinesWithSearch = lines.map((line, index) => {
+    const processedLines = lines.map((line, index) => {
       const lineNumber = index + 1;
-      if (line.toLowerCase().includes(lowerSearchTerm)) {
-        matchFoundOnAnyLine = true;
+      const displayLineNumber = `  ${String(lineNumber).padStart(numDigits, ' ')}. `;
+      if (lowerSearchTerm && line.toLowerCase().includes(lowerSearchTerm)) {
+        matchingLineNumbers.push(lineNumber);
         return `* ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
-      } else {
-        return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
       }
+      return displayLineNumber + line;
     });
+    
+    const content = processedLines.join('\n');
 
-    if (!matchFoundOnAnyLine) {
-      const allNumberedLines = lines.map((line, index) => {
-        const lineNumber = index + 1;
-        return `  ${String(lineNumber).padStart(numDigits, ' ')}. ${line}`;
-      }).join('\n');
-      return `"${searchTerm}" not found.\n\n${allNumberedLines}`;
+    if (lowerSearchTerm) { // Only create summary if there was a search term
+        if (matchingLineNumbers.length > 0) {
+            const maxLinesToShowInSummary = 5;
+            const linesToShow = matchingLineNumbers.slice(0, maxLinesToShowInSummary).join(', ');
+            const remainingCount = matchingLineNumbers.length - maxLinesToShowInSummary;
+            summaryText = `일치하는 라인: ${linesToShow}`;
+            if (remainingCount > 0) {
+                summaryText += ` (+ ${remainingCount}개 더보기)`;
+            }
+        } else {
+            summaryText = `"${searchTerm}" 검색 결과 없음.`;
+        }
     }
-    return processedLinesWithSearch.join('\n');
-  }
-
-  // If no search term for other endpoints, return original stringified data
-  if (!lowerSearchTerm || lowerSearchTerm === "") {
-    return originalStringifiedData;
+    return { content, summary: summaryText };
   }
 
   // Smallest block logic for global music list
   if (endpoint === "/2.0/music/showall.json") {
+    if (!lowerSearchTerm || lowerSearchTerm === "") {
+        return { content: originalStringifiedData };
+    }
+
+    let searchResultContent: string;
     if (Array.isArray(data)) {
         const matchedResults: string[] = [];
         data.forEach(item => {
@@ -155,20 +173,24 @@ const displayFilteredData = (data: any, searchTerm: string | undefined, endpoint
                 matchedResults.push(smallestBlock || itemStr); 
             }
         });
-        if (matchedResults.length > 0) {
-            return matchedResults.join('\n\n'); 
-        }
+        searchResultContent = matchedResults.length > 0 ? matchedResults.join('\n\n') : `"${searchTerm}" not found.`;
     } else if (typeof data === 'object' && data !== null) { 
         if (originalStringifiedData.toLowerCase().includes(lowerSearchTerm)) {
             const smallest = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm);
-            return smallest || originalStringifiedData;
+            searchResultContent = smallest || originalStringifiedData;
+        } else {
+            searchResultContent = `"${searchTerm}" not found.`;
         }
+    } else {
+        searchResultContent = originalStringifiedData; // Should not happen if data is not null/undefined
     }
-    return `"${searchTerm}" not found.`;
+    return { 
+        content: searchResultContent, 
+        summary: `검색어 "${searchTerm}"에 대한 결과 (일치하는 최소 단위 객체):` 
+    };
   }
   
-  // Default for non-searchable endpoints (if somehow reached with a search term)
-  return originalStringifiedData; 
+  return { content: originalStringifiedData }; 
 };
 
 
@@ -315,6 +337,8 @@ export default function ApiTestPage() {
         setState(prev => ({...prev, searchTerm: value }));
     }
 
+    const displayResult = state.data ? displayFilteredData(state.data, state.searchTerm, endpoint) : { content: "" };
+
     return (
       <Card>
         <CardHeader>
@@ -370,9 +394,12 @@ export default function ApiTestPage() {
           {state.data && (
             <div className="mt-2 space-y-1">
               <Label>응답 데이터 {state.searchTerm && `(검색어: "${state.searchTerm}")`}:</Label>
+              {displayResult.summary && (
+                 <p className="text-sm text-muted-foreground mb-1 italic">{displayResult.summary}</p>
+              )}
               <Textarea
                 readOnly
-                value={displayFilteredData(state.data, state.searchTerm, endpoint)}
+                value={displayResult.content}
                 className="h-64 font-mono text-xs"
                 rows={15}
               />
