@@ -267,7 +267,7 @@ const displayFilteredData = (
             if (itemStr.toLowerCase().includes(lowerSearchTerm)) {
                 // Pass the original pretty-printed item string for block finding
                 const smallestBlock = findSmallestEnclosingBlockHelper(JSON.stringify(item, null, 2), lowerSearchTerm);
-                matchedResults.push(<y_bin_564> || JSON.stringify(item, null, 2));
+                matchedResults.push(smallestBlock || JSON.stringify(item, null, 2));
             }
         });
         searchResultContent = matchedResults.length > 0 ? matchedResults.map(r => { try { return JSON.stringify(JSON.parse(r), null, 2); } catch { return r; }}).join('\n\n---\n\n') : `"${searchTerm}" not found.`;
@@ -423,10 +423,12 @@ export default function ApiTestPage() {
   };
 
   const handleLoadTitlesFromNewSongsJson = () => {
-    setNew20Debug(prev => ({ ...prev, loadingStep: "step1a", error: null, step1Output: "1-1단계 실행 중...", 
-      globalMusicDataForN20: null, 
-      step2DefinedSongPoolRaw: null, 
-      step2Output: initialNew20DebugState.step2Output 
+    setNew20Debug(prev => ({ 
+      ...initialNew20DebugState, // Reset most of the N20 debug state
+      nickname: prev.nickname, // Keep existing nickname
+      loadingStep: "step1a", 
+      error: null, 
+      step1Output: "1-1단계 실행 중...", 
     }));
     try {
         const titlesFromVerse = NewSongsData.titles?.verse || [];
@@ -437,7 +439,7 @@ export default function ApiTestPage() {
         setNew20Debug(prev => ({
             ...prev,
             step1NewSongTitlesRaw: processedTitles,
-            step1Output: titleLoadSummary + "\n" + (initialNew20DebugState.step1Output.split('\n').slice(1).join('\n')), // Preserve 1-2 part if exists
+            step1Output: titleLoadSummary + "\n" + (initialNew20DebugState.step1Output.split('\n').slice(1).join('\n')), 
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-1단계) 성공", description: "NewSongs.json 제목을 로드했습니다." });
@@ -449,9 +451,13 @@ export default function ApiTestPage() {
   };
 
   const handleLoadGlobalMusicForN20 = async () => {
-    setNew20Debug(prev => ({ ...prev, loadingStep: "step1b", error: null, 
-        step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...", // Preserve 1-1 part
-        step2DefinedSongPoolRaw: null, 
+    setNew20Debug(prev => ({ 
+        ...prev, 
+        loadingStep: "step1b", 
+        error: null, 
+        step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...",
+        globalMusicDataForN20: null, // Reset previous global music data
+        step2DefinedSongPoolRaw: null, // Reset step 2 as well, as it depends on global music
         step2Output: initialNew20DebugState.step2Output 
     }));
     try {
@@ -979,3 +985,6 @@ export default function ApiTestPage() {
     </main>
   );
 }
+
+
+    
