@@ -125,12 +125,14 @@ const initialSongByIdFetcherState: SongByIdFetcherState = {
 };
 
 
+// Helper function to find the smallest valid JSON block containing the term
 const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): string | null => {
     if (!term || term.trim() === "") return jsonDataStr;
     const lowerTerm = term.toLowerCase();
 
     let matchIndices: number[] = [];
     let i = -1;
+    // Find all occurrences of the term (case-insensitive)
     while ((i = jsonDataStr.toLowerCase().indexOf(lowerTerm, i + 1)) !== -1) {
         matchIndices.push(i);
     }
@@ -140,6 +142,7 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
     let smallestValidBlock: string | null = null;
 
     for (const matchIndex of matchIndices) {
+        // Search backwards for the opening brace/bracket
         let openBraceIndex = -1;
         let openBracketIndex = -1;
 
@@ -148,44 +151,50 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
                 openBraceIndex = startIdx;
                 break;
             }
-            if (jsonDataStr[startIdx] === '[') {
+            if (jsonDataStr[startIdx] === '[') { // Also consider arrays
                 openBracketIndex = startIdx;
                 break;
             }
         }
-
+        
         const startCharIndex = Math.max(openBraceIndex, openBracketIndex);
-        if (startCharIndex === -1 && jsonDataStr[0] !== '[' && jsonDataStr[0] !== '{') {
-             continue;
-        }
 
-        let startParseIndex = startCharIndex !== -1 ? startCharIndex : 0;
+        // If no opening char found before the term in this path, or if it's not the start of a valid JSON
+        if (startCharIndex === -1 && jsonDataStr[0] !== '[' && jsonDataStr[0] !== '{') {
+             continue; // This term occurrence isn't inside a clear JSON object/array start
+        }
+        
+        let startParseIndex = startCharIndex !== -1 ? startCharIndex : 0; // If -1, implies it might be the root [] or {}
+        
         const startChar = jsonDataStr[startParseIndex];
         const endChar = startChar === '{' ? '}' : ']';
         let balance = 0;
 
+        // Search forwards for the corresponding closing brace/bracket
         for (let endIdx = startParseIndex; endIdx < jsonDataStr.length; endIdx++) {
             if (jsonDataStr[endIdx] === startChar) balance++;
             else if (jsonDataStr[endIdx] === endChar) balance--;
 
-            if (balance === 0) {
+            if (balance === 0) { // Found a balanced block
                 const currentBlock = jsonDataStr.substring(startParseIndex, endIdx + 1);
+                // Ensure the term is actually within this specific block
                 if (currentBlock.toLowerCase().includes(lowerTerm)) {
                     try {
-                        JSON.parse(currentBlock);
+                        JSON.parse(currentBlock); // Check if it's valid JSON
                         if (!smallestValidBlock || currentBlock.length < smallestValidBlock.length) {
                             smallestValidBlock = currentBlock;
                         }
-                    } catch (e) { /* ignore invalid JSON snippets */ }
+                    } catch (e) { /* ignore invalid JSON snippets for this path */ }
                 }
-                break;
+                break; // Move to the next matchIndex
             }
         }
     }
+    // Return the smallest valid block found, pretty-printed, or an error message.
     try {
         return smallestValidBlock ? JSON.stringify(JSON.parse(smallestValidBlock), null, 2) : `Could not find a valid JSON block for "${term}".`;
     } catch {
-        return smallestValidBlock || `Could not find a valid JSON block for "${term}".`;
+        return smallestValidBlock || `Could not find a valid JSON block for "${term}".`; // Fallback if re-parsing for stringify fails
     }
 };
 
@@ -254,10 +263,11 @@ const displayFilteredData = (
     if (Array.isArray(dataToSearch)) {
         const matchedResults: string[] = [];
         dataToSearch.forEach(item => {
-            const itemStr = JSON.stringify(item, null, 2);
+            const itemStr = JSON.stringify(item); // No pretty print for internal search
             if (itemStr.toLowerCase().includes(lowerSearchTerm)) {
-                const smallestBlock = findSmallestEnclosingBlockHelper(itemStr, lowerSearchTerm);
-                matchedResults.push(smallestBlock || itemStr);
+                // Pass the original pretty-printed item string for block finding
+                const smallestBlock = findSmallestEnclosingBlockHelper(JSON.stringify(item, null, 2), lowerSearchTerm);
+                matchedResults.push(smallestBlock || JSON.stringify(item, null, 2));
             }
         });
         searchResultContent = matchedResults.length > 0 ? matchedResults.map(r => { try { return JSON.stringify(JSON.parse(r), null, 2); } catch { return r; }}).join('\n\n---\n\n') : `"${searchTerm}" not found.`;
@@ -407,6 +417,7 @@ export default function ApiTestPage() {
     const response = await fetch(url);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({error: {message: "Response not JSON"}}));
+      // Throw the full error string including the response data for better debugging in calling functions
       throw new Error(`API 오류 (${endpoint}, 상태: ${response.status}): ${errorData.error?.message || response.statusText}. 응답: ${JSON.stringify(errorData)}`);
     }
     return response.json();
@@ -414,7 +425,7 @@ export default function ApiTestPage() {
 
   const handleLoadTitlesFromNewSongsJson = () => {
     setNew20Debug(prev => ({ ...prev, loadingStep: "step1a", error: null, step1Output: "1-1단계 실행 중...", 
-      globalMusicDataForN20: null, // Clear data from subsequent steps
+      globalMusicDataForN20: null, 
       step2DefinedSongPoolRaw: null, 
       step2Output: initialNew20DebugState.step2Output 
     }));
@@ -427,7 +438,7 @@ export default function ApiTestPage() {
         setNew20Debug(prev => ({
             ...prev,
             step1NewSongTitlesRaw: processedTitles,
-            step1Output: titleLoadSummary + "\n" + (initialNew20DebugState.step1Output.split('\n').slice(1).join('\n')),
+            step1Output: titleLoadSummary + "\n" + (initialNew20DebugState.step1Output.split('\n').slice(1).join('\n')), // Preserve 1-2 part if exists
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-1단계) 성공", description: "NewSongs.json 제목을 로드했습니다." });
@@ -440,7 +451,7 @@ export default function ApiTestPage() {
 
   const handleLoadGlobalMusicForN20 = async () => {
     setNew20Debug(prev => ({ ...prev, loadingStep: "step1b", error: null, 
-        step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...",
+        step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...", // Preserve 1-1 part
         step2DefinedSongPoolRaw: null, 
         step2Output: initialNew20DebugState.step2Output 
     }));
@@ -468,7 +479,7 @@ export default function ApiTestPage() {
         }));
         toast({ title: "N20 디버그 (1-2단계) 성공", description: "전체 악곡 목록을 로드하고 상태에 저장했습니다." });
     } catch (e) {
-        const errorMsg = String(e);
+        const errorMsg = String(e); // Use String(e) to get the full error message from fetchApiForDebug
         console.error("[N20_DEBUG_STEP_1.2_ERROR] Error in handleLoadGlobalMusicForN20:", e);
         setNew20Debug(prev => ({ ...prev, error: `1-2단계 오류: ${errorMsg}`, loadingStep: null, step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + `\n1-2단계 오류: ${errorMsg}` }));
         toast({ title: "N20 디버그 (1-2단계) 실패", description: errorMsg, variant: "destructive" });
@@ -556,14 +567,15 @@ export default function ApiTestPage() {
       toast({title: "릴리즈 날짜 필터링 성공", description: resultSummary});
 
     } catch (e) {
-      const errorMsg = String(e);
+      const errorMsg = String(e); // Use String(e) for full error message
       setReleaseFilterTest(prev => ({ ...prev, loading: false, error: errorMsg, summary: `오류: ${errorMsg}`}));
       toast({title: "릴리즈 날짜 필터링 실패", description: errorMsg, variant: "destructive"});
     }
   };
 
   const handleFetchSongById = async () => {
-    if (!songByIdFetcher.songIdToFetch.trim()) {
+    const trimmedSongIdToFetch = songByIdFetcher.songIdToFetch.trim();
+    if (!trimmedSongIdToFetch) {
         toast({ title: "ID 필요", description: "조회할 악곡의 ID를 입력해주세요.", variant: "destructive" });
         setSongByIdFetcher(prev => ({ ...prev, error: "ID를 입력해주세요.", outputSummary: "ID를 입력해주세요."}));
         return;
@@ -572,32 +584,43 @@ export default function ApiTestPage() {
     try {
         const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
         const allMusicRecords = (globalMusicApiResponse.records || []).filter((e: any): e is AppShowallApiSongEntry =>
-            e && e.id && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
+            e && typeof e.id === 'string' && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
         );
         
-        const foundSong = allMusicRecords.find(song => song.id === songByIdFetcher.songIdToFetch.trim());
+        const foundSong = allMusicRecords.find(song => song.id === trimmedSongIdToFetch);
 
         if (foundSong) {
             setSongByIdFetcher(prev => ({
                 ...prev,
                 loading: false,
                 fetchedSongData: foundSong,
-                outputSummary: `ID '${songByIdFetcher.songIdToFetch}' 악곡 발견: ${foundSong.title}`,
+                outputSummary: `ID '${trimmedSongIdToFetch}' 악곡 발견: ${foundSong.title}`,
             }));
-            toast({ title: "악곡 발견", description: `ID ${songByIdFetcher.songIdToFetch}에 해당하는 악곡 '${foundSong.title}'을 찾았습니다.`});
+            toast({ title: "악곡 발견", description: `ID ${trimmedSongIdToFetch}에 해당하는 악곡 '${foundSong.title}'을 찾았습니다.`});
         } else {
+            console.error(`[SongByID] ID search failed.
+            Input ID (trimmed): "${trimmedSongIdToFetch}" (type: ${typeof trimmedSongIdToFetch})
+            Total records searched: ${allMusicRecords.length}`);
+            if (allMusicRecords.length > 0) {
+                console.log("[SongByID] Sample IDs from music/showall.json (first 10):");
+                allMusicRecords.slice(0, 10).forEach(s => console.log(`- ID: "${s.id}" (type: ${typeof s.id})`));
+            } else {
+                console.log("[SongByID] No records found in allMusicRecords to search from.");
+            }
+
             setSongByIdFetcher(prev => ({
                 ...prev,
                 loading: false,
                 fetchedSongData: null,
-                error: `ID '${songByIdFetcher.songIdToFetch}'에 해당하는 악곡을 music/showall.json 에서 찾을 수 없습니다.`,
-                outputSummary: `ID '${songByIdFetcher.songIdToFetch}' 악곡 없음.`,
+                error: `ID '${trimmedSongIdToFetch}'에 해당하는 악곡을 music/showall.json 에서 찾을 수 없습니다. (브라우저 콘솔 로그를 확인하세요)`,
+                outputSummary: `ID '${trimmedSongIdToFetch}' 악곡 없음.`,
             }));
-            toast({ title: "악곡 없음", description: `ID '${songByIdFetcher.songIdToFetch}'에 해당하는 악곡을 찾을 수 없습니다.`, variant: "destructive"});
+            toast({ title: "악곡 없음", description: `ID '${trimmedSongIdToFetch}'에 해당하는 악곡을 찾을 수 없습니다. (콘솔 로그를 확인하세요)`, variant: "destructive"});
         }
 
     } catch (e) {
         const errorMsg = String(e);
+        console.error("[SongByID_ERROR] Error in handleFetchSongById:", e);
         setSongByIdFetcher(prev => ({ ...prev, loading: false, error: errorMsg, fetchedSongData: null, outputSummary: `오류: ${errorMsg}`}));
         toast({title: "ID로 악곡 조회 실패", description: errorMsg, variant: "destructive"});
     }
