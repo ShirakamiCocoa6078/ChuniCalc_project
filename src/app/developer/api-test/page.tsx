@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon, FileSearch } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX, getCachedData, setCachedData, GLOBAL_MUSIC_DATA_KEY, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import type { ShowallApiSongEntry as AppShowallApiSongEntry, Song as AppSongType } from "@/app/result/page"; 
 import NewSongsData from '@/data/NewSongs.json';
@@ -69,7 +69,7 @@ const initialGlobalApiTestState: GlobalApiTestState = {
 
 interface New20DebugState {
   nickname: string;
-  loadingStep: string | null; // e.g., "step1a", "step1b", "step2"
+  loadingStep: string | null; 
   error: string | null;
 
   step1NewSongTitlesRaw: string[]; 
@@ -106,6 +106,22 @@ const initialReleaseFilterTestState: ReleaseFilterTestState = {
     rawData: null,
     filteredData: null,
     summary: "전체 악곡 목록 로드 및 필터링 실행 대기 중.",
+};
+
+interface SongByIdFetcherState {
+    songIdToFetch: string;
+    fetchedSongData: AppShowallApiSongEntry | null;
+    loading: boolean;
+    error: string | null;
+    outputSummary: string;
+}
+
+const initialSongByIdFetcherState: SongByIdFetcherState = {
+    songIdToFetch: "",
+    fetchedSongData: null,
+    loading: false,
+    error: null,
+    outputSummary: "조회할 악곡 ID를 입력하세요.",
 };
 
 
@@ -177,7 +193,7 @@ const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): st
 const displayFilteredData = (
     data: any,
     searchTerm: string | undefined,
-    endpoint: ApiEndpoint | "N20_DEBUG_GLOBAL" | "N20_DEBUG_USER" | "N20_DEBUG_POOL" | "RELEASE_FILTER_RAW" | "RELEASE_FILTER_RESULT"
+    endpoint: ApiEndpoint | "N20_DEBUG_GLOBAL" | "N20_DEBUG_USER" | "N20_DEBUG_POOL" | "RELEASE_FILTER_RAW" | "RELEASE_FILTER_RESULT" | "SONG_BY_ID_RESULT"
 ): { content: string; summary?: string } => {
   if (data === null || data === undefined) return { content: "" };
 
@@ -227,8 +243,8 @@ const displayFilteredData = (
   }
 
 
-  if (endpoint === "/2.0/music/showall.json" || endpoint === "N20_DEBUG_GLOBAL" || endpoint === "RELEASE_FILTER_RAW" || endpoint === "RELEASE_FILTER_RESULT") {
-    if (!lowerSearchTerm || lowerSearchTerm === "") {
+  if (endpoint === "/2.0/music/showall.json" || endpoint === "N20_DEBUG_GLOBAL" || endpoint === "RELEASE_FILTER_RAW" || endpoint === "RELEASE_FILTER_RESULT" || endpoint === "SONG_BY_ID_RESULT") {
+    if (!lowerSearchTerm || lowerSearchTerm === "" || endpoint === "SONG_BY_ID_RESULT") { // SONG_BY_ID_RESULT는 검색 없이 전체 표시
         return { content: originalStringifiedData };
     }
 
@@ -287,6 +303,7 @@ export default function ApiTestPage() {
   
   const [new20Debug, setNew20Debug] = useState<New20DebugState>({...initialNew20DebugState});
   const [releaseFilterTest, setReleaseFilterTest] = useState<ReleaseFilterTestState>({...initialReleaseFilterTestState});
+  const [songByIdFetcher, setSongByIdFetcher] = useState<SongByIdFetcherState>({...initialSongByIdFetcherState});
 
 
   useEffect(() => {
@@ -371,7 +388,7 @@ export default function ApiTestPage() {
       }));
       toast({ title: `${endpoint} 호출 성공`, description: "데이터를 성공적으로 가져왔습니다." });
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "알 수 없는 API 오류";
+      const errorMessage = String(err);
       setState(prev => ({ ...prev, loading: false, error: errorMessage, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
       toast({ title: `${endpoint} 호출 실패`, description: errorMessage, variant: "destructive" });
     }
@@ -396,7 +413,11 @@ export default function ApiTestPage() {
   };
 
   const handleLoadTitlesFromNewSongsJson = () => {
-    setNew20Debug(prev => ({ ...prev, loadingStep: "step1a", error: null, step1Output: "1-1단계 실행 중..." }));
+    setNew20Debug(prev => ({ ...prev, loadingStep: "step1a", error: null, step1Output: "1-1단계 실행 중...", 
+      globalMusicDataForN20: null, // Clear data from subsequent steps
+      step2DefinedSongPoolRaw: null, 
+      step2Output: initialNew20DebugState.step2Output 
+    }));
     try {
         const titlesFromVerse = NewSongsData.titles?.verse || [];
         const processedTitles = Array.isArray(titlesFromVerse) ? titlesFromVerse.map(t => t.trim().toLowerCase()) : [];
@@ -406,10 +427,7 @@ export default function ApiTestPage() {
         setNew20Debug(prev => ({
             ...prev,
             step1NewSongTitlesRaw: processedTitles,
-            step1Output: titleLoadSummary + "\n" + (prev.step1Output.split('\n').slice(1).join('\n') || "1-2단계: 전체 악곡 목록 로드 실행 대기 중."),
-            globalMusicDataForN20: null, 
-            step2DefinedSongPoolRaw: null, 
-            step2Output: initialNew20DebugState.step2Output, 
+            step1Output: titleLoadSummary + "\n" + (initialNew20DebugState.step1Output.split('\n').slice(1).join('\n')),
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-1단계) 성공", description: "NewSongs.json 제목을 로드했습니다." });
@@ -421,7 +439,11 @@ export default function ApiTestPage() {
   };
 
   const handleLoadGlobalMusicForN20 = async () => {
-    setNew20Debug(prev => ({ ...prev, loadingStep: "step1b", error: null, step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중..." }));
+    setNew20Debug(prev => ({ ...prev, loadingStep: "step1b", error: null, 
+        step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...",
+        step2DefinedSongPoolRaw: null, 
+        step2Output: initialNew20DebugState.step2Output 
+    }));
     try {
         toast({ title: "N20 디버그 (1-2단계)", description: "전체 악곡 목록 (music/showall) 로드 중..." });
         const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
@@ -442,8 +464,6 @@ export default function ApiTestPage() {
             ...prev,
             globalMusicDataForN20: globalMusicRecords,
             step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + `\n1-2단계: ${globalMusicSummary}`,
-            step2DefinedSongPoolRaw: null, 
-            step2Output: initialNew20DebugState.step2Output, 
             loadingStep: null,
         }));
         toast({ title: "N20 디버그 (1-2단계) 성공", description: "전체 악곡 목록을 로드하고 상태에 저장했습니다." });
@@ -539,6 +559,47 @@ export default function ApiTestPage() {
       const errorMsg = String(e);
       setReleaseFilterTest(prev => ({ ...prev, loading: false, error: errorMsg, summary: `오류: ${errorMsg}`}));
       toast({title: "릴리즈 날짜 필터링 실패", description: errorMsg, variant: "destructive"});
+    }
+  };
+
+  const handleFetchSongById = async () => {
+    if (!songByIdFetcher.songIdToFetch.trim()) {
+        toast({ title: "ID 필요", description: "조회할 악곡의 ID를 입력해주세요.", variant: "destructive" });
+        setSongByIdFetcher(prev => ({ ...prev, error: "ID를 입력해주세요.", outputSummary: "ID를 입력해주세요."}));
+        return;
+    }
+    setSongByIdFetcher(prev => ({ ...prev, loading: true, error: null, fetchedSongData: null, outputSummary: "전체 악곡 목록에서 ID 검색 중..."}));
+    try {
+        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
+        const allMusicRecords = (globalMusicApiResponse.records || []).filter((e: any): e is AppShowallApiSongEntry =>
+            e && e.id && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
+        );
+        
+        const foundSong = allMusicRecords.find(song => song.id === songByIdFetcher.songIdToFetch.trim());
+
+        if (foundSong) {
+            setSongByIdFetcher(prev => ({
+                ...prev,
+                loading: false,
+                fetchedSongData: foundSong,
+                outputSummary: `ID '${songByIdFetcher.songIdToFetch}' 악곡 발견: ${foundSong.title}`,
+            }));
+            toast({ title: "악곡 발견", description: `ID ${songByIdFetcher.songIdToFetch}에 해당하는 악곡 '${foundSong.title}'을 찾았습니다.`});
+        } else {
+            setSongByIdFetcher(prev => ({
+                ...prev,
+                loading: false,
+                fetchedSongData: null,
+                error: `ID '${songByIdFetcher.songIdToFetch}'에 해당하는 악곡을 music/showall.json 에서 찾을 수 없습니다.`,
+                outputSummary: `ID '${songByIdFetcher.songIdToFetch}' 악곡 없음.`,
+            }));
+            toast({ title: "악곡 없음", description: `ID '${songByIdFetcher.songIdToFetch}'에 해당하는 악곡을 찾을 수 없습니다.`, variant: "destructive"});
+        }
+
+    } catch (e) {
+        const errorMsg = String(e);
+        setSongByIdFetcher(prev => ({ ...prev, loading: false, error: errorMsg, fetchedSongData: null, outputSummary: `오류: ${errorMsg}`}));
+        toast({title: "ID로 악곡 조회 실패", description: errorMsg, variant: "destructive"});
     }
   };
 
@@ -785,6 +846,58 @@ export default function ApiTestPage() {
     );
   };
 
+  const renderSongByIdFetcherSection = () => {
+    const { songIdToFetch, fetchedSongData, loading, error, outputSummary } = songByIdFetcher;
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="font-headline flex items-center"><FileSearch className="mr-2 h-5 w-5 text-indigo-500" />ID로 특정 곡 데이터 조회</CardTitle>
+                <CardDescription>music/showall.json에서 특정 악곡 ID로 데이터를 검색하고 추출합니다.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-1">
+                    <Label htmlFor="song-id-fetch">조회할 악곡 ID</Label>
+                    <div className="flex space-x-2">
+                        <Input
+                            id="song-id-fetch"
+                            value={songIdToFetch}
+                            onChange={(e) => setSongByIdFetcher(prev => ({ ...prev, songIdToFetch: e.target.value }))}
+                            placeholder="예: music0001"
+                        />
+                        <Button onClick={handleFetchSongById} disabled={loading} className="px-3">
+                            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchIcon className="mr-2 h-4 w-4" />}
+                            조회
+                        </Button>
+                    </div>
+                </div>
+                {error && (
+                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                        <p className="font-semibold">오류:</p>
+                        <pre className="whitespace-pre-wrap break-all">{error}</pre>
+                    </div>
+                )}
+                <Textarea
+                    readOnly
+                    value={outputSummary}
+                    className="h-20 font-mono text-xs bg-muted/30"
+                    placeholder="조회 결과 요약"
+                />
+                {fetchedSongData && (
+                    <div>
+                        <Label>추출된 악곡 데이터:</Label>
+                        <Textarea 
+                            readOnly 
+                            value={displayFilteredData(fetchedSongData, undefined, "SONG_BY_ID_RESULT").content} 
+                            className="h-64 font-mono text-xs mt-1" 
+                            rows={10}
+                        />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+  };
+
 
   return (
     <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
@@ -805,8 +918,12 @@ export default function ApiTestPage() {
           
           {isDeveloperMode && renderNew20DebugSection()}
           {isDeveloperMode && renderReleaseDateFilterTestSection()}
+          {isDeveloperMode && renderSongByIdFetcherSection()}
         </div>
       </div>
     </main>
   );
 }
+
+
+    
