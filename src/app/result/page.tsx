@@ -15,11 +15,11 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
-import NewSongsData from '@/data/NewSongs.json';
+// import NewSongsData from '@/data/NewSongs.json'; // NewSongs.json no longer used
 
 
 const BEST_COUNT = 30;
-const NEW_COUNT = 20;
+// const NEW_COUNT = 20; // NEW_COUNT no longer used
 
 
 type ProfileData = {
@@ -107,7 +107,7 @@ const mapApiSongToAppSong = (
   } else if (typeof apiSong.const === 'number' && apiSong.const > 0) {
     effectiveChartConstant = apiSong.const;
   } else if (
-    apiSong.is_const_unknown &&
+    (apiSong as ShowallApiSongEntry).is_const_unknown && // Type assertion
     (typeof apiSong.level === 'string' || typeof apiSong.level === 'number')
   ) {
     const parsedLevel = parseFloat(String(apiSong.level));
@@ -168,69 +168,6 @@ const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
   });
 };
 
-const calculateNewSongs = (
-  definedSongPoolEntries: ShowallApiSongEntry[],
-  allUserRecords: ShowallApiSongEntry[],
-  count: number
-): Song[] => {
-  console.log("[N20_CALC] Starting New 20 calculation using titles from NewSongs.json.");
-  console.log(`[N20_CALC] Defined new song pool (from global music, based on NewSongs.json titles): ${definedSongPoolEntries.length} entries (across all difficulties).`);
-
-  if (!allUserRecords || allUserRecords.length === 0) {
-    console.warn("[N20_CALC] User's play records (allUserRecords) are empty. Cannot calculate New 20.");
-    return [];
-  }
-  if (!definedSongPoolEntries || definedSongPoolEntries.length === 0) {
-    console.warn("[N20_CALC] Defined new song pool (from NewSongs.json titles matching global music) is empty. Cannot calculate New 20.");
-    return [];
-  }
-
-  const userRecordsMap = new Map<string, ShowallApiSongEntry>();
-  allUserRecords.forEach(record => {
-    userRecordsMap.set(`${record.id}-${record.diff.toUpperCase()}`, record);
-  });
-  console.log(`[N20_CALC] Created user records map with ${userRecordsMap.size} entries.`);
-
-  const mappedUserPlayedNewSongs = definedSongPoolEntries.reduce((acc, definedSongEntry) => {
-    const userRecord = userRecordsMap.get(`${definedSongEntry.id}-${definedSongEntry.diff.toUpperCase()}`);
-
-    if (userRecord && typeof userRecord.score === 'number' && userRecord.score > 0) {
-        const combinedEntry: ShowallApiSongEntry = {
-            id: definedSongEntry.id,
-            diff: definedSongEntry.diff,
-            title: definedSongEntry.title,
-            genre: definedSongEntry.genre,
-            const: definedSongEntry.const,
-            level: definedSongEntry.level,
-            release: definedSongEntry.release,
-            is_const_unknown: typeof (definedSongEntry as any).is_const_unknown === 'boolean'
-                ? (definedSongEntry as any).is_const_unknown
-                : (definedSongEntry.const === null || definedSongEntry.const === 0),
-            score: userRecord.score,
-            rating: null, 
-            is_played: userRecord.is_played, 
-            updated_at: userRecord.updated_at,
-            is_clear: userRecord.is_clear,
-            is_fullcombo: userRecord.is_fullcombo,
-            is_alljustice: userRecord.is_alljustice,
-            is_fullchain: userRecord.is_fullchain,
-        };
-        acc.push(mapApiSongToAppSong(combinedEntry, acc.length, definedSongEntry.const ?? undefined));
-    }
-    return acc;
-  }, [] as Song[]);
-
-  console.log(`[N20_CALC] Found and mapped ${mappedUserPlayedNewSongs.length} played new songs based on the NewSongs.json derived pool.`);
-  console.log("[N20_CALC] Mapped user played new songs (before sorting):", mappedUserPlayedNewSongs.map(s => ({ title: s.title, id: s.id, diff: s.diff, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
-
-
-  const sortedUserPlayedNewSongs = sortSongsByRatingDesc(mappedUserPlayedNewSongs);
-
-  const finalNew20 = sortedUserPlayedNewSongs.slice(0, count);
-  console.log(`[N20_CALC] Final Top ${count} New Songs (after sorting):`, finalNew20.map(s => ({ title: s.title, id: s.id, diff: s.diff, currentScore: s.currentScore, currentRating: s.currentRating, chartConstant: s.chartConstant })));
-  return finalNew20;
-};
-
 
 type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
@@ -254,7 +191,7 @@ function ResultContent() {
 
   const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === "플레이어" ? "플레이어" : null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
-  const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
+  // const [new20SongsData, setNew20SongsData] = useState<Song[]>([]); // N20 state removed
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
@@ -302,14 +239,14 @@ function ResultContent() {
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-      const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+      // const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`; // User showall key still needed for B30 if it changes source
       
 
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
       const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
-      const cachedUserShowallData = getCachedData<ShowallApiResponse>(userShowallKey);
-      const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+      // const cachedUserShowallData = getCachedData<ShowallApiResponse>(userShowallKey); // N20 data source removed
+      // const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // N20 data source removed
 
       let cacheTimestamp = 'N/A';
       if (clientHasMounted) {
@@ -326,8 +263,8 @@ function ResultContent() {
       setLastRefreshed(cachedProfile ? cacheTimestamp : '사용자 캐시 없음');
 
 
-      if (cachedProfile && cachedRatingData && cachedUserShowallData && cachedGlobalMusicData) {
-        console.log("Loading all necessary data from localStorage cache...");
+      if (cachedProfile && cachedRatingData) { // Removed N20 related cache checks
+        console.log("Loading Best30 data from localStorage cache...");
         setApiPlayerName(cachedProfile.player_name || userNameForApi);
 
         const bestEntriesApi = cachedRatingData.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
@@ -336,31 +273,10 @@ function ResultContent() {
         ) || [];
         const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
-
-        const allUserRecordsFromCache = cachedUserShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
-            e && e.id && e.diff && typeof e.score === 'number' 
-        ) || [];
-
-        const globalMusicRecordsFromCache = cachedGlobalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
-            e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string')
-        ) || [];
         
-        const newSongTitlesFromDataFile = (NewSongsData.titles?.verse || []).map(title => title.trim());
-        console.log(`[N20_CALC] Titles to look for from NewSongs.json (verse, trimmed): ${newSongTitlesFromDataFile.length}`);
-        
-        const definedSongPoolFromTitles = globalMusicRecordsFromCache.filter(globalSong => 
-            globalSong.title && newSongTitlesFromDataFile.includes(globalSong.title.trim())
-        );
-        console.log(`[N20_CALC] Dynamic new song pool from CACHED global music (based on NewSongs.json titles): ${definedSongPoolFromTitles.length} entries (across all difficulties)`);
+        // N20 calculation removed
+        // setNew20SongsData([]); 
 
-
-        if (allUserRecordsFromCache.length > 0 && definedSongPoolFromTitles.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(definedSongPoolFromTitles, allUserRecordsFromCache, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs);
-        } else {
-            console.warn("Could not calculate New 20 from cache: User records or new song pool from cache (via NewSongs.json) are insufficient.");
-            setNew20SongsData([]);
-        }
         toast({ title: "데이터 로드 완료", description: `로컬 캐시에서 ${userNameForApi}님의 데이터를 성공적으로 불러왔습니다.` });
         setIsLoadingSongs(false);
         return;
@@ -371,11 +287,13 @@ function ResultContent() {
         const apiRequests = [
             fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
             fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`),
-            cachedGlobalMusicData ? Promise.resolve(null) : fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${API_TOKEN}`)
+            // fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`), // N20 API call removed
+            // cachedGlobalMusicData ? Promise.resolve(null) : fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${API_TOKEN}`) // N20 API call removed
         ];
 
-        const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponseOrNull] = await Promise.all(apiRequests);
+        // const [profileResponse, ratingDataResponse, userShowallResponse, globalMusicResponseOrNull] = await Promise.all(apiRequests);
+        const [profileResponse, ratingDataResponse] = await Promise.all(apiRequests);
+
 
         let criticalError = null;
 
@@ -403,55 +321,42 @@ function ResultContent() {
             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
         }
 
+        // N20 API data handling removed
+        // let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
+        // if (userShowallResponse && userShowallResponse.ok) { // Check if userShowallResponse exists
+        //     const userShowallData = await userShowallResponse.json();
+        //     allUserRecordsFromApi = userShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
+        //       e && e.id && e.diff && typeof e.score === 'number'
+        //     ) || [];
+        //     setCachedData<ShowallApiResponse>(userShowallKey, userShowallData);
+        // } else if (userShowallResponse) { // Check if userShowallResponse exists
+        //     const errorJson = await userShowallResponse.json().catch(() => ({}));
+        //     const errorMsg = `사용자 전체 곡 기록 로딩 실패 (상태: ${userShowallResponse.status}): ${errorJson.error?.message || userShowallResponse.statusText || '오류 없음'}`;
+        //     if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
+        // }
 
-        let allUserRecordsFromApi: ShowallApiSongEntry[] = [];
-        if (userShowallResponse.ok) {
-            const userShowallData = await userShowallResponse.json();
-            allUserRecordsFromApi = userShowallData.records?.filter((e: any): e is ShowallApiSongEntry =>
-              e && e.id && e.diff && typeof e.score === 'number'
-            ) || [];
-            setCachedData<ShowallApiResponse>(userShowallKey, userShowallData);
-        } else {
-            const errorJson = await userShowallResponse.json().catch(() => ({}));
-            const errorMsg = `사용자 전체 곡 기록 로딩 실패 (상태: ${userShowallResponse.status}): ${errorJson.error?.message || userShowallResponse.statusText || '오류 없음'}`;
-            if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
-        }
 
-
-        let globalMusicRecordsFromApi: ShowallApiSongEntry[] = cachedGlobalMusicData?.records || [];
-        if (globalMusicResponseOrNull && globalMusicResponseOrNull.ok) {
-            const globalMusicData = await globalMusicResponseOrNull.json();
-            globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
-               e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string')
-            ) || [];
-            setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
-        } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
-            const errorJson = await globalMusicResponseOrNull.json().catch(() => ({}));
-            const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponseOrNull.status}): ${errorJson.error?.message || globalMusicResponseOrNull.statusText || '오류 없음'}`;
-             if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
-        }
+        // let globalMusicRecordsFromApi: ShowallApiSongEntry[] = cachedGlobalMusicData?.records || [];
+        // if (globalMusicResponseOrNull && globalMusicResponseOrNull.ok) {
+        //     const globalMusicData = await globalMusicResponseOrNull.json();
+        //     globalMusicRecordsFromApi = globalMusicData.records?.filter((e: any): e is ShowallApiSongEntry =>
+        //        e && e.id && e.diff && e.title && e.genre && (typeof e.const === 'number' || e.const === null) && e.level && (e.release || typeof e.release === 'string')
+        //     ) || [];
+        //     setCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, globalMusicData, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+        // } else if (globalMusicResponseOrNull && !globalMusicResponseOrNull.ok) { 
+        //     const errorJson = await globalMusicResponseOrNull.json().catch(() => ({}));
+        //     const errorMsg = `전체 악곡 목록(music/showall) 로딩 실패 (상태: ${globalMusicResponseOrNull.status}): ${errorJson.error?.message || globalMusicResponseOrNull.statusText || '오류 없음'}`;
+        //      if (!criticalError) criticalError = errorMsg; else console.warn(errorMsg);
+        // }
 
 
         if (criticalError) {
           throw new Error(criticalError);
         }
         
-        const newSongTitlesFromDataFileApi = (NewSongsData.titles?.verse || []).map(title => title.trim());
-        console.log(`[N20_CALC] Titles to look for from NewSongs.json (verse API path, trimmed): ${newSongTitlesFromDataFileApi.length}`);
+        // N20 calculation removed
+        // setNew20SongsData([]);
 
-        const definedSongPoolFromTitlesApi = globalMusicRecordsFromApi.filter(globalSong =>
-            globalSong.title && newSongTitlesFromDataFileApi.includes(globalSong.title.trim())
-        );
-        console.log(`[N20_CALC] Dynamic new song pool from API-fetched/updated global music (based on NewSongs.json titles): ${definedSongPoolFromTitlesApi.length} entries (across all difficulties)`);
-
-
-        if (allUserRecordsFromApi.length > 0 && definedSongPoolFromTitlesApi.length > 0) {
-            const calculatedNewSongs = calculateNewSongs(definedSongPoolFromTitlesApi, allUserRecordsFromApi, NEW_COUNT);
-            setNew20SongsData(calculatedNewSongs);
-        } else {
-            console.warn("Could not calculate New 20 from API: User records or new song pool from API (via NewSongs.json) are insufficient.");
-            setNew20SongsData([]);
-        }
         const newCacheTime = new Date().toLocaleString();
         setLastRefreshed(newCacheTime);
         toast({ title: "데이터 로드 완료", description: `API에서 ${userNameForApi}님의 최신 데이터를 성공적으로 불러와 캐시했습니다. (${newCacheTime})` });
@@ -465,7 +370,7 @@ function ResultContent() {
         setErrorLoadingSongs(detailedErrorMessage);
         if (!apiPlayerName && userNameForApi !== "플레이어") setApiPlayerName(userNameForApi);
         setBest30SongsData([]);
-        setNew20SongsData([]);
+        // setNew20SongsData([]); // N20 state removed
       } finally {
         setIsLoadingSongs(false);
       }
@@ -478,9 +383,9 @@ function ResultContent() {
   }, [userNameForApi, refreshNonce, clientHasMounted]); 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  // const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; // N20 UI removed
   const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4";
-  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
+  // const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // N20 UI removed
 
 
   return (
@@ -556,10 +461,11 @@ function ResultContent() {
         </Card>
 
         <Tabs defaultValue="best30" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 gap-1 mb-6 bg-muted p-1 rounded-lg">
             <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best 30</TabsTrigger>
-            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger>
-            <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger>
+            {/* <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger> */}
+            {/* <TabsTrigger value="best30new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger> */}
+             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 (Combined View)</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
@@ -568,7 +474,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted
-                  ? (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) && getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS)
+                  ? (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) // Removed global music cache check for N20
                     ? '캐시를 확인/갱신 중입니다...'
                     : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
                   : '데이터 상태 확인 중...'
@@ -583,7 +489,7 @@ function ResultContent() {
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요. API에서 필요한 정보를 모두 가져오지 못했을 수 있습니다 (예: `music/showall.json` 또는 사용자 기록). 콘솔(F12)의 오류 메시지를 확인하세요.</p>
+                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요.</p>
                 <Button asChild variant="outline" className="mt-4">
                   <Link href="/">계산기로 돌아가기</Link>
                 </Button>
@@ -613,40 +519,29 @@ function ResultContent() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="new20">
+              {/* <TabsContent value="new20">
                 <Card>
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">New 20 곡</CardTitle>
                   </CardHeader>
                   <CardContent>
-                     {new20SongsData.length > 0 ? (
-                      <div className={cn(
-                        "grid grid-cols-1 gap-4",
-                        new20GridCols
-                      )}>
-                        {new20SongsData.map((song) => (
-                          <SongCard key={`new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
-                        ))}
-                      </div>
-                     ) : (
-                       <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 제목이 글로벌 악곡 목록에 없거나, 해당 곡을 플레이하지 않았거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
-                     )}
+                       <p className="text-muted-foreground">New 20 기능이 임시로 제거되었습니다.</p>
                   </CardContent>
                 </Card>
-              </TabsContent>
+              </TabsContent> */}
 
-              <TabsContent value="best30new20">
+              <TabsContent value="combined">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Best 30 + New 20 곡</CardTitle>
+                    <CardTitle className="font-headline text-2xl">Best 30 곡 (통합 보기)</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col lg:flex-row gap-6">
-                    <div className="lg:w-3/5">
-                      <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
+                    <div className="lg:w-full"> {/* Changed to full width for B30 only */}
+                      {/* <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3> */}
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
-                          combinedBest30GridCols
+                          combinedBest30GridCols 
                         )}>
                           {best30SongsData.map((song) => (
                             <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
@@ -656,21 +551,10 @@ function ResultContent() {
                          <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다.</p>
                       )}
                     </div>
-                    <div className="lg:w-2/5">
+                    {/* <div className="lg:w-2/5">
                       <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
-                       {new20SongsData.length > 0 ? (
-                        <div className={cn(
-                          "grid grid-cols-1 gap-4",
-                           combinedNew20GridCols
-                        )}>
-                          {new20SongsData.map((song) => (
-                            <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
-                          ))}
-                        </div>
-                       ) : (
-                          <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (NewSongs.json에 정의된 곡 제목이 글로벌 악곡 목록에 없거나, 해당 곡을 플레이하지 않았거나, API 호출에 문제가 있을 수 있습니다. 콘솔 로그 `[N20_CALC]`를 확인하세요.)</p>
-                       )}
-                    </div>
+                       <p className="text-muted-foreground">New 20 기능이 임시로 제거되었습니다.</p>
+                    </div> */}
                   </CardContent>
                 </Card>
               </TabsContent>
