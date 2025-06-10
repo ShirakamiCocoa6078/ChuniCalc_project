@@ -262,7 +262,7 @@ export default function ApiTestPage() {
 
     try {
       const response = await fetch(url);
-      const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" }}));
+      const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" } }));
 
       const limit = response.headers.get('X-Rate-Limit-Limit');
       const remaining = response.headers.get('X-Rate-Limit-Remaining');
@@ -536,7 +536,6 @@ export default function ApiTestPage() {
         ...prev,
         loadingStep: "step3a",
         error: null,
-        step3Output: "3-1단계: 사용자 전체 곡 기록 로드 중...",
         userRecordsForN20: null,
         step3FilteredPlayedNewSongsRaw: null,
         step3Output: "3-1단계: 사용자 전체 곡 기록 로드 중...\n" + (initialNew20DebugState.step3Output.split('\n').slice(1).join('\n')),
@@ -562,14 +561,11 @@ export default function ApiTestPage() {
         }
         console.log(`[N20_DEBUG_STEP_3.1_RAW_RECORDS_FROM_API] Extracted user records. Count: ${rawUserRecords.length}. Sample:`, rawUserRecords.slice(0, 2));
         
-        // records/showall.json은 이미 평탄화된 형태일 가능성이 높으므로, 여기서는 추가적인 {meta,data} 평탄화는 생략하고,
-        // AppShowallApiSongEntry에 필요한 기본 필드(id, diff, score) 유효성만 검사합니다.
-        // title, const, level 등은 이후 단계에서 신곡 풀의 데이터를 사용합니다.
         const validatedUserRecords = rawUserRecords.filter((e: any, index: number): e is AppShowallApiSongEntry => {
             const isValid = e &&
                 typeof e.id === 'string' && e.id.trim() !== '' &&
                 typeof e.diff === 'string' && e.diff.trim() !== '' &&
-                typeof e.score === 'number'; // is_played 등도 필요시 추가 가능
+                typeof e.score === 'number'; 
 
             if (!isValid && rawUserRecords.length > 0 && index < 5) {
                 console.log(`[N20_DEBUG_STEP_3.1_FILTER_ISSUE] User record at index ${index} filtered out. Details:`, {
@@ -581,17 +577,17 @@ export default function ApiTestPage() {
                 });
             }
             return isValid;
-        }).map(e => ({ // 최소한의 AppShowallApiSongEntry 형태로 매핑 (주로 score, id, diff만 사용됨)
+        }).map(e => ({ 
             id: e.id,
             diff: e.diff.toUpperCase(),
             score: e.score,
-            title: e.title || "N/A", // 나머지는 기본값 또는 N/A
+            title: e.title || "N/A", 
             genre: e.genre || "N/A",
             release: e.release || "",
             const: e.const !== undefined ? e.const : null,
             level: e.level !== undefined ? String(e.level) : "N/A",
             is_const_unknown: e.is_const_unknown === true,
-            is_played: true, // 이 API에서 가져온 것은 플레이한 것임
+            is_played: true, 
             is_clear: e.is_clear,
             is_fullcombo: e.is_fullcombo,
             is_alljustice: e.is_alljustice,
@@ -654,7 +650,7 @@ export default function ApiTestPage() {
 
         const userPlayedMap = new Map<string, AppShowallApiSongEntry>();
         new20Debug.userRecordsForN20.forEach(usrSong => {
-            if (usrSong.id && usrSong.diff) { // diff는 이미 toUpperCase() 처리됨
+            if (usrSong.id && usrSong.diff) { 
                 userPlayedMap.set(`${usrSong.id}_${usrSong.diff}`, usrSong);
             }
         });
@@ -664,12 +660,10 @@ export default function ApiTestPage() {
         new20Debug.step2DefinedSongPoolRaw.forEach(newSongDef => {
             const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
             if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
-                // 신곡 풀의 정보(const, level, title 등)와 사용자의 점수(score)를 결합
                 filteredPlayedNewSongs.push({
-                    ...newSongDef, // id, title, genre, release, diff, level, const, is_const_unknown
-                    score: userPlayRecord.score, // 사용자 점수
+                    ...newSongDef, 
+                    score: userPlayRecord.score, 
                     is_played: true,
-                    // 사용자 기록에서 가져올 수 있는 추가적인 플레이 상태 플래그들
                     is_clear: userPlayRecord.is_clear,
                     is_fullcombo: userPlayRecord.is_fullcombo,
                     is_alljustice: userPlayRecord.is_alljustice,
@@ -677,16 +671,17 @@ export default function ApiTestPage() {
             }
         });
         
-        const summary = `신곡 풀(${new20Debug.step2DefinedSongPoolRaw.length}개 항목)과 사용자 기록(${new20Debug.userRecordsForN20.length}개 항목) 매칭 완료. 점수 800,000점 이상인 플레이 신곡 ${filteredPlayedNewSongs.length}개 발견.\n샘플: ${filteredPlayedNewSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.score}, Const: ${s.const})`).join('; ')}`;
-        console.log(`[N20_DEBUG_STEP_3.2_RESULT] Filtered played new songs (score >= 800k). Count: ${filteredPlayedNewSongs.length}. Sample:`, filteredPlayedNewSongs.slice(0,3).map(s => ({id:s.id, title:s.title, diff:s.diff, score:s.score, const:s.const })));
+        console.log("[N20_DEBUG_STEP_3.2_FULL_RESULT_CONSOLE] Full list of filtered played new songs (score >= 800k):", filteredPlayedNewSongs);
 
+        const summary = `신곡 풀(${new20Debug.step2DefinedSongPoolRaw.length}개 항목)과 사용자 기록(${new20Debug.userRecordsForN20.length}개 항목) 매칭 완료. 점수 800,000점 이상인 플레이 신곡 ${filteredPlayedNewSongs.length}개 발견. 전체 목록은 콘솔([N20_DEBUG_STEP_3.2_FULL_RESULT_CONSOLE])을 확인하세요.\n샘플: ${filteredPlayedNewSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.score}, Const: ${s.const})`).join('; ')}`;
+        
         setNew20Debug(prev => ({
             ...prev,
             step3FilteredPlayedNewSongsRaw: filteredPlayedNewSongs,
             step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + `\n3-2단계: ${summary}`,
             loadingStep: null,
         }));
-        toast({ title: "N20 디버그 (3-2단계) 성공", description: "플레이한 신곡 필터링을 완료했습니다." });
+        toast({ title: "N20 디버그 (3-2단계) 성공", description: "플레이한 신곡 필터링을 완료했습니다. (콘솔 확인)" });
 
     } catch (e) {
         const errorMsg = String(e);
@@ -732,9 +727,10 @@ export default function ApiTestPage() {
         console.log("[N20_DEBUG_STEP_4_MAPPED] Mapped to AppSongType. Count:", calculatedSongs.length, calculatedSongs.slice(0,1).map(s=> ({title:s.title, rating:s.currentRating, score: s.currentScore})));
 
         const sortedSongs = sortSongsByRatingDescDebug(calculatedSongs);
-        console.log("[N20_DEBUG_STEP_4_SORTED] Sorted by rating. Count:", sortedSongs.length, sortedSongs.slice(0,3).map(s=> ({title:s.title, rating:s.currentRating, score: s.currentScore, diff: s.diff})));
+        console.log("[N20_DEBUG_STEP_4_FULL_SORTED_CONSOLE] Full list of calculated and sorted new songs:", sortedSongs);
+        console.log("[N20_DEBUG_STEP_4_TOP_20_CONSOLE] Top 20 calculated and sorted new songs:", sortedSongs.slice(0, 20));
         
-        const summary = `${sortedSongs.length}개의 신곡에 대해 레이팅 계산 및 정렬 완료.\n샘플 (상위 2개): ${sortedSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.currentScore}, Rating: ${s.currentRating.toFixed(2)})`).join('; ')}`;
+        const summary = `${sortedSongs.length}개의 신곡에 대해 레이팅 계산 및 정렬 완료. 전체 목록 및 상위 20개는 콘솔([N20_DEBUG_STEP_4_FULL_SORTED_CONSOLE], [N20_DEBUG_STEP_4_TOP_20_CONSOLE])을 확인하세요.\n샘플 (상위 2개): ${sortedSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.currentScore}, Rating: ${s.currentRating.toFixed(2)})`).join('; ')}`;
         
         setNew20Debug(prev => ({
             ...prev,
@@ -742,7 +738,7 @@ export default function ApiTestPage() {
             step4Output: `4단계: ${summary}`,
             loadingStep: null,
         }));
-        toast({ title: "N20 디버그 (4단계) 성공", description: "신곡 레이팅 계산 및 정렬을 완료했습니다." });
+        toast({ title: "N20 디버그 (4단계) 성공", description: "신곡 레이팅 계산 및 정렬을 완료했습니다. (콘솔 확인)" });
 
     } catch (e) {
         const errorMsg = String(e);
@@ -1245,7 +1241,6 @@ export default function ApiTestPage() {
                     <summary className="text-sm cursor-pointer hover:underline">필터링된 사용자 플레이 신곡 목록 보기 (점수 ≥ 80만, 처음 5개)</summary>
                     <Textarea 
                         readOnly 
-                        // AppShowallApiSongEntry[] (score 포함)를 표시하기 위해 "N20_DEBUG_USER_FILTERED" 같은 새 타입 필요시 추가 가능
                         value={displayFilteredData(step3FilteredPlayedNewSongsRaw.slice(0,5).map(s => ({id:s.id, title:s.title, diff:s.diff, score: s.score, const: s.const})), undefined, "N20_DEBUG_USER_FILTERED").content} 
                         className="h-40 font-mono text-xs mt-1" 
                     />
@@ -1259,7 +1254,7 @@ export default function ApiTestPage() {
               <h3 className="font-semibold text-lg flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5 text-primary" />4단계: 레이팅 계산 및 정렬</h3>
               <Button 
                 onClick={handleCalculateAndSortNewSongs} 
-                disabled={loadingStep === "step4" || !step3FilteredPlayedNewSongsRaw || step3FilteredPlayedNewSongsRaw.length === 0} 
+                disabled={loadingStep === "step4" || !step3FilteredPlayedNewSongsRaw || (step3FilteredPlayedNewSongsRaw && step3FilteredPlayedNewSongsRaw.length === 0)} 
                 size="sm"
               >
                 {loadingStep === "step4" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
