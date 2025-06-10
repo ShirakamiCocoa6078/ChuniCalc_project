@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon, FileSearch } from "lucide-react";
+import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon, FileSearch, BarChartHorizontalBig } from "lucide-react";
 import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import type { ShowallApiSongEntry as AppShowallApiSongEntry, Song as AppSongType } from "@/app/result/page"; 
 import NewSongsData from '@/data/NewSongs.json';
@@ -18,8 +18,9 @@ import {
     findSmallestEnclosingBlockHelper, 
     displayFilteredData, 
     fetchApiForDebug,
-    type ApiEndpointString as ApiHelperEndpointString, // Renamed to avoid conflict if ApiEndpoint is also defined here
-    type DisplayFilteredDataEndpointType 
+    type ApiEndpointString as ApiHelperEndpointString,
+    type DisplayFilteredDataEndpointType,
+    type FetchApiForDebugEndpointType,
 } from "@/lib/api-test-helpers";
 
 
@@ -88,6 +89,13 @@ interface New20DebugState {
 
   step2DefinedSongPoolRaw: AppShowallApiSongEntry[] | null; 
   step2Output: string;
+
+  userRecordsForN20: AppShowallApiSongEntry[] | null;
+  step3FilteredPlayedNewSongsRaw: AppShowallApiSongEntry[] | null;
+  step3Output: string;
+
+  step4CalculatedNewSongs: AppSongType[] | null;
+  step4Output: string;
 }
 
 const initialNew20DebugState: New20DebugState = {
@@ -99,6 +107,11 @@ const initialNew20DebugState: New20DebugState = {
   globalMusicDataForN20: null,
   step2DefinedSongPoolRaw: null,
   step2Output: "2단계: 전체 악곡 목록에서 신곡 정의 실행 대기 중. (1-1, 1-2단계 선행 필요)",
+  userRecordsForN20: null,
+  step3FilteredPlayedNewSongsRaw: null,
+  step3Output: "3-1단계: 사용자 전체 곡 기록 로드 실행 대기 중.\n3-2단계: 신곡 풀과 사용자 기록 매칭 및 필터링 실행 대기 중. (2단계, 3-1단계 선행 필요)",
+  step4CalculatedNewSongs: null,
+  step4Output: "4단계: 필터링된 신곡 레이팅 계산 및 정렬 실행 대기 중. (3-2단계 선행 필요)",
 };
 
 interface ReleaseFilterTestState {
@@ -120,7 +133,7 @@ const initialReleaseFilterTestState: ReleaseFilterTestState = {
 interface SongByIdFetcherState {
     songIdToFetch: string;
     fetchedSongData: AppShowallApiSongEntry | null; 
-    rawMusicShowallRecords: AppShowallApiSongEntry[] | string | null; // Can be array or string (for malformed response)
+    rawMusicShowallRecords: AppShowallApiSongEntry[] | string | null; 
     loading: boolean;
     error: string | null;
     outputSummary: string;
@@ -133,6 +146,63 @@ const initialSongByIdFetcherState: SongByIdFetcherState = {
     loading: false,
     error: null,
     outputSummary: "조회할 악곡 ID를 입력하세요.",
+};
+
+// Helper function from result/page.tsx, adapted for debug tool
+const calculateChunithmSongRatingDebug = (score: number, chartConstant: number | undefined | null): number => {
+  if (typeof chartConstant !== 'number' || chartConstant <= 0) {
+    return 0;
+  }
+  let ratingValue = 0;
+  if (score >= 1009000) ratingValue = chartConstant + 2.15;
+  else if (score >= 1007500) ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
+  else if (score >= 1005000) ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
+  else if (score >= 1000000) ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
+  else if (score >= 990000) ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
+  else if (score >= 975000) ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+  else if (score >= 950000) ratingValue = chartConstant - 1.50;
+  else if (score >= 925000) ratingValue = chartConstant - 3.00;
+  else if (score >= 900000) ratingValue = chartConstant - 5.00;
+  else if (score >= 800000) ratingValue = (chartConstant - 5.00) / 2.0;
+  else ratingValue = 0;
+  return Math.max(0, parseFloat(ratingValue.toFixed(2)));
+};
+
+const mapToAppSongForDebug = (apiSong: AppShowallApiSongEntry): AppSongType => {
+  const score = typeof apiSong.score === 'number' ? apiSong.score : 0;
+  let effectiveChartConstant: number | null = null;
+  if (typeof apiSong.const === 'number' && apiSong.const > 0) {
+    effectiveChartConstant = apiSong.const;
+  } else if (apiSong.is_const_unknown && (typeof apiSong.level === 'string' || typeof apiSong.level === 'number')) {
+    const parsedLevel = parseFloat(String(apiSong.level));
+    if (!isNaN(parsedLevel) && parsedLevel > 0) effectiveChartConstant = parsedLevel;
+  }
+
+  const calculatedCurrentRating = (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && score > 0)
+    ? calculateChunithmSongRatingDebug(score, effectiveChartConstant)
+    : (typeof apiSong.rating === 'number' ? apiSong.rating : 0);
+
+  return {
+    id: apiSong.id,
+    diff: apiSong.diff,
+    title: apiSong.title,
+    chartConstant: effectiveChartConstant,
+    currentScore: score,
+    currentRating: calculatedCurrentRating,
+    targetScore: score, // For debug, target can be same as current initially
+    targetRating: calculatedCurrentRating, // For debug
+  };
+};
+
+const difficultyOrderDebug: { [key: string]: number } = { ULT: 5, MAS: 4, EXP: 3, ADV: 2, BAS: 1 };
+const sortSongsByRatingDescDebug = (songs: AppSongType[]): AppSongType[] => {
+  return [...songs].sort((a, b) => {
+    if (b.currentRating !== a.currentRating) return b.currentRating - a.currentRating;
+    if (b.currentScore !== a.currentScore) return b.currentScore - a.currentScore;
+    const diffAOrder = difficultyOrderDebug[a.diff.toUpperCase() as keyof typeof difficultyOrderDebug] || 0;
+    const diffBOrder = difficultyOrderDebug[b.diff.toUpperCase() as keyof typeof difficultyOrderDebug] || 0;
+    return diffBOrder - diffAOrder;
+  });
 };
 
 
@@ -162,7 +232,7 @@ export default function ApiTestPage() {
 
 
   const handleFetch = async (
-    endpoint: ApiEndpoint, // Uses the page-specific ApiEndpoint type
+    endpoint: ApiEndpoint, 
     setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
     nicknameFromState?: string
   ) => {
@@ -248,9 +318,14 @@ export default function ApiTestPage() {
       loadingStep: "step1a", 
       error: null, 
       step1Output: "1-1단계 실행 중...", 
-      globalMusicDataForN20: null, // Reset subsequent step data
+      globalMusicDataForN20: null, 
       step2DefinedSongPoolRaw: null,
-      step2Output: initialNew20DebugState.step2Output
+      step2Output: initialNew20DebugState.step2Output,
+      userRecordsForN20: null,
+      step3FilteredPlayedNewSongsRaw: null,
+      step3Output: initialNew20DebugState.step3Output,
+      step4CalculatedNewSongs: null,
+      step4Output: initialNew20DebugState.step4Output,
     }));
     try {
         const titlesFromVerse = NewSongsData.titles?.verse || [];
@@ -280,23 +355,27 @@ export default function ApiTestPage() {
         step1Output: (prev.step1Output.split('\n')[0] || "1-1단계 결과 없음.") + "\n1-2단계: 전체 악곡 목록 로드 중...",
         globalMusicDataForN20: null, 
         step2DefinedSongPoolRaw: null, 
-        step2Output: initialNew20DebugState.step2Output 
+        step2Output: initialNew20DebugState.step2Output,
+        userRecordsForN20: null,
+        step3FilteredPlayedNewSongsRaw: null,
+        step3Output: initialNew20DebugState.step3Output,
+        step4CalculatedNewSongs: null,
+        step4Output: initialNew20DebugState.step4Output,
     }));
 
     try {
         toast({ title: "N20 디버그 (1-2단계)", description: "전체 악곡 목록 (music/showall) 로드 중..." });
-        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
+        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType);
         
         console.log("[N20_DEBUG_STEP_1.2_RAW_RESPONSE] Raw API response for music/showall:", globalMusicApiResponse);
 
-        let rawApiRecords: any[] = []; // This will hold the array of {meta, data} objects
+        let rawApiRecords: any[] = []; 
         let responseIssueMessage = "";
 
         if (Array.isArray(globalMusicApiResponse)) {
             rawApiRecords = globalMusicApiResponse;
             console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is a direct array. Count: ${rawApiRecords.length}.`);
         } else if (globalMusicApiResponse && typeof globalMusicApiResponse === 'object' && globalMusicApiResponse.records !== undefined) {
-            // This case might not be hit if the API truly sends a direct array, but kept for robustness
             if (Array.isArray(globalMusicApiResponse.records)) {
                 rawApiRecords = globalMusicApiResponse.records;
                 console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is an object with a 'records' array. Count: ${rawApiRecords.length}.`);
@@ -311,7 +390,6 @@ export default function ApiTestPage() {
         
         console.log(`[N20_DEBUG_STEP_1.2_RAW_RECORDS_FROM_API] Extracted records from API response. Count: ${rawApiRecords.length}. Sample:`, rawApiRecords.slice(0, 2));
 
-        // --- Transformation (Flattening) Step ---
         const flattenedMusicEntries: AppShowallApiSongEntry[] = [];
         if (Array.isArray(rawApiRecords)) {
             rawApiRecords.forEach(rawEntry => {
@@ -321,17 +399,16 @@ export default function ApiTestPage() {
                     for (const diffKey in difficulties) {
                         if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
                             const diffData = difficulties[diffKey];
-                            if (diffData && meta.id && meta.title) { // Ensure basic meta fields exist
+                            if (diffData && meta.id && meta.title) { 
                                 flattenedMusicEntries.push({
                                     id: String(meta.id),
                                     title: String(meta.title),
                                     genre: String(meta.genre || "N/A"),
                                     release: String(meta.release || ""),
-                                    diff: diffKey.toUpperCase(), // BAS, MAS, EXP etc.
+                                    diff: diffKey.toUpperCase(), 
                                     level: String(diffData.level || "N/A"),
-                                    const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)), // Attempt to parse if not number/null
-                                    // Add other AppShowallApiSongEntry fields if available in diffData or meta
-                                    score: undefined, // Not available in music/showall directly for user plays
+                                    const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)), 
+                                    score: undefined, 
                                     rating: undefined,
                                     is_played: undefined,
                                     is_const_unknown: diffData.is_const_unknown === true,
@@ -343,18 +420,16 @@ export default function ApiTestPage() {
             });
         }
         console.log(`[N20_DEBUG_STEP_1.2_FLATTENED] Flattened music entries. Count: ${flattenedMusicEntries.length}. Sample:`, flattenedMusicEntries.slice(0,2));
-        // --- End of Transformation ---
-
-
+        
         const globalMusicRecords = flattenedMusicEntries.filter((e: AppShowallApiSongEntry, index: number): e is AppShowallApiSongEntry => {
             const isValid = e && 
                             typeof e.id === 'string' && e.id.trim() !== '' &&
                             typeof e.diff === 'string' && e.diff.trim() !== '' &&
                             typeof e.title === 'string' && e.title.trim() !== '' &&
-                            (typeof e.release === 'string') && // release can be empty string from flattening
-                            (e.const !== undefined) && // const can be number or null
+                            (typeof e.release === 'string') && 
+                            (e.const !== undefined) && 
                             e.level !== undefined && String(e.level).trim() !== '';
-            if (!isValid && flattenedMusicEntries.length > 0 && index < 5) { // Log issues for first 5 *flattened* entries
+            if (!isValid && flattenedMusicEntries.length > 0 && index < 5) { 
                 console.log(`[N20_DEBUG_FILTER_ISSUE_ON_FLATTENED] Record at index ${index} from flattenedMusicEntries filtered out. Details:`, {
                     hasE: !!e,
                     isIdStringAndNotEmpty: typeof e?.id === 'string' && e.id.trim() !== '',
@@ -373,10 +448,12 @@ export default function ApiTestPage() {
         let globalMusicSummary = `API에서 ${rawApiRecords.length}개 원본 레코드 수신. ${flattenedMusicEntries.length}개로 평탄화. 필터링 후 ${globalMusicRecords.length}개 유효.`;
         if (responseIssueMessage) {
             globalMusicSummary = responseIssueMessage + ` (API에서 ${rawApiRecords.length}개 수신, ${flattenedMusicEntries.length}개로 평탄화, 필터링 후 ${globalMusicRecords.length}개 유효.)`;
-        } else if (rawApiRecords.length > 0 && globalMusicRecords.length === 0) {
+        } else if (rawApiRecords.length > 0 && globalMusicRecords.length === 0 && flattenedMusicEntries.length > 0) {
             globalMusicSummary += " [주의] API에서 레코드를 수신하고 평탄화했으나, 필터 조건에 맞는 유효한 악곡 데이터가 없습니다. 콘솔에서 '[N20_DEBUG_FILTER_ISSUE_ON_FLATTENED]' 로그를 확인하세요.";
+        } else if (rawApiRecords.length > 0 && flattenedMusicEntries.length === 0) {
+            globalMusicSummary += " [주의] API에서 레코드를 수신했으나, 평탄화 과정에서 유효한 악곡 항목을 생성하지 못했습니다. API 응답 구조를 확인하세요. (콘솔 [N20_DEBUG_STEP_1.2_RAW_RECORDS_FROM_API] 로그)";
         }
-        
+
         const firstSongSample = globalMusicRecords.length > 0 ? `ID: ${globalMusicRecords[0].id}, 제목: ${globalMusicRecords[0].title}, 난이도: ${globalMusicRecords[0].diff}, 출시: ${globalMusicRecords[0].release}` : "유효한 데이터 없음";
         globalMusicSummary += `\n샘플 악곡 (필터링된 첫 번째): ${firstSongSample}`;
 
@@ -398,7 +475,17 @@ export default function ApiTestPage() {
 
 
   const handleDefineNewSongPoolFromGlobalMusic = () => {
-    setNew20Debug(prev => ({ ...prev, loadingStep: "step2", error: null, step2Output: "2단계 실행 중..." }));
+    setNew20Debug(prev => ({ 
+        ...prev, 
+        loadingStep: "step2", 
+        error: null, 
+        step2Output: "2단계 실행 중...",
+        userRecordsForN20: null, 
+        step3FilteredPlayedNewSongsRaw: null,
+        step3Output: initialNew20DebugState.step3Output,
+        step4CalculatedNewSongs: null,
+        step4Output: initialNew20DebugState.step4Output,
+    }));
     if (!new20Debug.globalMusicDataForN20 || new20Debug.step1NewSongTitlesRaw.length === 0) {
         const errorMsg = "1-1단계 (NewSongs.json 제목) 또는 1-2단계 (전체 악곡 목록) 데이터가 로드되지 않았습니다. 먼저 해당 단계를 실행하세요.";
         setNew20Debug(prev => ({ ...prev, error: errorMsg, loadingStep: null, step2Output: `오류: ${errorMsg}` }));
@@ -438,16 +525,244 @@ export default function ApiTestPage() {
     }
   };
 
+  const handleFetchUserRecordsForN20 = async () => {
+    const nickname = new20Debug.nickname;
+    if (!nickname || nickname.trim() === "") {
+        toast({ title: "닉네임 필요", description: "사용자 기록을 로드하려면 닉네임을 입력해주세요.", variant: "destructive" });
+        setNew20Debug(prev => ({...prev, error: "3-1단계: 닉네임 필요", step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음") + "\n닉네임이 필요합니다."}));
+        return;
+    }
+    setNew20Debug(prev => ({
+        ...prev,
+        loadingStep: "step3a",
+        error: null,
+        step3Output: "3-1단계: 사용자 전체 곡 기록 로드 중...",
+        userRecordsForN20: null,
+        step3FilteredPlayedNewSongsRaw: null,
+        step3Output: "3-1단계: 사용자 전체 곡 기록 로드 중...\n" + (initialNew20DebugState.step3Output.split('\n').slice(1).join('\n')),
+        step4CalculatedNewSongs: null,
+        step4Output: initialNew20DebugState.step4Output,
+    }));
+
+    try {
+        toast({ title: "N20 디버그 (3-1단계)", description: `${nickname}님의 전체 곡 기록 (records/showall) 로드 중...` });
+        const userShowallApiResponse = await fetchApiForDebug("/2.0/records/showall.json" as FetchApiForDebugEndpointType, nickname);
+        console.log(`[N20_DEBUG_STEP_3.1_RAW_RESPONSE] Raw API response for user records/showall (${nickname}):`, userShowallApiResponse);
+
+        let rawUserRecords: any[] = [];
+        let responseUserIssueMessage = "";
+
+        if (Array.isArray(userShowallApiResponse)) {
+            rawUserRecords = userShowallApiResponse;
+        } else if (userShowallApiResponse && Array.isArray(userShowallApiResponse.records)) {
+            rawUserRecords = userShowallApiResponse.records;
+        } else {
+            responseUserIssueMessage = "사용자 기록 API 응답이 없거나, 객체 형식이 아니거나, 'records' 필드를 포함하지 않습니다.";
+            console.warn(`[N20_DEBUG_STEP_3.1_WARN] User records API response is not a direct array or an object with a 'records' array. Response:`, userShowallApiResponse);
+        }
+        console.log(`[N20_DEBUG_STEP_3.1_RAW_RECORDS_FROM_API] Extracted user records. Count: ${rawUserRecords.length}. Sample:`, rawUserRecords.slice(0, 2));
+        
+        // records/showall.json은 이미 평탄화된 형태일 가능성이 높으므로, 여기서는 추가적인 {meta,data} 평탄화는 생략하고,
+        // AppShowallApiSongEntry에 필요한 기본 필드(id, diff, score) 유효성만 검사합니다.
+        // title, const, level 등은 이후 단계에서 신곡 풀의 데이터를 사용합니다.
+        const validatedUserRecords = rawUserRecords.filter((e: any, index: number): e is AppShowallApiSongEntry => {
+            const isValid = e &&
+                typeof e.id === 'string' && e.id.trim() !== '' &&
+                typeof e.diff === 'string' && e.diff.trim() !== '' &&
+                typeof e.score === 'number'; // is_played 등도 필요시 추가 가능
+
+            if (!isValid && rawUserRecords.length > 0 && index < 5) {
+                console.log(`[N20_DEBUG_STEP_3.1_FILTER_ISSUE] User record at index ${index} filtered out. Details:`, {
+                    hasE: !!e,
+                    isIdStringAndNotEmpty: typeof e?.id === 'string' && e.id.trim() !== '',
+                    isDiffStringAndNotEmpty: typeof e?.diff === 'string' && e.diff.trim() !== '',
+                    hasScoreNumber: typeof e?.score === 'number',
+                    record: e
+                });
+            }
+            return isValid;
+        }).map(e => ({ // 최소한의 AppShowallApiSongEntry 형태로 매핑 (주로 score, id, diff만 사용됨)
+            id: e.id,
+            diff: e.diff.toUpperCase(),
+            score: e.score,
+            title: e.title || "N/A", // 나머지는 기본값 또는 N/A
+            genre: e.genre || "N/A",
+            release: e.release || "",
+            const: e.const !== undefined ? e.const : null,
+            level: e.level !== undefined ? String(e.level) : "N/A",
+            is_const_unknown: e.is_const_unknown === true,
+            is_played: true, // 이 API에서 가져온 것은 플레이한 것임
+            is_clear: e.is_clear,
+            is_fullcombo: e.is_fullcombo,
+            is_alljustice: e.is_alljustice,
+        }));
+        
+        console.log(`[N20_DEBUG_STEP_3.1_VALIDATED_RECORDS] Validated user records. Count: ${validatedUserRecords.length}. Sample:`, validatedUserRecords.slice(0,2));
+
+        let userRecordsSummary = `API에서 ${rawUserRecords.length}개 원본 사용자 기록 수신. 필터링/매핑 후 ${validatedUserRecords.length}개 유효.`;
+        if (responseUserIssueMessage) {
+            userRecordsSummary = responseUserIssueMessage + ` (${userRecordsSummary})`;
+        } else if (rawUserRecords.length > 0 && validatedUserRecords.length === 0) {
+            userRecordsSummary += " [주의] 사용자 기록 API에서 레코드를 수신했으나, 필터 조건에 맞는 유효한 데이터가 없습니다. 콘솔 로그를 확인하세요.";
+        }
+        const firstUserRecordSample = validatedUserRecords.length > 0 ? `ID: ${validatedUserRecords[0].id}, 제목: ${validatedUserRecords[0].title}, 난이도: ${validatedUserRecords[0].diff}, 점수: ${validatedUserRecords[0].score}` : "유효한 데이터 없음";
+        userRecordsSummary += `\n샘플 기록 (필터링된 첫 번째): ${firstUserRecordSample}`;
+
+        setNew20Debug(prev => ({
+            ...prev,
+            userRecordsForN20: validatedUserRecords,
+            step3Output: `3-1단계: ${userRecordsSummary}\n` + (initialNew20DebugState.step3Output.split('\n').slice(1).join('\n')),
+            loadingStep: null,
+        }));
+        toast({ title: "N20 디버그 (3-1단계) 완료", description: `사용자 기록 처리: ${userRecordsSummary.split('\n')[0]}` });
+
+    } catch (e) {
+        const errorMsg = String(e);
+        console.error("[N20_DEBUG_STEP_3.1_ERROR] Error in handleFetchUserRecordsForN20:", e);
+        setNew20Debug(prev => ({ ...prev, error: `3-1단계 오류: ${errorMsg}`, loadingStep: null, step3Output: `3-1단계 오류: ${errorMsg}\n` + (initialNew20DebugState.step3Output.split('\n').slice(1).join('\n')) }));
+        toast({ title: "N20 디버그 (3-1단계) 실패", description: errorMsg, variant: "destructive" });
+    }
+  };
+  
+  const handleFilterUserPlayedNewSongs = () => {
+    setNew20Debug(prev => ({ 
+        ...prev, 
+        loadingStep: "step3b", 
+        error: null, 
+        step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + "\n3-2단계: 신곡 풀과 사용자 기록 매칭 및 필터링 중...",
+        step3FilteredPlayedNewSongsRaw: null,
+        step4CalculatedNewSongs: null,
+        step4Output: initialNew20DebugState.step4Output,
+    }));
+
+    if (!new20Debug.step2DefinedSongPoolRaw) {
+        const errorMsg = "2단계 (정의된 신곡 풀) 데이터가 없습니다. 먼저 2단계를 실행하세요.";
+        setNew20Debug(prev => ({ ...prev, error: errorMsg, loadingStep: null, step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + `\n오류(3-2단계): ${errorMsg}` }));
+        toast({ title: "N20 디버그 (3-2단계) 실패", description: errorMsg, variant: "destructive" });
+        return;
+    }
+    if (!new20Debug.userRecordsForN20) {
+        const errorMsg = "3-1단계 (사용자 전체 곡 기록) 데이터가 없습니다. 먼저 3-1단계를 실행하세요.";
+        setNew20Debug(prev => ({ ...prev, error: errorMsg, loadingStep: null, step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + `\n오류(3-2단계): ${errorMsg}` }));
+        toast({ title: "N20 디버그 (3-2단계) 실패", description: errorMsg, variant: "destructive" });
+        return;
+    }
+
+    try {
+        console.log("[N20_DEBUG_STEP_3.2_INPUT] Defined new song pool (from step 2):", new20Debug.step2DefinedSongPoolRaw.length, new20Debug.step2DefinedSongPoolRaw.slice(0,1).map(s => ({id:s.id, title:s.title, diff:s.diff, const:s.const})));
+        console.log("[N20_DEBUG_STEP_3.2_INPUT] User records (from step 3.1):", new20Debug.userRecordsForN20.length, new20Debug.userRecordsForN20.slice(0,1).map(s => ({id:s.id, title:s.title, diff:s.diff, score:s.score})));
+
+        const userPlayedMap = new Map<string, AppShowallApiSongEntry>();
+        new20Debug.userRecordsForN20.forEach(usrSong => {
+            if (usrSong.id && usrSong.diff) { // diff는 이미 toUpperCase() 처리됨
+                userPlayedMap.set(`${usrSong.id}_${usrSong.diff}`, usrSong);
+            }
+        });
+        console.log(`[N20_DEBUG_STEP_3.2_INFO] User play map created with ${userPlayedMap.size} entries.`);
+
+        const filteredPlayedNewSongs: AppShowallApiSongEntry[] = [];
+        new20Debug.step2DefinedSongPoolRaw.forEach(newSongDef => {
+            const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
+            if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
+                // 신곡 풀의 정보(const, level, title 등)와 사용자의 점수(score)를 결합
+                filteredPlayedNewSongs.push({
+                    ...newSongDef, // id, title, genre, release, diff, level, const, is_const_unknown
+                    score: userPlayRecord.score, // 사용자 점수
+                    is_played: true,
+                    // 사용자 기록에서 가져올 수 있는 추가적인 플레이 상태 플래그들
+                    is_clear: userPlayRecord.is_clear,
+                    is_fullcombo: userPlayRecord.is_fullcombo,
+                    is_alljustice: userPlayRecord.is_alljustice,
+                });
+            }
+        });
+        
+        const summary = `신곡 풀(${new20Debug.step2DefinedSongPoolRaw.length}개 항목)과 사용자 기록(${new20Debug.userRecordsForN20.length}개 항목) 매칭 완료. 점수 800,000점 이상인 플레이 신곡 ${filteredPlayedNewSongs.length}개 발견.\n샘플: ${filteredPlayedNewSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.score}, Const: ${s.const})`).join('; ')}`;
+        console.log(`[N20_DEBUG_STEP_3.2_RESULT] Filtered played new songs (score >= 800k). Count: ${filteredPlayedNewSongs.length}. Sample:`, filteredPlayedNewSongs.slice(0,3).map(s => ({id:s.id, title:s.title, diff:s.diff, score:s.score, const:s.const })));
+
+        setNew20Debug(prev => ({
+            ...prev,
+            step3FilteredPlayedNewSongsRaw: filteredPlayedNewSongs,
+            step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + `\n3-2단계: ${summary}`,
+            loadingStep: null,
+        }));
+        toast({ title: "N20 디버그 (3-2단계) 성공", description: "플레이한 신곡 필터링을 완료했습니다." });
+
+    } catch (e) {
+        const errorMsg = String(e);
+        console.error("[N20_DEBUG_STEP_3.2_ERROR] Error in handleFilterUserPlayedNewSongs:", e);
+        setNew20Debug(prev => ({ ...prev, error: `3-2단계 오류: ${errorMsg}`, loadingStep: null, step3Output: (prev.step3Output.split('\n')[0] || "3-1단계 결과 없음.") + `\n오류(3-2단계): ${errorMsg}` }));
+        toast({ title: "N20 디버그 (3-2단계) 실패", description: errorMsg, variant: "destructive" });
+    }
+  };
+
+  const handleCalculateAndSortNewSongs = () => {
+    setNew20Debug(prev => ({
+        ...prev,
+        loadingStep: "step4",
+        error: null,
+        step4Output: "4단계: 필터링된 신곡 레이팅 계산 및 정렬 중...",
+        step4CalculatedNewSongs: null,
+    }));
+
+    if (!new20Debug.step3FilteredPlayedNewSongsRaw) {
+        const errorMsg = "3-2단계 (필터링된 플레이 신곡) 데이터가 없습니다. 먼저 3-2단계를 실행하세요.";
+        setNew20Debug(prev => ({ ...prev, error: errorMsg, loadingStep: null, step4Output: `오류(4단계): ${errorMsg}`}));
+        toast({ title: "N20 디버그 (4단계) 실패", description: errorMsg, variant: "destructive" });
+        return;
+    }
+    if (new20Debug.step3FilteredPlayedNewSongsRaw.length === 0) {
+        const summary = "레이팅 계산 대상 곡 없음 (3-2단계에서 필터링된 곡 없음).";
+        setNew20Debug(prev => ({
+            ...prev,
+            step4Output: `4단계: ${summary}`,
+            step4CalculatedNewSongs: [],
+            loadingStep: null,
+        }));
+        toast({ title: "N20 디버그 (4단계) 정보", description: summary });
+        return;
+    }
+
+    try {
+        console.log("[N20_DEBUG_STEP_4_INPUT] Songs to calculate rating for (from step 3.2):", new20Debug.step3FilteredPlayedNewSongsRaw.length, new20Debug.step3FilteredPlayedNewSongsRaw.slice(0,1).map(s => ({title:s.title, score:s.score, const:s.const})));
+
+        const calculatedSongs: AppSongType[] = new20Debug.step3FilteredPlayedNewSongsRaw.map(
+            (apiSongEntry) => mapToAppSongForDebug(apiSongEntry)
+        );
+        console.log("[N20_DEBUG_STEP_4_MAPPED] Mapped to AppSongType. Count:", calculatedSongs.length, calculatedSongs.slice(0,1).map(s=> ({title:s.title, rating:s.currentRating, score: s.currentScore})));
+
+        const sortedSongs = sortSongsByRatingDescDebug(calculatedSongs);
+        console.log("[N20_DEBUG_STEP_4_SORTED] Sorted by rating. Count:", sortedSongs.length, sortedSongs.slice(0,3).map(s=> ({title:s.title, rating:s.currentRating, score: s.currentScore, diff: s.diff})));
+        
+        const summary = `${sortedSongs.length}개의 신곡에 대해 레이팅 계산 및 정렬 완료.\n샘플 (상위 2개): ${sortedSongs.slice(0, 2).map(s => `${s.title} (${s.diff}, Score: ${s.currentScore}, Rating: ${s.currentRating.toFixed(2)})`).join('; ')}`;
+        
+        setNew20Debug(prev => ({
+            ...prev,
+            step4CalculatedNewSongs: sortedSongs,
+            step4Output: `4단계: ${summary}`,
+            loadingStep: null,
+        }));
+        toast({ title: "N20 디버그 (4단계) 성공", description: "신곡 레이팅 계산 및 정렬을 완료했습니다." });
+
+    } catch (e) {
+        const errorMsg = String(e);
+        console.error("[N20_DEBUG_STEP_4_ERROR] Error in handleCalculateAndSortNewSongs:", e);
+        setNew20Debug(prev => ({ ...prev, error: `4단계 오류: ${errorMsg}`, loadingStep: null, step4Output: `오류(4단계): ${errorMsg}` }));
+        toast({ title: "N20 디버그 (4단계) 실패", description: errorMsg, variant: "destructive" });
+    }
+  };
+
+
   const handleFetchAndFilterByReleaseDate = async () => {
     setReleaseFilterTest(prev => ({ ...prev, loading: true, error: null, summary: "전체 악곡 목록 로드 중..." }));
     try {
-      const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json"); 
+      const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType); 
       
       let rawApiRecords: any[] = [];
       if (Array.isArray(globalMusicApiResponse)) {
         rawApiRecords = globalMusicApiResponse;
       } else if (globalMusicApiResponse && Array.isArray(globalMusicApiResponse.records)) {
-        rawApiRecords = globalMusicApiResponse.records; // Fallback, though direct array is expected now
+        rawApiRecords = globalMusicApiResponse.records; 
       } else {
         console.warn("[ReleaseFilter] music/showall.json did not return a direct array or an object with a 'records' array. Response:", globalMusicApiResponse);
       }
@@ -482,7 +797,7 @@ export default function ApiTestPage() {
         typeof e.id === 'string' && e.id.trim() !== '' &&
         typeof e.diff === 'string' && e.diff.trim() !== '' &&
         typeof e.title === 'string' && e.title.trim() !== '' &&
-        typeof e.release === 'string' && e.release.match(/^\d{4}-\d{2}-\d{2}$/) && // Ensure release is valid date format
+        typeof e.release === 'string' && e.release.match(/^\d{4}-\d{2}-\d{2}$/) && 
         (e.const !== undefined) && 
         e.level !== undefined && String(e.level).trim() !== ''
       );
@@ -495,7 +810,7 @@ export default function ApiTestPage() {
       targetDate.setHours(0,0,0,0); 
 
       const filteredSongs = allMusicRecords.filter(song => {
-        if (!song.release) return false; // Should be caught by above filter, but defensive
+        if (!song.release) return false; 
         try {
           const releaseDate = new Date(song.release);
           releaseDate.setHours(0,0,0,0); 
@@ -534,7 +849,7 @@ export default function ApiTestPage() {
     setSongByIdFetcher(prev => ({ ...prev, loading: true, error: null, fetchedSongData: null, rawMusicShowallRecords: null, outputSummary: "전체 악곡 목록 로드 중..."}));
     
     try {
-        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
+        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType);
 
         let rawApiRecords: any[] = [];
         let apiFullResponseForDisplay: string | AppShowallApiSongEntry[] = "API 응답 없음";
@@ -542,11 +857,9 @@ export default function ApiTestPage() {
 
         if (Array.isArray(globalMusicApiResponse)) {
             rawApiRecords = globalMusicApiResponse;
-            // For display, we will show the raw {meta, data} structure
             apiFullResponseForDisplay = globalMusicApiResponse; 
             console.log("[SongByID] API response is a direct array.");
         } else if (globalMusicApiResponse && typeof globalMusicApiResponse === 'object' && globalMusicApiResponse.records !== undefined) {
-            // This case may not be hit often if API sends direct array
             if (Array.isArray(globalMusicApiResponse.records)) {
                 rawApiRecords = globalMusicApiResponse.records;
                 apiFullResponseForDisplay = globalMusicApiResponse.records;
@@ -601,7 +914,7 @@ export default function ApiTestPage() {
                 for (const diffKey in difficulties) {
                     if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
                         const diffData = difficulties[diffKey];
-                         if (diffData && meta.id && meta.title) { // Basic check
+                         if (diffData && meta.id && meta.title) { 
                             flattenedMusicEntries.push({
                                 id: String(meta.id),
                                 title: String(meta.title),
@@ -623,7 +936,6 @@ export default function ApiTestPage() {
         }
 
 
-        // Filter the flattened entries for validity (this ensures we only search valid structures)
         const allMusicRecordsFiltered = flattenedMusicEntries.filter((e: AppShowallApiSongEntry, index: number): e is AppShowallApiSongEntry => {
             const isValid = e && 
                             typeof e.id === 'string' && e.id.trim() !== '' &&
@@ -650,7 +962,6 @@ export default function ApiTestPage() {
         
         console.log(`[SongByID] Filtered allMusicRecords count for search (after flattening & filtering): ${allMusicRecordsFiltered.length}`);
         
-        // Find the song by ID from the *flattened and filtered* list
         const foundSong = allMusicRecordsFiltered.find(song => song.id === trimmedSongIdToFetch);
 
         if (foundSong) {
@@ -728,7 +1039,7 @@ export default function ApiTestPage() {
 
   const renderApiTestSection = (
     title: string,
-    endpoint: ApiEndpoint, // Uses page-specific ApiEndpoint
+    endpoint: ApiEndpoint, 
     state: UserApiTestState | GlobalApiTestState,
     setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
     requiresNickname: boolean,
@@ -746,7 +1057,6 @@ export default function ApiTestPage() {
         setState(prev => ({...prev, searchTerm: value }));
     }
 
-    // Ensure `displayFilteredData` is called with the correct endpoint type from the helper file
     const displayResult = state.data ? displayFilteredData(state.data, state.searchTerm, endpoint as DisplayFilteredDataEndpointType) : { content: "" };
 
     return (
@@ -821,7 +1131,13 @@ export default function ApiTestPage() {
   };
 
   const renderNew20DebugSection = () => {
-    const { nickname, loadingStep, error, step1NewSongTitlesRaw, step1Output, globalMusicDataForN20, step2Output, step2DefinedSongPoolRaw } = new20Debug;
+    const { 
+        nickname, loadingStep, error, 
+        step1NewSongTitlesRaw, step1Output, globalMusicDataForN20, 
+        step2Output, step2DefinedSongPoolRaw,
+        step3Output, step3FilteredPlayedNewSongsRaw, userRecordsForN20,
+        step4Output, step4CalculatedNewSongs
+    } = new20Debug;
 
     return (
       <Card>
@@ -831,7 +1147,7 @@ export default function ApiTestPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-1">
-            <Label htmlFor="n20-debug-nickname">사용자 닉네임 (user_name) - 3단계부터 사용</Label>
+            <Label htmlFor="n20-debug-nickname">사용자 닉네임 (user_name)</Label>
             <Input
               id="n20-debug-nickname"
               value={nickname}
@@ -847,8 +1163,9 @@ export default function ApiTestPage() {
             </div>
           )}
 
-          <div className="space-y-2 p-4 border rounded-md shadow-sm">
-             <h3 className="font-semibold text-lg flex items-center"><FileJson className="mr-2 h-5 w-5 text-primary" />1단계: 데이터 로드</h3>
+          {/* 단계 1: 데이터 로드 */}
+          <div className="space-y-2 p-4 border rounded-md shadow-sm bg-background">
+             <h3 className="font-semibold text-lg flex items-center"><FileJson className="mr-2 h-5 w-5 text-primary" />1단계: 기본 데이터 로드</h3>
             <div className="flex flex-col sm:flex-row gap-2 mb-2">
                 <Button onClick={handleLoadTitlesFromNewSongsJson} disabled={loadingStep === "step1a"} size="sm" className="flex-1">
                     {loadingStep === "step1a" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -874,7 +1191,8 @@ export default function ApiTestPage() {
             )}
           </div>
 
-          <div className="space-y-2 p-4 border rounded-md shadow-sm">
+          {/* 단계 2: 신곡 풀 정의 */}
+          <div className="space-y-2 p-4 border rounded-md shadow-sm bg-background">
             <div className="flex justify-between items-center mb-2">
               <h3 className="font-semibold text-lg flex items-center"><Server className="mr-2 h-5 w-5 text-primary" />2단계: 전체 악곡 목록에서 신곡 정의</h3>
               <Button onClick={handleDefineNewSongPoolFromGlobalMusic} disabled={loadingStep === "step2" || !globalMusicDataForN20 || step1NewSongTitlesRaw.length === 0} size="sm">
@@ -896,6 +1214,77 @@ export default function ApiTestPage() {
                 </details>
             )}
           </div>
+
+          {/* 단계 3: 사용자 기록 기반 필터링 */}
+          <div className="space-y-2 p-4 border rounded-md shadow-sm bg-background">
+            <h3 className="font-semibold text-lg flex items-center"><FilterIcon className="mr-2 h-5 w-5 text-primary" />3단계: 사용자 플레이 기록 기반 필터링</h3>
+            <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                <Button onClick={handleFetchUserRecordsForN20} disabled={loadingStep === "step3a" || !nickname.trim()} size="sm" className="flex-1">
+                    {loadingStep === "step3a" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    3-1단계: 사용자 전체 곡 기록 로드
+                </Button>
+                <Button 
+                    onClick={handleFilterUserPlayedNewSongs} 
+                    disabled={loadingStep === "step3b" || !step2DefinedSongPoolRaw || !userRecordsForN20} 
+                    size="sm" 
+                    className="flex-1"
+                >
+                    {loadingStep === "step3b" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    3-2단계: 신곡 매칭 및 필터링 (점수 ≥ 80만)
+                </Button>
+            </div>
+             <Textarea
+                readOnly
+                value={step3Output}
+                className="h-32 font-mono text-xs bg-muted/30"
+                rows={4}
+                placeholder="3-1, 3-2단계 결과 요약"
+            />
+            {step3FilteredPlayedNewSongsRaw && (
+                <details className="mt-2">
+                    <summary className="text-sm cursor-pointer hover:underline">필터링된 사용자 플레이 신곡 목록 보기 (점수 ≥ 80만, 처음 5개)</summary>
+                    <Textarea 
+                        readOnly 
+                        // AppShowallApiSongEntry[] (score 포함)를 표시하기 위해 "N20_DEBUG_USER_FILTERED" 같은 새 타입 필요시 추가 가능
+                        value={displayFilteredData(step3FilteredPlayedNewSongsRaw.slice(0,5).map(s => ({id:s.id, title:s.title, diff:s.diff, score: s.score, const: s.const})), undefined, "N20_DEBUG_USER_FILTERED").content} 
+                        className="h-40 font-mono text-xs mt-1" 
+                    />
+                </details>
+            )}
+          </div>
+
+          {/* 단계 4: 레이팅 계산 및 정렬 */}
+           <div className="space-y-2 p-4 border rounded-md shadow-sm bg-background">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="font-semibold text-lg flex items-center"><BarChartHorizontalBig className="mr-2 h-5 w-5 text-primary" />4단계: 레이팅 계산 및 정렬</h3>
+              <Button 
+                onClick={handleCalculateAndSortNewSongs} 
+                disabled={loadingStep === "step4" || !step3FilteredPlayedNewSongsRaw || step3FilteredPlayedNewSongsRaw.length === 0} 
+                size="sm"
+              >
+                {loadingStep === "step4" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                실행 (4단계)
+              </Button>
+            </div>
+            <Textarea
+              readOnly
+              value={step4Output}
+              className="h-32 font-mono text-xs bg-muted/30"
+              rows={4}
+              placeholder="4단계 결과 요약 (레이팅 계산 및 정렬)"
+            />
+             {step4CalculatedNewSongs && step4CalculatedNewSongs.length > 0 && (
+                <details className="mt-2">
+                    <summary className="text-sm cursor-pointer hover:underline">계산 및 정렬된 신곡 목록 보기 (상위 5개)</summary>
+                    <Textarea 
+                        readOnly 
+                        value={JSON.stringify(step4CalculatedNewSongs.slice(0,5).map(s => ({ title: s.title, diff: s.diff, score: s.currentScore, rating: s.currentRating, const: s.chartConstant })), null, 2)} 
+                        className="h-60 font-mono text-xs mt-1" 
+                    />
+                </details>
+            )}
+          </div>
+
         </CardContent>
       </Card>
     );
