@@ -251,6 +251,7 @@ function ResultContent() {
       console.log(`[N20_PREP_1] Titles from NewSongs.json for matching (count: ${newSongTitlesToMatch.length}):`, newSongTitlesToMatch.slice(0, 3));
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
+      const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
       // GlobalMusicApiResponse now expects records to be ShowallApiSongEntry[]
       const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       const cachedUserShowallData = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
@@ -589,7 +590,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted
-                  ? ( (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY) || getCachedData<UserShowallApiResponse>(`${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`))
+                  ? ( (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || getCachedData<RatingApiResponse>(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`) || getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY) || getCachedData<UserShowallApiResponse>(`${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`))
                     ? '캐시를 확인/갱신 중입니다...'
                     : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
                   : '데이터 상태 확인 중...'
