@@ -102,17 +102,39 @@ const mapApiSongToAppSong = (
   const score = typeof apiSong.score === 'number' ? apiSong.score : 0;
 
   let effectiveChartConstant: number | null = null;
+
+  // Priority 1: chartConstantOverride (typically for RatingApiSongEntry from best30)
   if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
     effectiveChartConstant = chartConstantOverride;
-  } else if (typeof apiSong.const === 'number' && apiSong.const > 0) {
-    effectiveChartConstant = apiSong.const;
-  } else if (
-    (apiSong as ShowallApiSongEntry).is_const_unknown &&
-    (typeof apiSong.level === 'string' || typeof apiSong.level === 'number')
-  ) {
-    const parsedLevel = parseFloat(String(apiSong.level));
-    if (!isNaN(parsedLevel) && parsedLevel > 0) {
-      effectiveChartConstant = parsedLevel;
+  } else {
+    // For ShowallApiSongEntry or if chartConstantOverride is not applicable
+    // Priority 2: apiSong.const if it's a positive number
+    if (typeof apiSong.const === 'number' && apiSong.const > 0) {
+      effectiveChartConstant = apiSong.const;
+    } 
+    // Priority 3: User's rule for when apiSong.const is 0
+    else if (apiSong.const === 0) {
+      if ((typeof apiSong.level === 'string' || typeof apiSong.level === 'number') && String(apiSong.level).trim() !== "") {
+        const parsedLevel = parseFloat(String(apiSong.level));
+        if (!isNaN(parsedLevel) && parsedLevel > 0) {
+          const isInteger = parsedLevel % 1 === 0;
+          const isXpoint5 = Math.abs((parsedLevel * 10) % 10) === 5;
+
+          if (isInteger || isXpoint5) {
+            effectiveChartConstant = parsedLevel;
+          }
+        }
+      }
+    } 
+    // Priority 4: Original fallback if apiSong.is_const_unknown is true and const wasn't positive or 0 (i.e. likely null)
+    // This applies if effectiveChartConstant is still null at this point.
+    else if (effectiveChartConstant === null && (apiSong as ShowallApiSongEntry).is_const_unknown && 
+             (typeof apiSong.level === 'string' || typeof apiSong.level === 'number') &&
+             String(apiSong.level).trim() !== "") {
+      const parsedLevel = parseFloat(String(apiSong.level));
+      if (!isNaN(parsedLevel) && parsedLevel > 0) {
+        effectiveChartConstant = parsedLevel; // Use any valid numeric level as const
+      }
     }
   }
 
@@ -344,10 +366,10 @@ function ResultContent() {
                     }
                     if (res.type === 'globalMusic' && (!cachedGlobalMusicData || !cachedGlobalMusicData.records)) {
                         let rawApiRecordsForGlobal: any[] = [];
-                        if (Array.isArray(res.data)) { // API directly returns array like [{meta,data}, ...]
+                        if (Array.isArray(res.data)) { 
                             rawApiRecordsForGlobal = res.data;
                             console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is a direct array. Count:", rawApiRecordsForGlobal.length);
-                        } else if (res.data && Array.isArray(res.data.records)) { // API returns { records: [{meta,data}, ...] }
+                        } else if (res.data && Array.isArray(res.data.records)) { 
                             rawApiRecordsForGlobal = res.data.records;
                              console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is an object with .records array. Count:", rawApiRecordsForGlobal.length);
                         } else {
@@ -355,7 +377,7 @@ function ResultContent() {
                         }
 
                         const flattenedGlobalMusicEntries: ShowallApiSongEntry[] = [];
-                        if (rawApiRecordsForGlobal.length > 0 && rawApiRecordsForGlobal[0].meta && rawApiRecordsForGlobal[0].data) {
+                        if (rawApiRecordsForGlobal.length > 0 && rawApiRecordsForGlobal[0] && rawApiRecordsForGlobal[0].meta && rawApiRecordsForGlobal[0].data) { // Check for {meta, data} structure
                             rawApiRecordsForGlobal.forEach(rawEntry => {
                                 if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
                                     const meta = rawEntry.meta;
@@ -382,7 +404,7 @@ function ResultContent() {
                              console.log(`[RESULT_PAGE_GLOBAL_MUSIC_API] Flattened ${flattenedGlobalMusicEntries.length} entries from ${rawApiRecordsForGlobal.length} raw API records.`);
                         } else if (rawApiRecordsForGlobal.length > 0) { // Assume it's already flat ShowallApiSongEntry[] if not {meta,data}
                              console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] Assuming API provided already flattened records for global music. Count:", rawApiRecordsForGlobal.length);
-                             rawApiRecordsForGlobal.forEach(entry => flattenedGlobalMusicEntries.push(entry as ShowallApiSongEntry)); // Cast, assuming it's correct
+                             rawApiRecordsForGlobal.forEach(entry => flattenedGlobalMusicEntries.push(entry as ShowallApiSongEntry)); 
                         }
 
 
@@ -393,10 +415,6 @@ function ResultContent() {
                         console.log("[N20_PREP_2_API] Global music data (flattened) fetched from API and cached. Count:", globalMusicRecordsFromDataSource.length);
                     }
                     if (res.type === 'userShowall' && (!cachedUserShowallData || !cachedUserShowallData.records)) {
-                        // Assuming user records/showall.json returns data that can be directly filtered into ShowallApiSongEntry like structures
-                        // or that it's already somewhat flattened for the relevant fields.
-                        // If user records/showall also returns {meta,data} then similar flattening would be needed here too.
-                        // For now, assume it's more direct or the required fields (id, diff, score) are top-level.
                         userShowallRecordsFromDataSource = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
                             e && e.id && e.diff && (e.score !== undefined)
                         );
@@ -458,8 +476,8 @@ function ResultContent() {
 
               if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score > 0) {
                   const combinedSongEntry: ShowallApiSongEntry = {
-                      ...newSongDef,
-                      score: userPlayRecord.score,
+                      ...newSongDef, 
+                      score: userPlayRecord.score, 
                       is_played: true,
                       is_clear: userPlayRecord.is_clear,
                       is_fullcombo: userPlayRecord.is_fullcombo,

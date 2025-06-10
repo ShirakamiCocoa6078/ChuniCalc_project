@@ -171,11 +171,33 @@ const calculateChunithmSongRatingDebug = (score: number, chartConstant: number |
 const mapToAppSongForDebug = (apiSong: AppShowallApiSongEntry): AppSongType => {
   const score = typeof apiSong.score === 'number' ? apiSong.score : 0;
   let effectiveChartConstant: number | null = null;
+
+  // Priority 1: apiSong.const if it's a positive number
   if (typeof apiSong.const === 'number' && apiSong.const > 0) {
     effectiveChartConstant = apiSong.const;
-  } else if (apiSong.is_const_unknown && (typeof apiSong.level === 'string' || typeof apiSong.level === 'number')) {
+  } 
+  // Priority 2: User's rule for when apiSong.const is 0
+  else if (apiSong.const === 0) {
+    if ((typeof apiSong.level === 'string' || typeof apiSong.level === 'number') && String(apiSong.level).trim() !== "") {
+      const parsedLevel = parseFloat(String(apiSong.level));
+      if (!isNaN(parsedLevel) && parsedLevel > 0) {
+        const isInteger = parsedLevel % 1 === 0;
+        const isXpoint5 = Math.abs((parsedLevel * 10) % 10) === 5;
+        if (isInteger || isXpoint5) {
+          effectiveChartConstant = parsedLevel;
+        }
+      }
+    }
+  } 
+  // Priority 3: Original fallback if apiSong.is_const_unknown is true and const wasn't positive or 0 (i.e. likely null)
+  // This applies if effectiveChartConstant is still null at this point.
+  else if (effectiveChartConstant === null && apiSong.is_const_unknown && 
+           (typeof apiSong.level === 'string' || typeof apiSong.level === 'number') &&
+           String(apiSong.level).trim() !== "") {
     const parsedLevel = parseFloat(String(apiSong.level));
-    if (!isNaN(parsedLevel) && parsedLevel > 0) effectiveChartConstant = parsedLevel;
+    if (!isNaN(parsedLevel) && parsedLevel > 0) {
+      effectiveChartConstant = parsedLevel;
+    }
   }
 
   const calculatedCurrentRating = (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && score > 0)
