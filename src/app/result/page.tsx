@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
-import NewSongsData from '@/data/NewSongs.json'; // Step 1: Import NewSongsData
+import NewSongsData from '@/data/NewSongs.json';
 
 
 const BEST_COUNT = 30;
@@ -120,13 +120,10 @@ const mapApiSongToAppSong = (
   if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && score > 0) {
     calculatedCurrentRating = calculateChunithmSongRating(score, effectiveChartConstant);
   } else {
-    // For songs without a constant or score (e.g., unplayed new songs, or API errors),
-    // use the rating from API if available, otherwise 0.
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
   const currentRating = calculatedCurrentRating;
 
-  // Target score/rating logic remains, can be adjusted later
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
 
@@ -176,12 +173,13 @@ type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
-type GlobalMusicApiResponse = {
-    records?: ShowallApiSongEntry[];
+// This type now expects `records` to be ShowallApiSongEntry[] (flattened)
+export type GlobalMusicApiResponse = {
+    records?: ShowallApiSongEntry[]; 
 }
 
 type UserShowallApiResponse = {
-    records?: ShowallApiSongEntry[];
+    records?: ShowallApiSongEntry[]; // Assumes user's records are already somewhat flat or processed to match ShowallApiSongEntry structure relevant fields.
 }
 
 
@@ -252,9 +250,8 @@ function ResultContent() {
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
       console.log(`[N20_PREP_1] Titles from NewSongs.json for matching (count: ${newSongTitlesToMatch.length}):`, newSongTitlesToMatch.slice(0, 3));
 
-
       const cachedProfile = getCachedData<ProfileData>(profileKey);
-      const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey);
+      // GlobalMusicApiResponse now expects records to be ShowallApiSongEntry[]
       const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       const cachedUserShowallData = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
       
@@ -290,7 +287,8 @@ function ResultContent() {
       }
 
       if (cachedGlobalMusicData && cachedGlobalMusicData.records) {
-        console.log("[N20_PREP_2_CACHE] Loading global music data from localStorage cache...");
+        console.log("[N20_PREP_2_CACHE] Loading global music data (expected flattened) from localStorage cache...");
+        // Assuming cachedGlobalMusicData.records is already ShowallApiSongEntry[]
         globalMusicRecordsFromDataSource = cachedGlobalMusicData.records.filter((e: any): e is ShowallApiSongEntry =>
             e && e.id && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
         );
@@ -298,7 +296,7 @@ function ResultContent() {
       if (cachedUserShowallData && cachedUserShowallData.records) {
         console.log("[N20_PREP_3_CACHE] Loading user's showall data from localStorage cache...");
         userShowallRecordsFromDataSource = cachedUserShowallData.records.filter((e: any): e is ShowallApiSongEntry =>
-            e && e.id && e.diff && (e.score !== undefined) // score is crucial for played songs
+            e && e.id && e.diff && (e.score !== undefined) 
         );
       }
 
@@ -344,13 +342,60 @@ function ResultContent() {
                     setCachedData<RatingApiResponse>(ratingDataKey, res.data);
                     }
                     if (res.type === 'globalMusic' && (!cachedGlobalMusicData || !cachedGlobalMusicData.records)) {
-                        globalMusicRecordsFromDataSource = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
+                        let rawApiRecordsForGlobal: any[] = [];
+                        if (Array.isArray(res.data)) { // API directly returns array like [{meta,data}, ...]
+                            rawApiRecordsForGlobal = res.data;
+                            console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is a direct array. Count:", rawApiRecordsForGlobal.length);
+                        } else if (res.data && Array.isArray(res.data.records)) { // API returns { records: [{meta,data}, ...] }
+                            rawApiRecordsForGlobal = res.data.records;
+                             console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is an object with .records array. Count:", rawApiRecordsForGlobal.length);
+                        } else {
+                            console.warn("[RESULT_PAGE_GLOBAL_MUSIC_API_WARN] music/showall.json API response was not an array and did not have a .records array. Response:", res.data);
+                        }
+
+                        const flattenedGlobalMusicEntries: ShowallApiSongEntry[] = [];
+                        if (rawApiRecordsForGlobal.length > 0 && rawApiRecordsForGlobal[0].meta && rawApiRecordsForGlobal[0].data) {
+                            rawApiRecordsForGlobal.forEach(rawEntry => {
+                                if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
+                                    const meta = rawEntry.meta;
+                                    const difficulties = rawEntry.data;
+                                    for (const diffKey in difficulties) {
+                                        if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
+                                            const diffData = difficulties[diffKey];
+                                            if (diffData && meta.id && meta.title) {
+                                                flattenedGlobalMusicEntries.push({
+                                                    id: String(meta.id),
+                                                    title: String(meta.title),
+                                                    genre: String(meta.genre || "N/A"),
+                                                    release: String(meta.release || ""),
+                                                    diff: diffKey.toUpperCase(),
+                                                    level: String(diffData.level || "N/A"),
+                                                    const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
+                                                    is_const_unknown: diffData.is_const_unknown === true,
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                             console.log(`[RESULT_PAGE_GLOBAL_MUSIC_API] Flattened ${flattenedGlobalMusicEntries.length} entries from ${rawApiRecordsForGlobal.length} raw API records.`);
+                        } else if (rawApiRecordsForGlobal.length > 0) { // Assume it's already flat ShowallApiSongEntry[] if not {meta,data}
+                             console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] Assuming API provided already flattened records for global music. Count:", rawApiRecordsForGlobal.length);
+                             rawApiRecordsForGlobal.forEach(entry => flattenedGlobalMusicEntries.push(entry as ShowallApiSongEntry)); // Cast, assuming it's correct
+                        }
+
+
+                        globalMusicRecordsFromDataSource = flattenedGlobalMusicEntries.filter((e: any): e is ShowallApiSongEntry =>
                             e && e.id && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
                         );
                         setCachedData<GlobalMusicApiResponse>(globalMusicKey, { records: globalMusicRecordsFromDataSource }, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
-                        console.log("[N20_PREP_2_API] Global music data fetched from API and cached.");
+                        console.log("[N20_PREP_2_API] Global music data (flattened) fetched from API and cached. Count:", globalMusicRecordsFromDataSource.length);
                     }
                     if (res.type === 'userShowall' && (!cachedUserShowallData || !cachedUserShowallData.records)) {
+                        // Assuming user records/showall.json returns data that can be directly filtered into ShowallApiSongEntry like structures
+                        // or that it's already somewhat flattened for the relevant fields.
+                        // If user records/showall also returns {meta,data} then similar flattening would be needed here too.
+                        // For now, assume it's more direct or the required fields (id, diff, score) are top-level.
                         userShowallRecordsFromDataSource = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
                             e && e.id && e.diff && (e.score !== undefined)
                         );
@@ -421,7 +466,7 @@ function ResultContent() {
                       is_fullchain: userPlayRecord.is_fullchain,
                   };
                   
-                  const appSong = mapApiSongToAppSong(combinedSongEntry, index); // chartConstantOverride is undefined
+                  const appSong = mapApiSongToAppSong(combinedSongEntry, index); 
                   if (appSong.currentRating > 0) {
                        playedNewSongsForRating.push(appSong);
                   }
@@ -439,7 +484,7 @@ function ResultContent() {
       } else if (definedSongPoolEntries.length === 0) {
           console.warn("[N20_CALC_USER] New song pool is empty. Cannot calculate New 20.");
           setNew20SongsData([]);
-      } else { // userShowallRecordsFromDataSource.length === 0 but definedSongPoolEntries.length > 0
+      } else { 
           console.warn("[N20_CALC_USER] User has no play records, or records/showall.json failed to load/returned empty. Cannot calculate New 20 based on user plays.");
           setNew20SongsData([]);
       }
