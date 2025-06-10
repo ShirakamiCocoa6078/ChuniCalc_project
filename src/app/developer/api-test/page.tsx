@@ -273,6 +273,7 @@ const displayFilteredData = (
         dataToSearch.forEach(item => {
             const itemStr = JSON.stringify(item); 
             if (itemStr.toLowerCase().includes(lowerSearchTerm)) {
+                // Pass the original pretty-printed item string for block finding
                 const smallestBlock = findSmallestEnclosingBlockHelper(JSON.stringify(item, null, 2), lowerSearchTerm);
                 matchedResults.push(smallestBlock || JSON.stringify(item, null, 2));
             }
@@ -585,7 +586,7 @@ export default function ApiTestPage() {
     }
   };
 
-  const handleFetchSongById = async () => {
+ const handleFetchSongById = async () => {
     const trimmedSongIdToFetch = songByIdFetcher.songIdToFetch.trim();
     if (!trimmedSongIdToFetch) {
         toast({ title: "ID 필요", description: "조회할 악곡의 ID를 입력해주세요.", variant: "destructive" });
@@ -1001,7 +1002,7 @@ export default function ApiTestPage() {
                     className="h-20 font-mono text-xs bg-muted/30"
                     placeholder="조회 결과 요약"
                 />
-                {rawMusicShowallRecords !== null && ( // Show Textarea if rawMusicShowallRecords is not null (can be [] or string)
+                {rawMusicShowallRecords !== null && ( 
                     <div>
                         <Label>전체 music/showall.json 레코드 (또는 API 응답):</Label>
                         <Textarea
