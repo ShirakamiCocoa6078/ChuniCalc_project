@@ -289,59 +289,95 @@ export default function ApiTestPage() {
         
         console.log("[N20_DEBUG_STEP_1.2_RAW_RESPONSE] Raw API response for music/showall:", globalMusicApiResponse);
 
-        let rawRecords: any[] = [];
+        let rawApiRecords: any[] = []; // This will hold the array of {meta, data} objects
         let responseIssueMessage = "";
 
         if (Array.isArray(globalMusicApiResponse)) {
-            rawRecords = globalMusicApiResponse;
-            console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is a direct array. Count: ${rawRecords.length}.`);
+            rawApiRecords = globalMusicApiResponse;
+            console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is a direct array. Count: ${rawApiRecords.length}.`);
         } else if (globalMusicApiResponse && typeof globalMusicApiResponse === 'object' && globalMusicApiResponse.records !== undefined) {
+            // This case might not be hit if the API truly sends a direct array, but kept for robustness
             if (Array.isArray(globalMusicApiResponse.records)) {
-                rawRecords = globalMusicApiResponse.records;
-                console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is an object with a 'records' array. Count: ${rawRecords.length}.`);
+                rawApiRecords = globalMusicApiResponse.records;
+                console.log(`[N20_DEBUG_STEP_1.2_INFO] API response is an object with a 'records' array. Count: ${rawApiRecords.length}.`);
             } else {
                 responseIssueMessage = "API 응답에 'records' 필드가 있지만 배열이 아닙니다. 콘솔에서 '[N20_DEBUG_STEP_1.2_RAW_RESPONSE]' 로그를 확인하세요.";
                 console.warn(`[N20_DEBUG_STEP_1.2_WARN] 'globalMusicApiResponse.records' is not an array. Type: ${typeof globalMusicApiResponse.records}`);
             }
         } else {
-            responseIssueMessage = "API 응답이 없거나, 객체 형식이 아니거나, 'records' 필드를 포함하지 않습니다. 콘솔에서 '[N20_DEBUG_STEP_1.2_RAW_RESPONSE]' 로그를 확인하세요.";
-            console.warn(`[N20_DEBUG_STEP_1.2_WARN] 'globalMusicApiResponse' is not an object with a 'records' array or is not an array itself. Response:`, globalMusicApiResponse);
+            responseIssueMessage = "API 응답이 없거나, 객체 형식이 아니거나, 'records' 필드를 포함하지 않습니다 (또는 직접 배열이 아님). 콘솔에서 '[N20_DEBUG_STEP_1.2_RAW_RESPONSE]' 로그를 확인하세요.";
+            console.warn(`[N20_DEBUG_STEP_1.2_WARN] 'globalMusicApiResponse' is not a direct array or an object with a 'records' array. Response:`, globalMusicApiResponse);
         }
         
-        console.log(`[N20_DEBUG_STEP_1.2_RAW_RECORDS] Extracted records (before filtering). Count: ${rawRecords.length}. Sample:`, rawRecords.slice(0, 2));
+        console.log(`[N20_DEBUG_STEP_1.2_RAW_RECORDS_FROM_API] Extracted records from API response. Count: ${rawApiRecords.length}. Sample:`, rawApiRecords.slice(0, 2));
 
-        const globalMusicRecords = rawRecords.filter((e: any, index: number): e is AppShowallApiSongEntry => {
+        // --- Transformation (Flattening) Step ---
+        const flattenedMusicEntries: AppShowallApiSongEntry[] = [];
+        if (Array.isArray(rawApiRecords)) {
+            rawApiRecords.forEach(rawEntry => {
+                if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
+                    const meta = rawEntry.meta;
+                    const difficulties = rawEntry.data;
+                    for (const diffKey in difficulties) {
+                        if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
+                            const diffData = difficulties[diffKey];
+                            if (diffData && meta.id && meta.title) { // Ensure basic meta fields exist
+                                flattenedMusicEntries.push({
+                                    id: String(meta.id),
+                                    title: String(meta.title),
+                                    genre: String(meta.genre || "N/A"),
+                                    release: String(meta.release || ""),
+                                    diff: diffKey.toUpperCase(), // BAS, MAS, EXP etc.
+                                    level: String(diffData.level || "N/A"),
+                                    const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)), // Attempt to parse if not number/null
+                                    // Add other AppShowallApiSongEntry fields if available in diffData or meta
+                                    score: undefined, // Not available in music/showall directly for user plays
+                                    rating: undefined,
+                                    is_played: undefined,
+                                    is_const_unknown: diffData.is_const_unknown === true,
+                                });
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        console.log(`[N20_DEBUG_STEP_1.2_FLATTENED] Flattened music entries. Count: ${flattenedMusicEntries.length}. Sample:`, flattenedMusicEntries.slice(0,2));
+        // --- End of Transformation ---
+
+
+        const globalMusicRecords = flattenedMusicEntries.filter((e: AppShowallApiSongEntry, index: number): e is AppShowallApiSongEntry => {
             const isValid = e && 
-                            typeof e.id === 'string' && 
-                            e.diff && 
-                            e.title && 
-                            (e.release || typeof e.release === 'string') && 
-                            (e.const !== undefined) && 
-                            e.level !== undefined;
-            if (!isValid && rawRecords.length > 0 && index < 5) {
-                console.log(`[N20_DEBUG_FILTER_ISSUE] Record at index ${index} from rawRecords filtered out. Details:`, {
+                            typeof e.id === 'string' && e.id.trim() !== '' &&
+                            typeof e.diff === 'string' && e.diff.trim() !== '' &&
+                            typeof e.title === 'string' && e.title.trim() !== '' &&
+                            (typeof e.release === 'string') && // release can be empty string from flattening
+                            (e.const !== undefined) && // const can be number or null
+                            e.level !== undefined && String(e.level).trim() !== '';
+            if (!isValid && flattenedMusicEntries.length > 0 && index < 5) { // Log issues for first 5 *flattened* entries
+                console.log(`[N20_DEBUG_FILTER_ISSUE_ON_FLATTENED] Record at index ${index} from flattenedMusicEntries filtered out. Details:`, {
                     hasE: !!e,
-                    isIdString: typeof e?.id === 'string',
-                    hasDiff: !!e?.diff,
-                    hasTitle: !!e?.title,
-                    releaseOk: !!(e?.release || typeof e?.release === 'string'), // Check if release is present or is a string (allowing empty strings if API returns that)
+                    isIdStringAndNotEmpty: typeof e?.id === 'string' && e.id.trim() !== '',
+                    isDiffStringAndNotEmpty: typeof e?.diff === 'string' && e.diff.trim() !== '',
+                    isTitleStringAndNotEmpty: typeof e?.title === 'string' && e.title.trim() !== '',
+                    releaseIsString: typeof e?.release === 'string',
                     constExists: e?.const !== undefined,
-                    levelExists: e?.level !== undefined,
+                    levelExistsAndNotEmpty: e?.level !== undefined && String(e.level).trim() !== '',
                     record: e
                 });
             }
             return isValid;
         });
-        console.log(`[N20_DEBUG_STEP_1.2_FILTERED_RECORDS] Filtered global music records. Count: ${globalMusicRecords.length}. Sample:`, globalMusicRecords.slice(0,2));
+        console.log(`[N20_DEBUG_STEP_1.2_FILTERED_RECORDS] Filtered global music records (after flattening & filtering). Count: ${globalMusicRecords.length}. Sample:`, globalMusicRecords.slice(0,2));
         
-        let globalMusicSummary = `API에서 ${rawRecords.length}개 수신. 필터링 후 ${globalMusicRecords.length}개 유효.`;
+        let globalMusicSummary = `API에서 ${rawApiRecords.length}개 원본 레코드 수신. ${flattenedMusicEntries.length}개로 평탄화. 필터링 후 ${globalMusicRecords.length}개 유효.`;
         if (responseIssueMessage) {
-            globalMusicSummary = responseIssueMessage + ` (API에서 ${rawRecords.length}개 수신, 필터링 후 ${globalMusicRecords.length}개 유효.)`;
-        } else if (rawRecords.length > 0 && globalMusicRecords.length === 0) {
-            globalMusicSummary += " [주의] API에서 레코드를 수신했으나, 필터 조건에 맞는 유효한 악곡 데이터가 없습니다. 콘솔에서 '[N20_DEBUG_FILTER_ISSUE]' 로그를 확인하세요.";
+            globalMusicSummary = responseIssueMessage + ` (API에서 ${rawApiRecords.length}개 수신, ${flattenedMusicEntries.length}개로 평탄화, 필터링 후 ${globalMusicRecords.length}개 유효.)`;
+        } else if (rawApiRecords.length > 0 && globalMusicRecords.length === 0) {
+            globalMusicSummary += " [주의] API에서 레코드를 수신하고 평탄화했으나, 필터 조건에 맞는 유효한 악곡 데이터가 없습니다. 콘솔에서 '[N20_DEBUG_FILTER_ISSUE_ON_FLATTENED]' 로그를 확인하세요.";
         }
         
-        const firstSongSample = globalMusicRecords.length > 0 ? `ID: ${globalMusicRecords[0].id}, 제목: ${globalMusicRecords[0].title}, 출시: ${globalMusicRecords[0].release}` : "유효한 데이터 없음";
+        const firstSongSample = globalMusicRecords.length > 0 ? `ID: ${globalMusicRecords[0].id}, 제목: ${globalMusicRecords[0].title}, 난이도: ${globalMusicRecords[0].diff}, 출시: ${globalMusicRecords[0].release}` : "유효한 데이터 없음";
         globalMusicSummary += `\n샘플 악곡 (필터링된 첫 번째): ${firstSongSample}`;
 
         setNew20Debug(prev => ({
@@ -372,7 +408,7 @@ export default function ApiTestPage() {
 
     try {
         console.log("[N20_DEBUG_STEP_2_INPUT] Titles to match (from NewSongs.json):", new20Debug.step1NewSongTitlesRaw.length, new20Debug.step1NewSongTitlesRaw.slice(0,3));
-        console.log("[N20_DEBUG_STEP_2_INPUT] Global music data to filter from:", new20Debug.globalMusicDataForN20.length, new20Debug.globalMusicDataForN20.slice(0,1).map(s => s.title));
+        console.log("[N20_DEBUG_STEP_2_INPUT] Global music data to filter from (flattened & filtered):", new20Debug.globalMusicDataForN20.length, new20Debug.globalMusicDataForN20.slice(0,1).map(s => s.title));
 
         const definedPool = new20Debug.globalMusicDataForN20.filter(globalSong => {
             if (globalSong.title) {
@@ -405,30 +441,61 @@ export default function ApiTestPage() {
   const handleFetchAndFilterByReleaseDate = async () => {
     setReleaseFilterTest(prev => ({ ...prev, loading: true, error: null, summary: "전체 악곡 목록 로드 중..." }));
     try {
-      const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json"); // This assumes fetchApiForDebug handles direct array or object with .records
+      const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json"); 
       
-      let allMusicData: any[] = [];
-       if (Array.isArray(globalMusicApiResponse)) {
-        allMusicData = globalMusicApiResponse;
+      let rawApiRecords: any[] = [];
+      if (Array.isArray(globalMusicApiResponse)) {
+        rawApiRecords = globalMusicApiResponse;
       } else if (globalMusicApiResponse && Array.isArray(globalMusicApiResponse.records)) {
-        allMusicData = globalMusicApiResponse.records;
+        rawApiRecords = globalMusicApiResponse.records; // Fallback, though direct array is expected now
       } else {
         console.warn("[ReleaseFilter] music/showall.json did not return a direct array or an object with a 'records' array. Response:", globalMusicApiResponse);
       }
 
-      const allMusicRecords = allMusicData.filter((e: any): e is AppShowallApiSongEntry =>
-        e && e.id && e.diff && e.title && typeof e.release === 'string' && e.release.match(/^\d{4}-\d{2}-\d{2}$/) && e.const !== undefined && e.level !== undefined
-      );
-      setReleaseFilterTest(prev => ({ ...prev, rawData: allMusicRecords, summary: `${allMusicRecords.length}개의 전체 악곡 로드 완료. 필터링 중...` }));
+      const flattenedMusicEntries: AppShowallApiSongEntry[] = [];
+      rawApiRecords.forEach(rawEntry => {
+          if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
+              const meta = rawEntry.meta;
+              const difficulties = rawEntry.data;
+              for (const diffKey in difficulties) {
+                  if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
+                      const diffData = difficulties[diffKey];
+                      if (diffData && meta.id && meta.title) {
+                          flattenedMusicEntries.push({
+                              id: String(meta.id),
+                              title: String(meta.title),
+                              genre: String(meta.genre || "N/A"),
+                              release: String(meta.release || ""),
+                              diff: diffKey.toUpperCase(),
+                              level: String(diffData.level || "N/A"),
+                              const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
+                              is_const_unknown: diffData.is_const_unknown === true,
+                          });
+                      }
+                  }
+              }
+          }
+      });
       
-      console.log(`[ReleaseFilter] Total records fetched and validated: ${allMusicRecords.length}`);
+      const allMusicRecords = flattenedMusicEntries.filter((e: AppShowallApiSongEntry): e is AppShowallApiSongEntry =>
+        e && 
+        typeof e.id === 'string' && e.id.trim() !== '' &&
+        typeof e.diff === 'string' && e.diff.trim() !== '' &&
+        typeof e.title === 'string' && e.title.trim() !== '' &&
+        typeof e.release === 'string' && e.release.match(/^\d{4}-\d{2}-\d{2}$/) && // Ensure release is valid date format
+        (e.const !== undefined) && 
+        e.level !== undefined && String(e.level).trim() !== ''
+      );
+      setReleaseFilterTest(prev => ({ ...prev, rawData: allMusicRecords, summary: `${allMusicRecords.length}개의 전체 악곡 로드 완료 (평탄화 및 필터링 후). 출시일 필터링 중...` }));
+      
+      console.log(`[ReleaseFilter] Total records after flattening and initial validation: ${allMusicRecords.length}`);
 
       const targetDateStr = '2024-12-12';
       const targetDate = new Date(targetDateStr);
       targetDate.setHours(0,0,0,0); 
 
       const filteredSongs = allMusicRecords.filter(song => {
-        if (!song.release) return false;
+        if (!song.release) return false; // Should be caught by above filter, but defensive
         try {
           const releaseDate = new Date(song.release);
           releaseDate.setHours(0,0,0,0); 
@@ -441,7 +508,7 @@ export default function ApiTestPage() {
       });
       console.log(`[ReleaseFilter] Filtered songs (after ${targetDateStr}): ${filteredSongs.length}`);
 
-      const resultSummary = `총 ${allMusicRecords.length}개 악곡 중 "${targetDateStr}" 이후 출시된 악곡 ${filteredSongs.length}개 발견.`;
+      const resultSummary = `총 ${allMusicRecords.length}개 악곡 (평탄화 및 유효성 검사 후) 중 "${targetDateStr}" 이후 출시된 악곡 ${filteredSongs.length}개 발견.`;
       setReleaseFilterTest(prev => ({
         ...prev,
         loading: false,
@@ -469,17 +536,20 @@ export default function ApiTestPage() {
     try {
         const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json");
 
-        let apiRecordsSource: any[] = [];
+        let rawApiRecords: any[] = [];
         let apiFullResponseForDisplay: string | AppShowallApiSongEntry[] = "API 응답 없음";
 
+
         if (Array.isArray(globalMusicApiResponse)) {
-            apiRecordsSource = globalMusicApiResponse;
-            apiFullResponseForDisplay = globalMusicApiResponse;
+            rawApiRecords = globalMusicApiResponse;
+            // For display, we will show the raw {meta, data} structure
+            apiFullResponseForDisplay = globalMusicApiResponse; 
             console.log("[SongByID] API response is a direct array.");
-        } else if (globalMusicApiResponse && typeof globalMusicApiResponse === 'object') {
+        } else if (globalMusicApiResponse && typeof globalMusicApiResponse === 'object' && globalMusicApiResponse.records !== undefined) {
+            // This case may not be hit often if API sends direct array
             if (Array.isArray(globalMusicApiResponse.records)) {
-                apiRecordsSource = globalMusicApiResponse.records;
-                apiFullResponseForDisplay = globalMusicApiResponse.records; // Show only records if structure is as expected
+                rawApiRecords = globalMusicApiResponse.records;
+                apiFullResponseForDisplay = globalMusicApiResponse.records;
                 console.log("[SongByID] API response is an object with a 'records' array.");
             } else {
                 const errorDetail = "API 응답에 'records' 필드가 있지만 배열이 아닙니다 (music/showall.json).";
@@ -517,41 +587,70 @@ export default function ApiTestPage() {
             return; 
         }
         
-        setSongByIdFetcher(prev => ({ ...prev, rawMusicShowallRecords: apiFullResponseForDisplay, outputSummary: "전체 악곡 목록 로드 완료. ID 검색 중..." }));
-        console.log(`[SongByID] Raw records for search count: ${apiRecordsSource.length}`);
-        if (apiRecordsSource.length > 0) {
-            console.log("[SongByID] Sample raw records for search (first 2):", apiRecordsSource.slice(0, 2));
+        setSongByIdFetcher(prev => ({ ...prev, rawMusicShowallRecords: apiFullResponseForDisplay, outputSummary: "전체 악곡 목록 로드 완료. 평탄화 및 ID 검색 중..." }));
+        console.log(`[SongByID] Raw records from API for search count: ${rawApiRecords.length}`);
+        if (rawApiRecords.length > 0) {
+            console.log("[SongByID] Sample raw records from API (first 2):", rawApiRecords.slice(0, 2));
         }
         
-        const allMusicRecordsFiltered = apiRecordsSource.filter((e: any, index: number): e is AppShowallApiSongEntry => {
+        const flattenedMusicEntries: AppShowallApiSongEntry[] = [];
+        rawApiRecords.forEach(rawEntry => {
+            if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
+                const meta = rawEntry.meta;
+                const difficulties = rawEntry.data;
+                for (const diffKey in difficulties) {
+                    if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
+                        const diffData = difficulties[diffKey];
+                         if (diffData && meta.id && meta.title) { // Basic check
+                            flattenedMusicEntries.push({
+                                id: String(meta.id),
+                                title: String(meta.title),
+                                genre: String(meta.genre || "N/A"),
+                                release: String(meta.release || ""),
+                                diff: diffKey.toUpperCase(),
+                                level: String(diffData.level || "N/A"),
+                                const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
+                                is_const_unknown: diffData.is_const_unknown === true,
+                            });
+                        }
+                    }
+                }
+            }
+        });
+        console.log(`[SongByID] Flattened entries count for search: ${flattenedMusicEntries.length}`);
+        if (flattenedMusicEntries.length > 0) {
+            console.log("[SongByID] Sample flattened entries for search (first 2):", flattenedMusicEntries.slice(0, 2));
+        }
+
+
+        // Filter the flattened entries for validity (this ensures we only search valid structures)
+        const allMusicRecordsFiltered = flattenedMusicEntries.filter((e: AppShowallApiSongEntry, index: number): e is AppShowallApiSongEntry => {
             const isValid = e && 
-                            typeof e.id === 'string' && 
-                            e.diff && 
-                            e.title && 
-                            (e.release || typeof e.release === 'string') && 
+                            typeof e.id === 'string' && e.id.trim() !== '' &&
+                            typeof e.diff === 'string' && e.diff.trim() !== '' &&
+                            typeof e.title === 'string' && e.title.trim() !== '' &&
+                            (typeof e.release === 'string') &&
                             (e.const !== undefined) && 
-                            e.level !== undefined;
+                            e.level !== undefined && String(e.level).trim() !== '';
             
-            if (!isValid && index < 5 && apiRecordsSource.length > 0) { 
-                console.log(`[SongByID_FilterDebug] Record at index ${index} filtered out. Details:`, {
+            if (!isValid && index < 5 && flattenedMusicEntries.length > 0) { 
+                console.log(`[SongByID_FilterDebug_On_Flattened] Record at index ${index} from flattenedMusicEntries filtered out. Details:`, {
                     hasE: !!e,
-                    isIdString: typeof e?.id === 'string',
-                    hasDiff: !!e?.diff,
-                    hasTitle: !!e?.title,
-                    releaseOk: !!(e?.release || typeof e?.release === 'string'),
+                    isIdStringAndNotEmpty: typeof e?.id === 'string' && e.id.trim() !== '',
+                    isDiffStringAndNotEmpty: typeof e?.diff === 'string' && e.diff.trim() !== '',
+                    isTitleStringAndNotEmpty: typeof e?.title === 'string' && e.title.trim() !== '',
+                    releaseIsString: typeof e?.release === 'string',
                     constExists: e?.const !== undefined,
-                    levelExists: e?.level !== undefined,
+                    levelExistsAndNotEmpty: e?.level !== undefined && String(e.level).trim() !== '',
                     record: e
                 });
             }
             return isValid;
         });
         
-        console.log(`[SongByID] Filtered allMusicRecords count for search: ${allMusicRecordsFiltered.length}`);
-        if (allMusicRecordsFiltered.length > 0) {
-            console.log("[SongByID] Sample filtered records for search (first 2):", allMusicRecordsFiltered.slice(0, 2));
-        }
-
+        console.log(`[SongByID] Filtered allMusicRecords count for search (after flattening & filtering): ${allMusicRecordsFiltered.length}`);
+        
+        // Find the song by ID from the *flattened and filtered* list
         const foundSong = allMusicRecordsFiltered.find(song => song.id === trimmedSongIdToFetch);
 
         if (foundSong) {
@@ -560,26 +659,29 @@ export default function ApiTestPage() {
                 loading: false,
                 fetchedSongData: foundSong, 
                 error: null,
-                outputSummary: `전체 악곡 목록 로드됨. ID '${trimmedSongIdToFetch}' 악곡 발견: ${foundSong.title}`,
+                outputSummary: `전체 악곡 목록 로드 및 평탄화 완료. ID '${trimmedSongIdToFetch}' 악곡 발견: ${foundSong.title} (${foundSong.diff})`,
             }));
-            toast({ title: "악곡 발견", description: `ID ${trimmedSongIdToFetch}에 해당하는 악곡 '${foundSong.title}'을(를) 전체 목록 내에서 찾았습니다.`});
+            toast({ title: "악곡 발견", description: `ID ${trimmedSongIdToFetch}에 해당하는 악곡 '${foundSong.title} (${foundSong.diff})'을(를) 전체 목록 내에서 찾았습니다.`});
         } else {
             console.error(`[SongByID] ID search failed.
             Input ID (trimmed): "${trimmedSongIdToFetch}" (type: ${typeof trimmedSongIdToFetch})
-            Total records searched (after filtering for search): ${allMusicRecordsFiltered.length}`);
+            Total records searched (after flattening and filtering): ${allMusicRecordsFiltered.length}`);
             
             let finalSummary = "";
-            const baseSummary = apiRecordsSource && Array.isArray(apiRecordsSource) && apiRecordsSource.length > 0
-                ? `전체 music/showall.json 레코드가 아래에 표시됩니다.`
-                : `전체 악곡 목록(music/showall.json)에 레코드가 없거나 API 응답에 records 필드가 없어 표시할 전체 목록이 없습니다.`;
+            const baseSummary = rawApiRecords && Array.isArray(rawApiRecords) && rawApiRecords.length > 0
+                ? `전체 music/showall.json 원본 레코드(${rawApiRecords.length}개)가 아래에 표시됩니다.`
+                : `전체 악곡 목록(music/showall.json)에 원본 레코드가 없거나 API 응답에 문제가 있어 표시할 전체 목록이 없습니다.`;
 
             if (allMusicRecordsFiltered.length > 0) {
-                 finalSummary = `${baseSummary} ID '${trimmedSongIdToFetch}' 악곡을 찾지 못했습니다.`;
-            } else if (apiRecordsSource.length > 0) {
-                 console.log("[SongByID] No records remained after filtering for search, but raw API response had records. Check filter logic and SongByID_FilterDebug logs.");
-                 finalSummary = `${baseSummary} 유효한 형식의 악곡이 없어 ID '${trimmedSongIdToFetch}' 악곡을 검색할 수 없었습니다. (콘솔 FilterDebug 로그 확인)`;
+                 finalSummary = `${baseSummary} ID '${trimmedSongIdToFetch}' 악곡을 평탄화 및 필터링된 목록에서 찾지 못했습니다.`;
+            } else if (flattenedMusicEntries.length > 0) {
+                 console.log("[SongByID] No records remained after filtering the flattened entries. Check filter logic and SongByID_FilterDebug_On_Flattened logs.");
+                 finalSummary = `${baseSummary} 유효한 형식의 악곡이 없어 ID '${trimmedSongIdToFetch}' 악곡을 검색할 수 없었습니다. (콘솔 FilterDebug_On_Flattened 로그 확인)`;
+            } else if (rawApiRecords.length > 0) {
+                 console.log("[SongByID] Flattening process resulted in zero entries, though raw API response had records. Check flattening logic.");
+                 finalSummary = `${baseSummary} 원본 데이터를 평탄화하는 과정에서 유효한 악곡 항목을 생성하지 못했습니다. ID '${trimmedSongIdToFetch}' 검색 불가.`;
             } else {
-                console.log("[SongByID] No records found in raw API response (globalMusicApiResponse was empty, undefined, or not a valid array/object).");
+                console.log("[SongByID] No records found in raw API response. Flattening and search not possible.");
                 finalSummary = `${baseSummary} ID '${trimmedSongIdToFetch}' 악곡을 찾지 못했습니다.`;
             }
 
@@ -754,7 +856,7 @@ export default function ApiTestPage() {
                 </Button>
                 <Button onClick={handleLoadGlobalMusicForN20} disabled={loadingStep === "step1b"} size="sm" className="flex-1">
                     {loadingStep === "step1b" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    1-2단계: 전체 악곡 목록 로드
+                    1-2단계: 전체 악곡 목록 로드 및 평탄화/필터링
                 </Button>
             </div>
             <Textarea
@@ -766,7 +868,7 @@ export default function ApiTestPage() {
             />
             {globalMusicDataForN20 && (
                 <details className="mt-2">
-                    <summary className="text-sm cursor-pointer hover:underline">로드된 전체 악곡 목록 데이터 보기 (필터링 후, 처음 5개)</summary>
+                    <summary className="text-sm cursor-pointer hover:underline">로드된 전체 악곡 목록 데이터 보기 (평탄화 및 필터링 후, 처음 5개)</summary>
                     <Textarea readOnly value={displayFilteredData(globalMusicDataForN20.slice(0,5), undefined, "N20_DEBUG_GLOBAL").content} className="h-40 font-mono text-xs mt-1" />
                 </details>
             )}
@@ -805,12 +907,12 @@ export default function ApiTestPage() {
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-blue-500" />"2024-12-12" 이후 출시 곡 필터링 테스트</CardTitle>
-                <CardDescription>music/showall.json에서 특정 날짜 이후 출시된 곡을 필터링합니다.</CardDescription>
+                <CardDescription>music/showall.json에서 특정 날짜 이후 출시된 곡을 필터링합니다. (데이터 평탄화 적용)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <Button onClick={handleFetchAndFilterByReleaseDate} disabled={loading} className="w-full">
                     {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FilterIcon className="mr-2 h-4 w-4" />}
-                    전체 악곡 로드 및 필터링 실행
+                    전체 악곡 로드, 평탄화 및 필터링 실행
                 </Button>
                  {error && (
                     <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
@@ -829,14 +931,14 @@ export default function ApiTestPage() {
                         <summary className="text-sm cursor-pointer hover:underline">필터링된 악곡 목록 보기 ({filteredData.length}개, 최대 20개 표시)</summary>
                         <Textarea 
                             readOnly 
-                            value={JSON.stringify(filteredData.slice(0,20).map(s => ({ id: s.id, title: s.title, release: s.release, const: s.const })), null, 2)} 
+                            value={JSON.stringify(filteredData.slice(0,20).map(s => ({ id: s.id, title: s.title, diff: s.diff, release: s.release, const: s.const })), null, 2)} 
                             className="h-64 font-mono text-xs mt-1" 
                         />
                     </details>
                 )}
-                 {rawData && !filteredData && !error && !loading && ( // Show rawData if filtering hasn't produced results yet but raw data is loaded
+                 {rawData && !filteredData && !error && !loading && ( 
                      <details className="mt-2">
-                        <summary className="text-sm cursor-pointer hover:underline">로드된 전체 악곡 데이터 보기 (필터링 전, 처음 5개)</summary>
+                        <summary className="text-sm cursor-pointer hover:underline">로드된 전체 악곡 데이터 보기 (평탄화 및 필터링 전, 처음 5개)</summary>
                         <Textarea readOnly value={displayFilteredData(rawData.slice(0,5), undefined, "RELEASE_FILTER_RAW").content} className="h-40 font-mono text-xs mt-1" />
                     </details>
                  )}
@@ -851,7 +953,7 @@ export default function ApiTestPage() {
         <Card>
             <CardHeader>
                 <CardTitle className="font-headline flex items-center"><FileSearch className="mr-2 h-5 w-5 text-indigo-500" />ID로 특정 곡 데이터 조회</CardTitle>
-                <CardDescription>music/showall.json에서 전체 레코드를 표시하고, 그 안에서 특정 악곡 ID로 데이터를 검색 및 추출합니다.</CardDescription>
+                <CardDescription>music/showall.json 원본을 표시하고, 데이터를 평탄화한 후 특정 악곡 ID로 데이터를 검색 및 추출합니다.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <div className="space-y-1">
@@ -883,7 +985,7 @@ export default function ApiTestPage() {
                 />
                 {rawMusicShowallRecords !== null && ( 
                     <div>
-                        <Label>전체 music/showall.json 레코드 (또는 API 응답):</Label>
+                        <Label>전체 music/showall.json 원본 레코드 (API 응답):</Label>
                         <Textarea
                             readOnly
                             value={displayFilteredData(rawMusicShowallRecords, undefined, "SONG_BY_ID_RAW").content}
@@ -894,7 +996,7 @@ export default function ApiTestPage() {
                 )}
                 {fetchedSongData && (
                     <div className="mt-4">
-                        <Label>찾은 특정 곡 데이터 (ID: {songIdToFetch}):</Label>
+                        <Label>찾은 특정 곡 데이터 (ID: {songIdToFetch}, 난이도: {fetchedSongData.diff}):</Label>
                         <Textarea 
                             readOnly 
                             value={displayFilteredData(fetchedSongData, undefined, "SONG_BY_ID_RESULT").content} 
