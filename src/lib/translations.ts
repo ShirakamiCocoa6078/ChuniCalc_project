@@ -19,7 +19,7 @@ export const translations = {
     calculateButton: "계산 및 결과 보기",
     // AdvancedSettings
     advancedSettingsTitle: "고급 설정 및 데이터 관리",
-    advancedSettingsDescription: "로컬 API 키 설정 등 고급 기능을 사용합니다.",
+    advancedSettingsDescription: "로컬 API 키 설정, 캐시 데이터 관리, 개발자 모드 등 고급 기능을 사용합니다.",
     localApiKeyLabel: "로컬 API 키 설정",
     localApiKeyPlaceholder: "개인 Chunirec API 토큰 입력",
     saveApiKeyButton: "로컬 API 키 저장/업데이트",
@@ -32,7 +32,7 @@ export const translations = {
     cacheUserNicknamePlaceholder: "Chunirec 닉네임",
     cacheUserRecordsButton: "해당 사용자 기록 캐시 (records/showall)",
     clearLocalDataButton: "모든 로컬 캐시 데이터 삭제",
-    clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.",
+    clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
     appVersion: "ChuniCalc v1.0.0",
@@ -61,12 +61,12 @@ export const translations = {
     toastErrorMissingInfoDesc: "현재 레이팅(조회 필요)과 목표 레이팅을 모두 입력해주세요.",
     toastErrorInvalidInput: "잘못된 입력",
     toastErrorInvalidInputDesc: "레이팅은 숫자로 입력해야 합니다.",
+    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음",
+    toastErrorCurrentRatingTooHighDesc: "현재 레이팅이 17.50 이상입니다. 이 계산기에서는 더 이상 성장을 예측할 수 없습니다.",
     toastErrorInvalidRatingRange: "잘못된 레이팅 범위",
     toastErrorInvalidRatingRangeDesc: "현재 레이팅은 0.00-17.49, 목표 레이팅은 0.00-17.50 사이여야 합니다.",
     toastErrorTargetRating: "목표 레이팅 오류",
     toastErrorTargetRatingDesc: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
-    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음",
-    toastErrorCurrentRatingTooHighDesc: "현재 레이팅이 17.50 이상입니다. 이 계산기에서는 더 이상 성장을 예측할 수 없습니다.",
     toastSuccessLocalApiKeySaved: "로컬 API 키 저장됨",
     toastSuccessLocalApiKeySavedDesc: "입력한 API 키가 로컬 저장소에 저장되었습니다.",
     toastSuccessLocalApiKeyRemoved: "로컬 API 키 제거됨",
@@ -127,6 +127,8 @@ export const translations = {
     resultPageToastCacheLoadSuccessDesc: "로컬 캐시에서 데이터를 성공적으로 불러왔습니다.",
     resultPageHeaderCurrent: "현재:",
     resultPageHeaderTarget: "목표:",
+    toastInfoCombinedCacheSuccessTitle: "통합 데이터 저장됨",
+    toastInfoCombinedCacheSuccessDesc: "Best30 및 New20 곡 데이터가 로컬에 저장되었습니다.",
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -147,7 +149,7 @@ export const translations = {
     calculateButton: "計算および結果表示",
     // AdvancedSettings
     advancedSettingsTitle: "個人設定",
-    advancedSettingsDescription: "ローカルAPIキーの設定機能を使用します。",
+    advancedSettingsDescription: "ローカルAPIキーの設定、キャッシュデータ管理、開発者モードなど高度な機能を使用します。",
     localApiKeyLabel: "ローカルAPIキー設定",
     localApiKeyPlaceholder: "個人用 Chunirec API トークン入力",
     saveApiKeyButton: "ローカルAPIキー保存/更新",
@@ -160,7 +162,7 @@ export const translations = {
     cacheUserNicknamePlaceholder: "Chunirec ニックネーム",
     cacheUserRecordsButton: "該当ユーザー記録キャッシュ (records/showall)",
     clearLocalDataButton: "全てのローカルキャッシュデータ削除",
-    clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定を除く）を削除します。",
+    clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
     appVersion: "ChuniCalc v1.0.0",
@@ -189,12 +191,12 @@ export const translations = {
     toastErrorMissingInfoDesc: "現在レーティング(読み込み必要)と目標レーティングを両方入力してください。",
     toastErrorInvalidInput: "不正な入力",
     toastErrorInvalidInputDesc: "レーティングは数値で入力する必要があります。",
+    toastErrorCurrentRatingTooHigh: "現在レーティングが高すぎます",
+    toastErrorCurrentRatingTooHighDesc: "現在レーティングが17.50以上です。この計算機ではこれ以上の成長を予測できません。",
     toastErrorInvalidRatingRange: "不正なレーティング範囲",
     toastErrorInvalidRatingRangeDesc: "現在レーティングは0.00～17.49、目標レーティングは0.00～17.50の間である必要があります。",
     toastErrorTargetRating: "目標レーティングエラー",
     toastErrorTargetRatingDesc: "目標レーティングは現在レーティングより高くする必要があります。",
-    toastErrorCurrentRatingTooHigh: "現在レーティングが高すぎます",
-    toastErrorCurrentRatingTooHighDesc: "現在レーティングが17.50以上です。この計算機ではこれ以上の成長を予測できません。",
     toastSuccessLocalApiKeySaved: "ローカルAPIキー保存完了",
     toastSuccessLocalApiKeySavedDesc: "入力されたAPIキーがローカルストレージに保存されました。",
     toastSuccessLocalApiKeyRemoved: "ローカルAPIキー削除完了",
@@ -255,6 +257,8 @@ export const translations = {
     resultPageToastCacheLoadSuccessDesc: "ローカルキャッシュからデータを正常にロードしました。",
     resultPageHeaderCurrent: "現在:",
     resultPageHeaderTarget: "目標:",
+    toastInfoCombinedCacheSuccessTitle: "統合データ保存完了",
+    toastInfoCombinedCacheSuccessDesc: "Best30およびNew20曲データがローカルに保存されました。",
   }
 };
 
@@ -298,5 +302,3 @@ export function getTranslation<K extends BaseTranslationKeys>(
   }
   return messageOrFn as string; // messageOrFn is a string here
 }
-
-    

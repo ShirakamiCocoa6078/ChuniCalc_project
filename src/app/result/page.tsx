@@ -19,7 +19,7 @@ import NewSongsData from '@/data/NewSongs.json';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { LanguageToggle } from "@/components/LanguageToggle"; // Added LanguageToggle import
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 
 const BEST_COUNT = 30;
@@ -230,9 +230,11 @@ function ResultContent() {
         const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
         const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
         const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
+        const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`;
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
+        localStorage.removeItem(combinedDataKey);
         // localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Optionally clear global music too
         console.log(`User-specific cache cleared for user: ${userNameForApi}`);
         toast({ 
@@ -532,6 +534,30 @@ function ResultContent() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userNameForApi, refreshNonce, clientHasMounted, locale]); 
+
+  // Effect to save combined b30 and n20 data to localStorage
+  useEffect(() => {
+    if (
+      !isLoadingSongs &&
+      userNameForApi &&
+      userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName') &&
+      clientHasMounted && // Ensure this runs client-side only
+      (best30SongsData.length > 0 || new20SongsData.length > 0)
+    ) {
+      const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`;
+      const dataToCache = {
+        best30: best30SongsData,
+        new20: new20SongsData,
+      };
+      setCachedData(combinedDataKey, dataToCache, USER_DATA_CACHE_EXPIRY_MS);
+      console.log(`Combined B30 and N20 data cached for user: ${userNameForApi}`, dataToCache);
+      toast({
+          title: getTranslation(locale, 'toastInfoCombinedCacheSuccessTitle'),
+          description: getTranslation(locale, 'toastInfoCombinedCacheSuccessDesc'),
+      });
+    }
+  }, [best30SongsData, new20SongsData, userNameForApi, isLoadingSongs, locale, clientHasMounted, toast]);
+
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
