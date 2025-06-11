@@ -213,6 +213,7 @@ function ResultContent() {
   const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName') ? getTranslation(locale, 'resultPageDefaultPlayerName') : null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
   const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
+  const [combinedTopSongs, setCombinedTopSongs] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
   const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
@@ -558,11 +559,39 @@ function ResultContent() {
     }
   }, [best30SongsData, new20SongsData, userNameForApi, isLoadingSongs, locale, clientHasMounted, toast]);
 
+  // Effect to merge and sort Best 30 and New 20 songs for the "Combined" tab
+  useEffect(() => {
+    if (!isLoadingSongs) {
+      if (best30SongsData.length > 0 || new20SongsData.length > 0) {
+        const songMap = new Map<string, Song>();
+
+        // Add Best 30 songs first to give them priority in case of duplicates
+        best30SongsData.forEach(song => {
+          songMap.set(`${song.id}_${song.diff}`, song);
+        });
+
+        // Add New 20 songs, only if they are not already in the map (from Best 30)
+        new20SongsData.forEach(song => {
+          const key = `${song.id}_${song.diff}`;
+          if (!songMap.has(key)) {
+            songMap.set(key, song);
+          }
+        });
+        
+        const mergedSongs = Array.from(songMap.values());
+        setCombinedTopSongs(sortSongsByRatingDesc(mergedSongs));
+      } else {
+        // Both lists are empty
+        setCombinedTopSongs([]);
+      }
+    }
+  }, [best30SongsData, new20SongsData, isLoadingSongs]);
+
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4";
-  const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3";
+  // const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; // No longer needed
+  // const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // No longer needed
 
 
   return (
@@ -728,37 +757,19 @@ function ResultContent() {
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleCombined')}</CardTitle>
                   </CardHeader>
-                  <CardContent className="flex flex-col lg:flex-row gap-6">
-                    <div className="lg:w-3/5"> 
-                      <h3 className="text-xl font-semibold mb-3 font-headline">{getTranslation(locale, 'resultPageSubHeaderBest30')}</h3>
-                      {best30SongsData.length > 0 ? (
-                        <div className={cn(
-                          "grid grid-cols-1 gap-4",
-                          combinedBest30GridCols 
-                        )}>
-                          {best30SongsData.map((song) => (
-                            <SongCard key={`combo-best30-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
-                          ))}
-                        </div>
-                      ) : (
-                         <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoBest30Data')}</p>
-                      )}
-                    </div>
-                    <div className="lg:w-2/5">
-                      <h3 className="text-xl font-semibold mb-3 font-headline">{getTranslation(locale, 'resultPageSubHeaderNew20')}</h3>
-                       {new20SongsData.length > 0 ? (
-                         <div className={cn(
-                           "grid grid-cols-1 gap-4",
-                           combinedNew20GridCols
-                         )}>
-                           {new20SongsData.map((song) => (
-                             <SongCard key={`combo-new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
-                           ))}
-                         </div>
-                       ) : (
-                         <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoNew20Data')}</p>
-                       )}
-                    </div>
+                  <CardContent> {/* Removed flex classes here */}
+                    {combinedTopSongs.length > 0 ? (
+                      <div className={cn(
+                        "grid grid-cols-1 gap-4",
+                        best30GridCols // Reusing best30GridCols for the combined list
+                      )}>
+                        {combinedTopSongs.map((song) => (
+                          <SongCard key={`combined-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoCombinedData')}</p>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -778,3 +789,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+

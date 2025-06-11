@@ -129,6 +129,7 @@ export const translations = {
     resultPageHeaderTarget: "목표:",
     toastInfoCombinedCacheSuccessTitle: "통합 데이터 저장됨",
     toastInfoCombinedCacheSuccessDesc: "Best30 및 New20 곡 데이터가 로컬에 저장되었습니다.",
+    resultPageNoCombinedData: "Best 30 및 New 20 곡 데이터가 모두 없습니다.",
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -259,6 +260,7 @@ export const translations = {
     resultPageHeaderTarget: "目標:",
     toastInfoCombinedCacheSuccessTitle: "統合データ保存完了",
     toastInfoCombinedCacheSuccessDesc: "Best30およびNew20曲データがローカルに保存されました。",
+    resultPageNoCombinedData: "Best 30 および New 20 曲データが両方ともありません。",
   }
 };
 
@@ -298,7 +300,8 @@ export function getTranslation<K extends BaseTranslationKeys>(
   if (typeof messageOrFn === 'function') {
     // Type assertion is needed here because TypeScript can't infer the exact function signature
     // from the union type of all possible translation functions.
-    return (messageOrFn as TranslationFunction)(...args);
+    return (messageOrFn as TranslationFunction<any[], string>)(...args);
   }
   return messageOrFn as string; // messageOrFn is a string here
 }
+
