@@ -35,6 +35,10 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
   const scoreDifference = song.targetScore > 0 ? song.targetScore - song.currentScore : 0;
   const ratingDifference = song.targetRating > 0 ? parseFloat((song.targetRating - song.currentRating).toFixed(2)) : 0;
 
+  // Determine if the target line should be shown
+  // Show if there's a positive difference in either score or rating
+  const showTargetLine = scoreDifference > 0 || ratingDifference > 0;
+
   const getDifficultyColorClass = (diff: string) => {
     const upperDiff = diff.toUpperCase();
     return difficultyColors[upperDiff] || difficultyColors.UNKNOWN;
@@ -72,16 +76,18 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
               <span className="flex items-center"><Star className="w-3 h-3 mr-1 text-yellow-500" /></span>
               <span className="font-medium text-foreground">{song.currentScore.toLocaleString()} / {song.currentRating.toFixed(2)}</span>
             </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="flex items-center"><TargetIcon className="w-3 h-3 mr-1 text-green-500" /></span>
-              <span className="font-medium text-foreground">
-                {song.targetScore > 0 ? song.targetScore.toLocaleString() : '-'}
-                {scoreDifference > 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{scoreDifference.toLocaleString()})</span>}
-                {' / '}
-                {song.targetRating > 0 ? song.targetRating.toFixed(2) : '-'}
-                {ratingDifference > 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{ratingDifference.toFixed(2)})</span>}
-              </span>
-            </div>
+            {showTargetLine && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span className="flex items-center"><TargetIcon className="w-3 h-3 mr-1 text-green-500" /></span>
+                <span className="font-medium text-foreground">
+                  {song.targetScore > 0 ? song.targetScore.toLocaleString() : '-'}
+                  {scoreDifference > 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{scoreDifference.toLocaleString()})</span>}
+                  {' / '}
+                  {song.targetRating > 0 ? song.targetRating.toFixed(2) : '-'}
+                  {ratingDifference > 0 && <span className="text-green-600 dark:text-green-400 ml-1">(+{ratingDifference.toFixed(2)})</span>}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
