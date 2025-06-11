@@ -173,7 +173,16 @@ export default function ChuniCalcForm() {
       return;
     }
 
-    if (current < 0 || current > 18 || target < 0 || target > 17.50) { 
+    if (current >= 17.50) {
+      toast({
+        title: getTranslation(locale, 'toastErrorCurrentRatingTooHigh'),
+        description: getTranslation(locale, 'toastErrorCurrentRatingTooHighDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (current < 0 || current >= 17.50 || target < 0 || target > 17.50) { 
         toast({
           title: getTranslation(locale, 'toastErrorInvalidRatingRange'),
           description: getTranslation(locale, 'toastErrorInvalidRatingRangeDesc'),
@@ -256,7 +265,7 @@ export default function ChuniCalcForm() {
               type="number"
               step="0.01"
               min="0"
-              max="18.00"
+              max="17.49" // Updated max value
               placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
               value={currentRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
