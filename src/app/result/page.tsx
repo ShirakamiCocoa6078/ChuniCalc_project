@@ -18,7 +18,8 @@ import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORA
 import NewSongsData from '@/data/NewSongs.json';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
-import { ThemeToggle } from "@/components/ThemeToggle"; // Added ThemeToggle import
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle"; // Added LanguageToggle import
 
 
 const BEST_COUNT = 30;
@@ -551,16 +552,21 @@ function ResultContent() {
               </Link>
             </div>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-4 text-sm sm:text-base w-full sm:w-auto">
-            <div className="flex items-center p-2 bg-secondary rounded-md">
-              <Gauge className="w-5 h-5 mr-2 text-primary" />
-              <span>{getTranslation(locale, 'resultPageHeaderCurrent')} <span className="font-semibold">{currentRatingDisplay}</span></span>
+          <div className="flex flex-col sm:items-end items-stretch gap-2">
+            <div className="flex items-center justify-end gap-2 text-sm sm:text-base w-full">
+              <div className="flex items-center p-2 bg-secondary rounded-md">
+                <Gauge className="w-5 h-5 mr-2 text-primary" />
+                <span>{getTranslation(locale, 'resultPageHeaderCurrent')} <span className="font-semibold">{currentRatingDisplay}</span></span>
+              </div>
+              <div className="flex items-center p-2 bg-secondary rounded-md">
+                <TargetIconLucide className="w-5 h-5 mr-2 text-primary" />
+                <span>{getTranslation(locale, 'resultPageHeaderTarget')} <span className="font-semibold">{targetRatingDisplay}</span></span>
+              </div>
             </div>
-            <div className="flex items-center p-2 bg-secondary rounded-md">
-              <TargetIconLucide className="w-5 h-5 mr-2 text-primary" />
-              <span>{getTranslation(locale, 'resultPageHeaderTarget')} <span className="font-semibold">{targetRatingDisplay}</span></span>
+            <div className="flex items-center justify-end gap-2 w-full">
+                <LanguageToggle />
+                <ThemeToggle /> 
             </div>
-            <ThemeToggle /> 
           </div>
         </header>
 
@@ -746,5 +752,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    
