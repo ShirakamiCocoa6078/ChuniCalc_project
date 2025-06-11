@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext"; // Added
+import { getTranslation } from "@/lib/translations"; // Added
 
 type GlobalMusicApiResponse = { records?: any[] };
 type UserShowallApiResponse = { records?: any[] };
@@ -24,6 +26,7 @@ export default function AdvancedSettings() {
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
+  const { locale } = useLanguage(); // Added
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -56,7 +59,6 @@ export default function AdvancedSettings() {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
-          // Do not remove the developer mode setting itself
           if (key !== DEVELOPER_MODE_KEY) {
             keysToRemove.push(key);
           }
@@ -67,7 +69,6 @@ export default function AdvancedSettings() {
         clearedCount++;
       });
 
-      // Re-fetch current local API token to display after clearing, if it was also cleared
        const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
        setLocalApiToken(storedToken || "");
       
@@ -136,27 +137,27 @@ export default function AdvancedSettings() {
       <CardHeader>
         <CardTitle className="font-headline text-2xl flex items-center">
           <Settings className="mr-2 h-6 w-6 text-primary" />
-          고급 설정 및 데이터 관리
+          {getTranslation(locale, 'advancedSettingsTitle')}
         </CardTitle>
         <CardDescription>
-          로컬 API 키 설정, 캐시 데이터 관리, 개발자 모드 등 고급 기능을 사용합니다.
+          {getTranslation(locale, 'advancedSettingsDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="localApiToken" className="flex items-center font-medium">
-            <KeyRound className="mr-2 h-5 w-5 text-primary" /> 로컬 API 키 설정
+            <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
           </Label>
           <Input
             id="localApiToken"
             type="text"
-            placeholder="개인 Chunirec API 토큰 입력"
+            placeholder={getTranslation(locale, 'localApiKeyPlaceholder')}
             value={localApiToken}
             onChange={(e) => setLocalApiToken(e.target.value)}
           />
-          <Button onClick={handleSaveLocalApiToken} className="w-full mt-1">로컬 API 키 저장/업데이트</Button>
+          <Button onClick={handleSaveLocalApiToken} className="w-full mt-1">{getTranslation(locale, 'saveApiKeyButton')}</Button>
           <p className="text-xs text-muted-foreground mt-1">
-            여기에 개인 Chunirec API 토큰을 입력하면, 앱 실행 시 우선적으로 이 키를 사용합니다. 비워두고 저장하면 제거됩니다.
+            {getTranslation(locale, 'localApiKeyHelp')}
           </p>
         </div>
 
@@ -170,13 +171,13 @@ export default function AdvancedSettings() {
             disabled={!clientHasMounted}
           />
           <Label htmlFor="developer-mode" className="flex items-center font-medium">
-            <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> 개발자 모드
+            <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> {getTranslation(locale, 'developerModeLabel')}
           </Label>
         </div>
         {isDeveloperMode && clientHasMounted && (
           <Button asChild variant="outline" className="w-full">
             <Link href="/developer/api-test">
-              <DatabaseZap className="mr-2 h-4 w-4"/> API 테스트 페이지로 이동
+              <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
             </Link>
           </Button>
         )}
@@ -185,24 +186,24 @@ export default function AdvancedSettings() {
         <hr/>
 
         <div className="space-y-3">
-            <h3 className="font-medium flex items-center"><CloudDownload className="mr-2 h-5 w-5 text-primary" />수동 데이터 캐싱</h3>
+            <h3 className="font-medium flex items-center"><CloudDownload className="mr-2 h-5 w-5 text-primary" />{getTranslation(locale, 'manualCachingLabel')}</h3>
             <div>
                 <Button onClick={handleCacheGlobalMusic} variant="outline" className="w-full">
-                    전역 음악 목록 캐시 (music/showall)
+                    {getTranslation(locale, 'cacheGlobalMusicButton')}
                 </Button>
             </div>
             <div>
-                <Label htmlFor="cacheNickname" className="text-sm">캐시할 사용자 닉네임</Label>
+                <Label htmlFor="cacheNickname" className="text-sm">{getTranslation(locale, 'cacheUserNicknameLabel')}</Label>
                  <Input
                     id="cacheNickname"
                     type="text"
-                    placeholder="Chunirec 닉네임"
+                    placeholder={getTranslation(locale, 'cacheUserNicknamePlaceholder')}
                     value={cacheNickname}
                     onChange={(e) => setCacheNickname(e.target.value)}
                     className="mt-1"
                 />
                 <Button onClick={handleCacheUserRecords} variant="outline" className="w-full mt-1" disabled={!cacheNickname.trim()}>
-                    <UserCircle className="mr-2 h-4 w-4"/> 해당 사용자 기록 캐시 (records/showall)
+                    <UserCircle className="mr-2 h-4 w-4"/> {getTranslation(locale, 'cacheUserRecordsButton')}
                 </Button>
             </div>
         </div>
@@ -211,20 +212,20 @@ export default function AdvancedSettings() {
 
         <div>
           <Button onClick={handleClearAllLocalData} variant="destructive" className="w-full">
-            <Trash2 className="mr-2 h-4 w-4" /> 모든 로컬 캐시 데이터 삭제
+            <Trash2 className="mr-2 h-4 w-4" /> {getTranslation(locale, 'clearLocalDataButton')}
           </Button>
           <p className="text-xs text-muted-foreground mt-1">
-            앱이 로컬 저장소에 저장한 모든 캐시 데이터 (API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.
+            {getTranslation(locale, 'clearLocalDataHelp')}
           </p>
         </div>
         
         <hr/>
         
         <div className="text-sm">
-            <h3 className="font-medium mb-1">문의 및 정보</h3>
-            <p className="text-muted-foreground">버그 리포트 및 기타 문의: <a href="mailto:your-email@example.com" className="text-primary hover:underline">your-email@example.com</a></p>
+            <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
+            <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="mailto:your-email@example.com" className="text-primary hover:underline">your-email@example.com</a></p>
             {clientHasMounted && (
-              <p className="text-xs text-muted-foreground mt-1">ChuniCalc v{process.env.npm_package_version || "1.0.0"}</p>
+              <p className="text-xs text-muted-foreground mt-1">{getTranslation(locale, 'appVersion')}</p>
             )}
         </div>
       </CardContent>

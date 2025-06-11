@@ -33,10 +33,10 @@ export const translations = {
     cacheUserNicknamePlaceholder: "Chunirec 닉네임",
     cacheUserRecordsButton: "해당 사용자 기록 캐시 (records/showall)",
     clearLocalDataButton: "모든 로컬 캐시 데이터 삭제",
-    clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.",
+    clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v"
+    appVersion: "ChuniCalc v1.0.0"
   },
   JP: {
     homePageTitle: "チュニカルク",
@@ -71,10 +71,10 @@ export const translations = {
     cacheUserNicknamePlaceholder: "Chunirec ニックネーム",
     cacheUserRecordsButton: "該当ユーザー記録キャッシュ (records/showall)",
     clearLocalDataButton: "全てのローカルキャッシュデータ削除",
-    clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（API応答、ローカルAPIトークン、開発者モード設定を除く）を削除します。",
+    clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "チュニカルク v"
+    appVersion: "チュニカルク v1.0.0"
   }
 };
 

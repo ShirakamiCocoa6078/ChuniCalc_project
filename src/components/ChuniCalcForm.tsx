@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
+import { useLanguage } from "@/contexts/LanguageContext"; // Added
+import { getTranslation } from "@/lib/translations"; // Added
 
 // Define ProfileData type, assuming structure from API
 type ProfileData = {
@@ -26,10 +28,10 @@ export default function ChuniCalcForm() {
   const [currentRatingStr, setCurrentRatingStr] = useState<string>("");
   const [targetRatingStr, setTargetRatingStr] = useState<string>("");
   const [isFetchingRating, setIsFetchingRating] = useState<boolean>(false);
-  // const [isCurrentRatingLocked, setIsCurrentRatingLocked] = useState<boolean>(false); // No longer needed as it's always locked
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const { locale } = useLanguage(); // Added
 
   useEffect(() => {
     setIsClient(true);
@@ -48,14 +50,13 @@ export default function ChuniCalcForm() {
     setNickname(e.target.value);
     setCurrentRatingStr(""); // Clear current rating when nickname changes
     setTargetRatingStr(""); // Clear target rating
-    // setIsCurrentRatingLocked(false); // No longer needed
   };
 
   const handleFetchRating = async () => {
     if (!nickname) {
       toast({
-        title: "닉네임 필요",
-        description: "레이팅을 조회할 닉네임을 입력해주세요.",
+        title: getTranslation(locale, 'nicknameLabel').split(' (')[0] + " 필요", // Dynamically get "닉네임 필요" or "ニックネーム必要"
+        description: getTranslation(locale, 'nicknameHelp'),
         variant: "destructive",
       });
       return;
@@ -71,7 +72,6 @@ export default function ChuniCalcForm() {
     }
 
     setIsFetchingRating(true);
-    // setIsCurrentRatingLocked(false); // No longer needed
     setCurrentRatingStr("");
     setTargetRatingStr("");
 
@@ -114,7 +114,6 @@ export default function ChuniCalcForm() {
         throw new Error(errorMessage);
       }
 
-      // Save fetched profile data to localStorage
       setCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${nickname}`, data);
 
       let ratingValue: number | null = null;
@@ -129,7 +128,6 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        // setIsCurrentRatingLocked(true); // No longer needed
         const newTargetRating = Math.min(ratingValue + 0.01, 17.50);
         setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
@@ -139,7 +137,6 @@ export default function ChuniCalcForm() {
       } else {
          setCurrentRatingStr("");
          setTargetRatingStr("");
-         // setIsCurrentRatingLocked(false); // No longer needed
         toast({
           title: "데이터 오류",
           description: "레이팅 정보를 가져왔으나 형식이 올바르지 않거나, 플레이 데이터가 없습니다.",
@@ -150,7 +147,6 @@ export default function ChuniCalcForm() {
       console.error("Error fetching rating:", error);
       setCurrentRatingStr("");
       setTargetRatingStr("");
-      // setIsCurrentRatingLocked(false); // No longer needed
       toast({
         title: "조회 실패",
         description: error instanceof Error ? error.message : "레이팅을 가져오는 중 오류가 발생했습니다.",
@@ -210,9 +206,9 @@ export default function ChuniCalcForm() {
     return (
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="text-center">
-          <CardTitle className="font-headline text-4xl tracking-tight">ChuniCalc</CardTitle>
+          <CardTitle className="font-headline text-4xl tracking-tight">{getTranslation(locale, 'formTitle')}</CardTitle>
           <CardDescription className="font-body text-md">
-            츄니즘 레이팅 진행 상황을 추적하세요.
+            {getTranslation(locale, 'formDescription')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -230,22 +226,22 @@ export default function ChuniCalcForm() {
   return (
     <Card className="w-full max-w-md shadow-2xl">
       <CardHeader className="text-center">
-        <CardTitle className="font-headline text-4xl tracking-tight">ChuniCalc</CardTitle>
+        <CardTitle className="font-headline text-4xl tracking-tight">{getTranslation(locale, 'formTitle')}</CardTitle>
         <CardDescription className="font-body text-md">
-          츄니즘 레이팅 진행 상황을 추적하세요. 닉네임으로 레이팅을 조회하거나 직접 입력하세요.
+         {getTranslation(locale, 'formDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
-              <User className="mr-2 h-5 w-5 text-primary" /> 닉네임 (Chunirec User Name)
+              <User className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'nicknameLabel')}
             </Label>
             <div className="flex space-x-2">
               <Input
                 id="nickname"
                 type="text"
-                placeholder="예: chunirec"
+                placeholder={getTranslation(locale, 'nicknamePlaceholder')}
                 value={nickname}
                 onChange={handleNicknameChange}
                 className="text-lg"
@@ -253,15 +249,15 @@ export default function ChuniCalcForm() {
               />
               <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating || !getApiToken()}>
                 {isFetchingRating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                <span className="ml-2">조회</span>
+                <span className="ml-2">{getTranslation(locale, 'fetchRatingButton')}</span>
               </Button>
             </div>
-            <p id="nicknameHelp" className="text-sm text-muted-foreground">Chunirec 닉네임을 입력하여 현재 레이팅을 조회합니다.</p>
+            <p id="nicknameHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'nicknameHelp')}</p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="currentRating" className="flex items-center text-lg font-medium">
-              <Gauge className="mr-2 h-5 w-5 text-primary" /> 현재 레이팅
+              <Gauge className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'currentRatingLabel')}
             </Label>
             <Input
               id="currentRating"
@@ -269,39 +265,39 @@ export default function ChuniCalcForm() {
               step="0.01"
               min="0"
               max="18.00"
-              placeholder="Chunirec 유저명을 입력해 조회하세요"
+              placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
               value={currentRatingStr}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)} // Should not be changeable by user directly
-              className="text-lg bg-muted/50" // Visually indicate disabled state
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
+              className="text-lg bg-muted/50" 
               aria-describedby="currentRatingHelp"
-              disabled // Always disabled
+              disabled 
             />
             <p id="currentRatingHelp" className="text-sm text-muted-foreground">
-              Chunirec 유저명을 입력해 조회하세요.
+              {getTranslation(locale, 'currentRatingHelp')}
             </p>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
-              <Target className="mr-2 h-5 w-5 text-primary" /> 목표 레이팅
+              <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
             </Label>
             <Input
               id="targetRating"
               type="number"
               step="0.01"
               min="0"
-              max="17.50" // Max updated
-              placeholder="예: 16.00"
+              max="17.50" 
+              placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
               value={targetRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetRatingStr(e.target.value)}
               className="text-lg"
               aria-describedby="targetRatingHelp"
             />
-             <p id="targetRatingHelp" className="text-sm text-muted-foreground">목표 레이팅을 입력하세요. (최대 17.50)</p>
+             <p id="targetRatingHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'targetRatingHelp')}</p>
           </div>
 
           <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
-            계산 및 결과 보기 <ArrowRight className="ml-2 h-5 w-5" />
+            {getTranslation(locale, 'calculateButton')} <ArrowRight className="ml-2 h-5 w-5" />
           </Button>
         </form>
       </CardContent>
