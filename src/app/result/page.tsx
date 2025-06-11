@@ -16,6 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { getTranslation } from '@/lib/translations';
 
 
 const BEST_COUNT = 30;
@@ -207,12 +209,13 @@ type UserShowallApiResponse = {
 
 function ResultContent() {
   const searchParams = useSearchParams();
-  const userNameForApi = searchParams.get("nickname") || "플레이어";
-  const currentRatingDisplay = searchParams.get("current") || "N/A";
-  const targetRatingDisplay = searchParams.get("target") || "N/A";
+  const { locale } = useLanguage();
+  const userNameForApi = searchParams.get("nickname") || getTranslation(locale, 'resultPageDefaultPlayerName');
+  const currentRatingDisplay = searchParams.get("current") || getTranslation(locale, 'resultPageNotAvailable');
+  const targetRatingDisplay = searchParams.get("target") || getTranslation(locale, 'resultPageNotAvailable');
   const { toast } = useToast();
 
-  const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === "플레이어" ? "플레이어" : null);
+  const [apiPlayerName, setApiPlayerName] = useState<string | null>(userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName') ? getTranslation(locale, 'resultPageDefaultPlayerName') : null);
   const [best30SongsData, setBest30SongsData] = useState<Song[]>([]);
   const [new20SongsData, setNew20SongsData] = useState<Song[]>([]);
   const [isLoadingSongs, setIsLoadingSongs] = useState(true);
@@ -228,7 +231,7 @@ function ResultContent() {
 
 
   const handleRefreshData = useCallback(() => {
-    if (typeof window !== 'undefined' && userNameForApi && userNameForApi !== "플레이어") {
+    if (typeof window !== 'undefined' && userNameForApi && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName')) {
         const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
         const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
         const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
@@ -238,23 +241,26 @@ function ResultContent() {
         // Optionally clear global music too if you want a full refresh:
         // localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); 
         console.log(`User-specific cache cleared for user: ${userNameForApi}`);
-        toast({ title: "데이터 새로고침 중", description: "사용자 관련 캐시를 지우고 API에서 최신 데이터를 가져옵니다." });
+        toast({ 
+            title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), 
+            description: getTranslation(locale, 'resultPageToastRefreshingDataDesc') 
+        });
     }
     setRefreshNonce(prev => prev + 1);
-  }, [userNameForApi, toast]);
+  }, [userNameForApi, toast, locale]);
 
   useEffect(() => {
     const fetchAndProcessData = async () => {
       const API_TOKEN = getApiToken();
       if (!API_TOKEN) {
-        setErrorLoadingSongs("API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.");
+        setErrorLoadingSongs(getTranslation(locale, 'resultPageErrorApiTokenNotSetResult'));
         setIsLoadingSongs(false);
         return;
       }
 
-      if (!userNameForApi || userNameForApi === "플레이어") {
-        setErrorLoadingSongs("사용자 닉네임이 제공되지 않아 데이터를 가져올 수 없습니다.");
-        setApiPlayerName("플레이어");
+      if (!userNameForApi || userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName')) {
+        setErrorLoadingSongs(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult'));
+        setApiPlayerName(getTranslation(locale, 'resultPageDefaultPlayerName'));
         setIsLoadingSongs(false);
         return;
       }
@@ -274,7 +280,6 @@ function ResultContent() {
 
       const cachedProfile = getCachedData<ProfileData>(profileKey);
       const cachedRatingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
-      // GlobalMusicApiResponse now expects records to be ShowallApiSongEntry[]
       const cachedGlobalMusicData = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       const cachedUserShowallData = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
       
@@ -282,7 +287,7 @@ function ResultContent() {
       let userShowallRecordsFromDataSource: ShowallApiSongEntry[] = [];
 
 
-      let cacheTimestamp = 'N/A';
+      let cacheTimestamp = getTranslation(locale, 'resultPageSyncStatusNoCache');
       if (clientHasMounted) {
         const userCacheTimestampItem = localStorage.getItem(profileKey); 
         if (userCacheTimestampItem) {
@@ -294,7 +299,7 @@ function ResultContent() {
             } catch (e) { console.error("Error parsing user cache timestamp", e); }
         }
       }
-      setLastRefreshed(cachedProfile ? cacheTimestamp : '사용자 캐시 없음');
+      setLastRefreshed(cachedProfile ? getTranslation(locale, 'resultPageSyncStatus', cacheTimestamp) : getTranslation(locale, 'resultPageSyncStatusNoCache'));
 
 
       if (cachedProfile) {
@@ -311,7 +316,6 @@ function ResultContent() {
 
       if (cachedGlobalMusicData && cachedGlobalMusicData.records) {
         console.log("[N20_PREP_2_CACHE] Loading global music data (expected flattened) from localStorage cache...");
-        // Assuming cachedGlobalMusicData.records is already ShowallApiSongEntry[]
         globalMusicRecordsFromDataSource = cachedGlobalMusicData.records.filter((e: any): e is ShowallApiSongEntry =>
             e && e.id && e.diff && e.title && (e.release || typeof e.release === 'string') && (e.const !== undefined) && e.level !== undefined
         );
@@ -425,21 +429,30 @@ function ResultContent() {
                 if (criticalError) throw new Error(criticalError);
                 
                 const newCacheTime = new Date().toLocaleString();
-                setLastRefreshed(newCacheTime);
-                toast({ title: "데이터 로드 완료 (API)", description: `API에서 최신 데이터를 성공적으로 불러와 캐시했습니다. (${newCacheTime})` });
+                setLastRefreshed(getTranslation(locale, 'resultPageSyncStatus', newCacheTime));
+                toast({ 
+                    title: getTranslation(locale, 'resultPageToastApiLoadSuccessTitle'), 
+                    description: getTranslation(locale, 'resultPageToastApiLoadSuccessDesc', newCacheTime) 
+                });
 
             } catch (error) {
                 console.error("Error fetching song data from API:", error);
-                let detailedErrorMessage = "알 수 없는 오류로 곡 정보를 가져오지 못했습니다.";
-                if (error instanceof Error) detailedErrorMessage = error.message;
+                let detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', "Unknown error");
+                if (error instanceof Error) detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error.message);
                 setErrorLoadingSongs(detailedErrorMessage);
-                if (!apiPlayerName && userNameForApi !== "플레이어") setApiPlayerName(userNameForApi);
+                if (!apiPlayerName && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName')) setApiPlayerName(userNameForApi);
             }
         } else {
-             toast({ title: "데이터 로드 완료 (캐시)", description: `로컬 캐시에서 데이터를 성공적으로 불러왔습니다.` });
+             toast({ 
+                title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), 
+                description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') 
+            });
         }
       } else {
-         toast({ title: "데이터 로드 완료 (캐시)", description: `로컬 캐시에서 데이터를 성공적으로 불러왔습니다.` });
+         toast({ 
+            title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), 
+            description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') 
+        });
       }
 
       // Step 2: Define new song pool from global music data
@@ -515,7 +528,7 @@ function ResultContent() {
       fetchAndProcessData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, clientHasMounted]); 
+  }, [userNameForApi, refreshNonce, clientHasMounted, locale]); 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -532,18 +545,18 @@ function ResultContent() {
             <div>
               <h1 className="text-2xl font-bold font-headline">{apiPlayerName || userNameForApi}</h1>
               <Link href="/" className="text-sm text-primary hover:underline flex items-center">
-                <ArrowLeft className="w-4 h-4 mr-1" /> 계산기로 돌아가기
+                <ArrowLeft className="w-4 h-4 mr-1" /> {getTranslation(locale, 'resultPageButtonBackToCalc')}
               </Link>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center gap-4 text-sm sm:text-base w-full sm:w-auto">
             <div className="flex items-center p-2 bg-secondary rounded-md">
               <Gauge className="w-5 h-5 mr-2 text-primary" />
-              <span>현재: <span className="font-semibold">{currentRatingDisplay}</span></span>
+              <span>{getTranslation(locale, 'resultPageHeaderCurrent')} <span className="font-semibold">{currentRatingDisplay}</span></span>
             </div>
             <div className="flex items-center p-2 bg-secondary rounded-md">
               <TargetIconLucide className="w-5 h-5 mr-2 text-primary" />
-              <span>목표: <span className="font-semibold">{targetRatingDisplay}</span></span>
+              <span>{getTranslation(locale, 'resultPageHeaderTarget')} <span className="font-semibold">{targetRatingDisplay}</span></span>
             </div>
           </div>
         </header>
@@ -551,18 +564,18 @@ function ResultContent() {
         <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-2">
             <p className="text-xs text-muted-foreground">
                 {clientHasMounted
-                    ? (lastRefreshed && lastRefreshed !== '사용자 캐시 없음' ? `사용자 데이터 동기화: ${lastRefreshed}` : '캐시된 사용자 데이터가 없거나 만료되었습니다.')
-                    : '동기화 상태 확인 중...'}
+                    ? lastRefreshed
+                    : getTranslation(locale, 'resultPageSyncStatusChecking')}
             </p>
-            <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === "플레이어" || !getApiToken()}>
+            <Button onClick={handleRefreshData} variant="outline" size="sm" disabled={isLoadingSongs || !userNameForApi || userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName') || !getApiToken()}>
                 <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingSongs && "animate-spin")} />
-                사용자 데이터 새로고침
+                {getTranslation(locale, 'resultPageRefreshButton')}
             </Button>
         </div>
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="font-headline text-xl">전략 선택</CardTitle>
+            <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -573,45 +586,45 @@ function ResultContent() {
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
                 <RadioGroupItem value="average" id="r-average" />
                 <Label htmlFor="r-average" className="flex items-center cursor-pointer">
-                  <BarChart3 className="w-5 h-5 mr-2 text-primary" /> 평균 (Average)
+                  <BarChart3 className="w-5 h-5 mr-2 text-primary" /> {getTranslation(locale, 'resultPageStrategyAverage')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
                 <RadioGroupItem value="peak" id="r-peak" />
                 <Label htmlFor="r-peak" className="flex items-center cursor-pointer">
-                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> 고점 (Peak Performance)
+                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyPeak')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
                 <RadioGroupItem value="floor" id="r-floor" />
                 <Label htmlFor="r-floor" className="flex items-center cursor-pointer">
-                  <TrendingDown className="w-5 h-5 mr-2 text-green-600" /> 저점 (Fill Bottom Slots)
+                  <TrendingDown className="w-5 h-5 mr-2 text-green-600" /> {getTranslation(locale, 'resultPageStrategyFloor')}
                 </Label>
               </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground mt-2">
-              * 현재 이 전략 선택은 UI 프로토타입이며, 실제 목표 점수 계산 로직은 아직 구현되지 않았습니다.
+              {getTranslation(locale, 'resultPageStrategyDisclaimer')}
             </p>
           </CardContent>
         </Card>
 
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
-            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best 30</TabsTrigger>
-            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">New 20</TabsTrigger>
-            <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">Best30 + New20</TabsTrigger>
+            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabBest30')}</TabsTrigger>
+            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabNew20')}</TabsTrigger>
+            <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
           {isLoadingSongs ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-              <p className="text-xl text-muted-foreground">곡 데이터를 불러오는 중입니다...</p>
+              <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted
                   ? ( (getCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || getCachedData<RatingApiResponse>(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`) || getCachedData<GlobalMusicApiResponse>(GLOBAL_MUSIC_DATA_KEY) || getCachedData<UserShowallApiResponse>(`${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`))
-                    ? '캐시를 확인/갱신 중입니다...'
-                    : 'Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.')
-                  : '데이터 상태 확인 중...'
+                    ? getTranslation(locale, 'resultPageLoadingCacheCheck')
+                    : getTranslation(locale, 'resultPageLoadingApiFetch'))
+                  : getTranslation(locale, 'resultPageLoadingDataStateCheck')
                 }
               </p>
             </div>
@@ -619,13 +632,13 @@ function ResultContent() {
              <Card className="border-destructive">
               <CardHeader className="flex flex-row items-center space-x-2">
                 <AlertTriangle className="w-6 h-6 text-destructive" />
-                <CardTitle className="font-headline text-xl text-destructive">데이터 로딩 오류</CardTitle>
+                <CardTitle className="font-headline text-xl text-destructive">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-destructive">{errorLoadingSongs}</p>
-                <p className="text-sm text-muted-foreground mt-2">입력한 닉네임이 정확한지, Chunirec에 데이터가 공개되어 있는지, 또는 API 토큰이 유효한지 확인해주세요. 문제가 지속되면 '데이터 새로고침' 버튼을 사용해보세요.</p>
+                <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 <Button asChild variant="outline" className="mt-4">
-                  <Link href="/">계산기로 돌아가기</Link>
+                  <Link href="/">{getTranslation(locale, 'resultPageButtonBackToCalc')}</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -634,7 +647,7 @@ function ResultContent() {
               <TabsContent value="best30">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Best 30 곡</CardTitle>
+                    <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleBest30')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     {best30SongsData.length > 0 ? (
@@ -647,7 +660,7 @@ function ResultContent() {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다. (Chunirec API의 `rating_data.json` 응답을 확인해주세요)</p>
+                      <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoBest30Data')}</p>
                     )}
                   </CardContent>
                 </Card>
@@ -656,7 +669,7 @@ function ResultContent() {
               <TabsContent value="new20">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">New 20 곡</CardTitle>
+                    <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleNew20')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                        {new20SongsData.length > 0 ? (
@@ -669,7 +682,7 @@ function ResultContent() {
                            ))}
                          </div>
                        ) : (
-                         <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. 사용자가 NewSongs.json에 포함된 곡을 플레이하지 않았거나, 관련 API 데이터 로딩에 실패했을 수 있습니다. (콘솔 로그 확인)</p>
+                         <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoNew20Data')}</p>
                        )}
                   </CardContent>
                 </Card>
@@ -678,11 +691,11 @@ function ResultContent() {
               <TabsContent value="combined">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="font-headline text-2xl">Best 30 + New 20 (통합 보기)</CardTitle>
+                    <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleCombined')}</CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col lg:flex-row gap-6">
                     <div className="lg:w-3/5"> 
-                      <h3 className="text-xl font-semibold mb-3 font-headline">Best 30</h3>
+                      <h3 className="text-xl font-semibold mb-3 font-headline">{getTranslation(locale, 'resultPageSubHeaderBest30')}</h3>
                       {best30SongsData.length > 0 ? (
                         <div className={cn(
                           "grid grid-cols-1 gap-4",
@@ -693,11 +706,11 @@ function ResultContent() {
                           ))}
                         </div>
                       ) : (
-                         <p className="text-muted-foreground">Best 30 곡 데이터가 없습니다.</p>
+                         <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoBest30Data')}</p>
                       )}
                     </div>
                     <div className="lg:w-2/5">
-                      <h3 className="text-xl font-semibold mb-3 font-headline">New 20</h3>
+                      <h3 className="text-xl font-semibold mb-3 font-headline">{getTranslation(locale, 'resultPageSubHeaderNew20')}</h3>
                        {new20SongsData.length > 0 ? (
                          <div className={cn(
                            "grid grid-cols-1 gap-4",
@@ -708,7 +721,7 @@ function ResultContent() {
                            ))}
                          </div>
                        ) : (
-                         <p className="text-muted-foreground">New 20 곡 데이터가 없습니다. (콘솔 로그 확인)</p>
+                         <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoNew20Data')}</p>
                        )}
                     </div>
                   </CardContent>
@@ -723,8 +736,9 @@ function ResultContent() {
 }
 
 export default function ResultPage() {
+  const { locale } = useLanguage();
   return (
-    <Suspense fallback={<div className="flex min-h-screen flex-col items-center justify-center text-xl"><Loader2 className="w-10 h-10 animate-spin mr-2" /> 결과 로딩 중...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen flex-col items-center justify-center text-xl"><Loader2 className="w-10 h-10 animate-spin mr-2" /> {getTranslation(locale, 'resultPageSuspenseFallback')}</div>}>
       <ResultContent />
     </Suspense>
   );
