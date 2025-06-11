@@ -294,7 +294,7 @@ function ResultContent() {
             try {
                 const parsedItem = JSON.parse(userCacheTimestampItem);
                 if (parsedItem && typeof parsedItem.timestamp === 'number') {
-                    cacheTimestamp = new Date(parsedItem.timestamp).toLocaleString();
+                    cacheTimestamp = new Date(parsedItem.timestamp).toLocaleString(locale); // Use current locale
                 }
             } catch (e) { console.error("Error parsing user cache timestamp", e); }
         }
@@ -428,7 +428,7 @@ function ResultContent() {
                 }
                 if (criticalError) throw new Error(criticalError);
                 
-                const newCacheTime = new Date().toLocaleString();
+                const newCacheTime = new Date().toLocaleString(locale); // Use current locale
                 setLastRefreshed(getTranslation(locale, 'resultPageSyncStatus', newCacheTime));
                 toast({ 
                     title: getTranslation(locale, 'resultPageToastApiLoadSuccessTitle'), 
