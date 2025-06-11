@@ -39,12 +39,12 @@ export default function ChuniCalcForm() {
     if (!token) {
       console.error("Chunirec API Token is not configured. Please set it in Advanced Settings or environment variables.");
       toast({
-        title: "API 설정 오류",
-        description: "Chunirec API 토큰이 설정되지 않았습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.",
+        title: getTranslation(locale, 'toastErrorApiKeyNotSet'),
+        description: getTranslation(locale, 'toastErrorApiKeyNotSetDesc'),
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, locale]);
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
@@ -55,8 +55,8 @@ export default function ChuniCalcForm() {
   const handleFetchRating = async () => {
     if (!nickname) {
       toast({
-        title: getTranslation(locale, 'nicknameLabel').split(' (')[0] + " 필요", 
-        description: getTranslation(locale, 'nicknameHelp'),
+        title: getTranslation(locale, 'toastErrorNicknameNeeded'), 
+        description: getTranslation(locale, 'toastErrorNicknameNeededDesc'),
         variant: "destructive",
       });
       return;
@@ -64,8 +64,8 @@ export default function ChuniCalcForm() {
     const apiToken = getApiToken();
     if (!apiToken) {
       toast({
-        title: "API 토큰 없음",
-        description: "API 토큰이 설정되지 않아 레이팅을 조회할 수 없습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.",
+        title: getTranslation(locale, 'toastErrorApiKeyMissing'),
+        description: getTranslation(locale, 'toastErrorApiKeyMissingDesc'),
         variant: "destructive",
       });
       return;
@@ -86,32 +86,24 @@ export default function ChuniCalcForm() {
 
       if (response.status === 404) {
         toast({
-          title: "사용자 없음",
-          description: data.error?.message || `닉네임 '${nickname}'에 해당하는 사용자를 찾을 수 없거나 플레이 데이터가 없습니다.`,
+          title: getTranslation(locale, 'toastErrorUserNotFound'),
+          description: getTranslation(locale, 'toastErrorUserNotFoundDesc', nickname),
           variant: "destructive",
         });
         setIsFetchingRating(false);
         return;
       }
       if (response.status === 403) {
-        let message = data.error?.message || "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.";
-        if (data.error?.code === 403) {
-            message = `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${data.error.code})`;
-        }
         toast({
-          title: "접근 금지",
-          description: message,
+          title: getTranslation(locale, 'toastErrorAccessDenied'),
+          description: getTranslation(locale, 'toastErrorAccessDeniedDesc', nickname, data.error?.code),
           variant: "destructive",
         });
         setIsFetchingRating(false);
         return;
       }
       if (!response.ok) {
-        let errorMessage = `API 요청 실패 (상태: ${response.status})`;
-        if (data.error && data.error.message) {
-            errorMessage += `: ${data.error.message}`;
-        }
-        throw new Error(errorMessage);
+        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, data.error?.message));
       }
 
       setCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${nickname}`, data);
@@ -131,15 +123,15 @@ export default function ChuniCalcForm() {
         const newTargetRating = Math.min(ratingValue + 0.01, 17.50);
         setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
-          title: "레이팅 조회 성공!",
-          description: `'${data.player_name || nickname}'님의 현재 레이팅: ${ratingValue.toFixed(2)}`,
+          title: getTranslation(locale, 'toastSuccessRatingFetched'),
+          description: getTranslation(locale, 'toastSuccessRatingFetchedDesc', data.player_name || nickname, ratingValue.toFixed(2)),
         });
       } else {
          setCurrentRatingStr("");
          setTargetRatingStr("");
         toast({
-          title: "데이터 오류",
-          description: "레이팅 정보를 가져왔으나 형식이 올바르지 않거나, 플레이 데이터가 없습니다.",
+          title: getTranslation(locale, 'toastErrorInvalidRatingData'),
+          description: getTranslation(locale, 'toastErrorInvalidRatingDataDesc'),
           variant: "destructive",
         });
       }
@@ -148,8 +140,8 @@ export default function ChuniCalcForm() {
       setCurrentRatingStr("");
       setTargetRatingStr("");
       toast({
-        title: "조회 실패",
-        description: error instanceof Error ? error.message : "레이팅을 가져오는 중 오류가 발생했습니다.",
+        title: getTranslation(locale, 'toastErrorRatingFetchFailed'),
+        description: getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error instanceof Error ? error.message : String(error)),
         variant: "destructive",
       });
     } finally {
@@ -165,8 +157,8 @@ export default function ChuniCalcForm() {
 
     if (currentRatingStr === "" || targetRatingStr === "") {
         toast({
-            title: "정보 부족",
-            description: "현재 레이팅(조회 필요)과 목표 레이팅을 모두 입력해주세요.",
+            title: getTranslation(locale, 'toastErrorMissingInfo'),
+            description: getTranslation(locale, 'toastErrorMissingInfoDesc'),
             variant: "destructive",
         });
         return;
@@ -174,17 +166,17 @@ export default function ChuniCalcForm() {
 
     if (isNaN(current) || isNaN(target)) {
       toast({
-        title: "잘못된 입력",
-        description: "레이팅은 숫자로 입력해야 합니다.",
+        title: getTranslation(locale, 'toastErrorInvalidInput'),
+        description: getTranslation(locale, 'toastErrorInvalidInputDesc'),
         variant: "destructive",
       });
       return;
     }
 
-    if (current < 0 || current > 18 || target < 0 || target > 17.50) { // Target max updated
+    if (current < 0 || current > 18 || target < 0 || target > 17.50) { 
         toast({
-          title: "잘못된 레이팅 범위",
-          description: "현재 레이팅은 0.00-18.00, 목표 레이팅은 0.00-17.50 사이여야 합니다.",
+          title: getTranslation(locale, 'toastErrorInvalidRatingRange'),
+          description: getTranslation(locale, 'toastErrorInvalidRatingRangeDesc'),
           variant: "destructive",
         });
         return;
@@ -192,8 +184,8 @@ export default function ChuniCalcForm() {
 
     if (target <= current) {
       toast({
-        title: "목표 레이팅 오류",
-        description: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
+        title: getTranslation(locale, 'toastErrorTargetRating'),
+        description: getTranslation(locale, 'toastErrorTargetRatingDesc'),
         variant: "destructive",
       });
       return;
@@ -300,3 +292,5 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
+
+    

@@ -48,10 +48,16 @@ export default function AdvancedSettings() {
     if (typeof window !== 'undefined') {
       if (localApiToken.trim() === "") {
         localStorage.removeItem('chuniCalcData_userApiToken');
-        toast({ title: "로컬 API 키 제거됨", description: "로컬 API 키가 비어있어 저장소에서 제거되었습니다." });
+        toast({ 
+            title: getTranslation(locale, 'toastSuccessLocalApiKeyRemoved'), 
+            description: getTranslation(locale, 'toastSuccessLocalApiKeyRemovedDesc') 
+        });
       } else {
         localStorage.setItem('chuniCalcData_userApiToken', localApiToken.trim());
-        toast({ title: "로컬 API 키 저장됨", description: "입력한 API 키가 로컬 저장소에 저장되었습니다." });
+        toast({ 
+            title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'), 
+            description: getTranslation(locale, 'toastSuccessLocalApiKeySavedDesc') 
+        });
       }
     }
   };
@@ -77,55 +83,90 @@ export default function AdvancedSettings() {
        const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
        setLocalApiToken(storedToken || "");
       
-      toast({ title: "로컬 데이터 삭제 완료", description: `${clearedCount}개의 앱 관련 로컬 캐시 데이터가 삭제되었습니다.` });
+      toast({ 
+          title: getTranslation(locale, 'toastSuccessLocalDataCleared'), 
+          description: getTranslation(locale, 'toastSuccessLocalDataClearedDesc', clearedCount) 
+      });
     }
   };
 
   const handleCacheGlobalMusic = async () => {
     const apiToken = getApiToken();
     if (!apiToken) {
-      toast({ title: "API 토큰 없음", description: "전역 음악 목록을 캐시하려면 API 토큰이 필요합니다.", variant: "destructive" });
+      toast({ 
+          title: getTranslation(locale, 'toastErrorApiKeyMissing'), 
+          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')), // Using existing key for desc
+          variant: "destructive" 
+      });
       return;
     }
-    toast({ title: "캐싱 시작", description: "전역 음악 목록(music/showall)을 가져오고 있습니다..." });
+    toast({ 
+        title: getTranslation(locale, 'toastInfoCachingStarted'), 
+        description: getTranslation(locale, 'toastInfoCachingStartedDesc', getTranslation(locale, 'cacheGlobalMusicButton')) 
+    });
     try {
       const response = await fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${apiToken}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`API 오류 (상태: ${response.status}): ${errorData.error?.message || response.statusText}`);
+        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message));
       }
       const data = await response.json();
       setCachedData<GlobalMusicApiResponse>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, data);
-      toast({ title: "캐싱 성공", description: "전역 음악 목록이 로컬 저장소에 캐시되었습니다." });
+      toast({ 
+          title: getTranslation(locale, 'toastSuccessGlobalMusicCached'), 
+          description: getTranslation(locale, 'toastSuccessGlobalMusicCachedDesc') 
+      });
     } catch (error) {
       console.error("Error caching global music data:", error);
-      toast({ title: "캐싱 실패", description: error instanceof Error ? error.message : "전역 음악 목록 캐싱 중 오류 발생.", variant: "destructive" });
+      toast({ 
+          title: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed'), 
+          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailedDesc', error instanceof Error ? error.message : undefined), 
+          variant: "destructive" 
+      });
     }
   };
 
   const handleCacheUserRecords = async () => {
     if (!cacheNickname.trim()) {
-      toast({ title: "닉네임 필요", description: "사용자 기록을 캐시하려면 닉네임을 입력해주세요.", variant: "destructive" });
+      toast({ 
+          title: getTranslation(locale, 'toastErrorNicknameNeeded'), 
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorNicknameNeededDesc')), // Using existing key for desc
+          variant: "destructive" 
+      });
       return;
     }
     const apiToken = getApiToken();
     if (!apiToken) {
-      toast({ title: "API 토큰 없음", description: "사용자 기록을 캐시하려면 API 토큰이 필요합니다.", variant: "destructive" });
+      toast({ 
+          title: getTranslation(locale, 'toastErrorApiKeyMissing'), 
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')), // Using existing key for desc
+          variant: "destructive" 
+      });
       return;
     }
-    toast({ title: "캐싱 시작", description: `${cacheNickname}님의 기록(records/showall)을 가져오고 있습니다...` });
+    toast({ 
+        title: getTranslation(locale, 'toastInfoCachingStarted'), 
+        description: getTranslation(locale, 'toastInfoCachingStartedDesc', `${cacheNickname.trim()}'s records`)
+    });
     try {
       const response = await fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(cacheNickname.trim())}&token=${apiToken}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(`API 오류 (상태: ${response.status}): ${errorData.error?.message || response.statusText}`);
+        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message));
       }
       const data = await response.json();
       setCachedData<UserShowallApiResponse>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data);
-      toast({ title: "캐싱 성공", description: `${cacheNickname}님의 사용자 기록이 로컬 저장소에 캐시되었습니다.` });
+      toast({ 
+          title: getTranslation(locale, 'toastSuccessUserRecordsCached'), 
+          description: getTranslation(locale, 'toastSuccessUserRecordsCachedDesc', cacheNickname.trim()) 
+      });
     } catch (error) {
       console.error("Error caching user records:", error);
-      toast({ title: "캐싱 실패", description: error instanceof Error ? error.message : "사용자 기록 캐싱 중 오류 발생.", variant: "destructive" });
+      toast({ 
+          title: getTranslation(locale, 'toastErrorUserRecordsCacheFailed'), 
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailedDesc', error instanceof Error ? error.message : undefined), 
+          variant: "destructive" 
+      });
     }
   };
 
@@ -134,7 +175,7 @@ export default function AdvancedSettings() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(DEVELOPER_MODE_KEY, String(checked));
     }
-    toast({ title: "개발자 모드 " + (checked ? "활성화됨" : "비활성화됨") });
+    toast({ title: checked ? getTranslation(locale, 'toastInfoDevModeEnabled') : getTranslation(locale, 'toastInfoDevModeDisabled') });
   };
 
   const toggleAdminPanel = () => {
@@ -143,7 +184,7 @@ export default function AdvancedSettings() {
     if (typeof window !== 'undefined') {
         localStorage.setItem(ADMIN_PANEL_VISIBLE_KEY, String(newVisibility));
     }
-    toast({ title: "관리자 패널 " + (newVisibility ? "표시됨" : "숨겨짐") });
+    toast({ title: newVisibility ? getTranslation(locale, 'toastInfoAdminPanelShown') : getTranslation(locale, 'toastInfoAdminPanelHidden') });
   };
 
 
@@ -253,3 +294,5 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
+
+    
