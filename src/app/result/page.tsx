@@ -18,6 +18,7 @@ import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORA
 import NewSongsData from '@/data/NewSongs.json';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
+import { ThemeToggle } from "@/components/ThemeToggle"; // Added ThemeToggle import
 
 
 const BEST_COUNT = 30;
@@ -559,6 +560,7 @@ function ResultContent() {
               <TargetIconLucide className="w-5 h-5 mr-2 text-primary" />
               <span>{getTranslation(locale, 'resultPageHeaderTarget')} <span className="font-semibold">{targetRatingDisplay}</span></span>
             </div>
+            <ThemeToggle /> 
           </div>
         </header>
 
