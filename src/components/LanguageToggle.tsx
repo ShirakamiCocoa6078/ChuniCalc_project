@@ -3,8 +3,8 @@
 
 import * as React from "react";
 import { Globe } from "lucide-react";
-// import { useLocale } from "next-intl"; // Will be used later for i18n
-// import { useRouter, usePathname } from "next/navigation"; // Will be used later for i18n
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getTranslation, type Locale } from "@/lib/translations";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -15,15 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function LanguageToggle() {
-  // const locale = useLocale(); // Will be used later
-  // const router = useRouter(); // Will be used later
-  // const pathname = usePathname(); // Will be used later
+  const { locale, setLocale } = useLanguage();
 
-  // const changeLocale = (newLocale: string) => {
-  //   // Placeholder for actual locale change logic
-  //   console.log(`Changing locale to ${newLocale} for path ${pathname}`);
-  //   // router.replace(`/${newLocale}${pathname.startsWith('/') ? '' : '/'}${pathname.substring(pathname.indexOf('/', 1))}`);
-  // };
+  const changeLocale = (newLocale: Locale) => {
+    setLocale(newLocale);
+  };
 
   return (
     <DropdownMenu>
@@ -34,11 +30,11 @@ export function LanguageToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => console.log("Selected KR")}>
-          KR (한국어)
+        <DropdownMenuItem onClick={() => changeLocale('KR')}>
+          {getTranslation(locale, 'languageToggleKR')}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => console.log("Selected JP")}>
-          JP (日本語)
+        <DropdownMenuItem onClick={() => changeLocale('JP')}>
+          {getTranslation(locale, 'languageToggleJP')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
