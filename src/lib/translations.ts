@@ -6,14 +6,14 @@ export const translations = {
     languageToggleJP: "JP (日本語)",
     // ChuniCalcForm
     formTitle: "ChuniCalc",
-    formDescription: "츄니즘 레이팅 진행 상황을 추적하세요. 닉네임으로 레이팅을 조회하거나 직접 입력하세요.",
+    formDescription: "츄니즘 성장 시뮬레이터. 닉네임으로 레이팅을 조회하거나 직접 입력하세요.",
     nicknameLabel: "닉네임 (Chunirec User Name)",
     nicknamePlaceholder: "예: chunirec",
     fetchRatingButton: "조회",
     nicknameHelp: "Chunirec 닉네임을 입력하여 현재 레이팅을 조회합니다.",
     currentRatingLabel: "현재 레이팅",
     currentRatingPlaceholder: "Chunirec 유저명을 입력해 조회하세요",
-    currentRatingHelp: "Chunirec 유저명을 입력해 조회하세요.",
+    currentRatingHelp: "Chunirec 유저명을 입력해 조회하세요.", // 이 부분은 ChuniCalcForm.tsx에서 더 이상 사용되지 않습니다.
     targetRatingLabel: "목표 레이팅",
     targetRatingPlaceholder: "예: 16.00",
     targetRatingHelp: "목표 레이팅을 입력하세요. (최대 17.50)",
@@ -36,7 +36,9 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.0"
+    appVersion: "ChuniCalc v1.0.0",
+    adminPanelToggleShow: "관리자 패널 표시",
+    adminPanelToggleHide: "관리자 패널 숨기기"
   },
   JP: {
     homePageTitle: "チュニカルク",
@@ -44,14 +46,14 @@ export const translations = {
     languageToggleJP: "JP (日本語)",
     // ChuniCalcForm
     formTitle: "チュニカルク",
-    formDescription: "チュウニズムのレーティング進行状況を追跡します。ニックネームでレーティングを照会するか、直接入力してください。",
+    formDescription: "チュウニズム成長シミュレーター。ニックネームでレーティングを照会するか、直接入力してください。",
     nicknameLabel: "ニックネーム (Chunirec User Name)",
     nicknamePlaceholder: "例: chunirec",
     fetchRatingButton: "照会",
     nicknameHelp: "Chunirecのニックネームを入力して現在のレーティングを照会します。",
     currentRatingLabel: "現在レーティング",
     currentRatingPlaceholder: "Chunirecユーザー名を入力して照会してください",
-    currentRatingHelp: "Chunirecユーザー名を入力して照会してください。",
+    currentRatingHelp: "Chunirecユーザー名を入力して照会してください。", // 이 부분은 ChuniCalcForm.tsx에서 더 이상 사용되지 않습니다.
     targetRatingLabel: "目標レーティング",
     targetRatingPlaceholder: "例: 16.00",
     targetRatingHelp: "目標レーティングを入力してください。(最大 17.50)",
@@ -74,7 +76,9 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "チュニカルク v1.0.0"
+    appVersion: "チュニカルク v1.0.0",
+    adminPanelToggleShow: "管理者パネル表示",
+    adminPanelToggleHide: "管理者パネル非表示"
   }
 };
 

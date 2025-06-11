@@ -12,8 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { useLanguage } from "@/contexts/LanguageContext"; // Added
-import { getTranslation } from "@/lib/translations"; // Added
+import { useLanguage } from "@/contexts/LanguageContext"; 
+import { getTranslation } from "@/lib/translations"; 
 
 // Define ProfileData type, assuming structure from API
 type ProfileData = {
@@ -31,7 +31,7 @@ export default function ChuniCalcForm() {
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { locale } = useLanguage(); // Added
+  const { locale } = useLanguage(); 
 
   useEffect(() => {
     setIsClient(true);
@@ -55,7 +55,7 @@ export default function ChuniCalcForm() {
   const handleFetchRating = async () => {
     if (!nickname) {
       toast({
-        title: getTranslation(locale, 'nicknameLabel').split(' (')[0] + " 필요", // Dynamically get "닉네임 필요" or "ニックネーム必要"
+        title: getTranslation(locale, 'nicknameLabel').split(' (')[0] + " 필요", 
         description: getTranslation(locale, 'nicknameHelp'),
         variant: "destructive",
       });
@@ -269,12 +269,8 @@ export default function ChuniCalcForm() {
               value={currentRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
               className="text-lg bg-muted/50" 
-              aria-describedby="currentRatingHelp"
               disabled 
             />
-            <p id="currentRatingHelp" className="text-sm text-muted-foreground">
-              {getTranslation(locale, 'currentRatingHelp')}
-            </p>
           </div>
 
           <div className="space-y-2">

@@ -11,22 +11,24 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext"; // Added
-import { getTranslation } from "@/lib/translations"; // Added
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getTranslation } from "@/lib/translations";
 
 type GlobalMusicApiResponse = { records?: any[] };
 type UserShowallApiResponse = { records?: any[] };
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
+const ADMIN_PANEL_VISIBLE_KEY = `${LOCAL_STORAGE_PREFIX}isAdminPanelVisible`; // For persisting toggle state
 
 export default function AdvancedSettings() {
   const [localApiToken, setLocalApiToken] = useState("");
   const [cacheNickname, setCacheNickname] = useState("");
   const [isDeveloperMode, setIsDeveloperMode] = useState(false);
+  const [isAdminPanelVisible, setIsAdminPanelVisible] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
-  const { locale } = useLanguage(); // Added
+  const { locale } = useLanguage();
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -37,6 +39,8 @@ export default function AdvancedSettings() {
       }
       const devMode = localStorage.getItem(DEVELOPER_MODE_KEY);
       setIsDeveloperMode(devMode === 'true');
+      const adminPanelVisible = localStorage.getItem(ADMIN_PANEL_VISIBLE_KEY);
+      setIsAdminPanelVisible(adminPanelVisible === 'true');
     }
   }, []);
 
@@ -59,7 +63,8 @@ export default function AdvancedSettings() {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
-          if (key !== DEVELOPER_MODE_KEY) {
+          // Keep developer mode and admin panel visibility settings
+          if (key !== DEVELOPER_MODE_KEY && key !== ADMIN_PANEL_VISIBLE_KEY) { 
             keysToRemove.push(key);
           }
         }
@@ -132,6 +137,16 @@ export default function AdvancedSettings() {
     toast({ title: "개발자 모드 " + (checked ? "활성화됨" : "비활성화됨") });
   };
 
+  const toggleAdminPanel = () => {
+    const newVisibility = !isAdminPanelVisible;
+    setIsAdminPanelVisible(newVisibility);
+    if (typeof window !== 'undefined') {
+        localStorage.setItem(ADMIN_PANEL_VISIBLE_KEY, String(newVisibility));
+    }
+    toast({ title: "관리자 패널 " + (newVisibility ? "표시됨" : "숨겨짐") });
+  };
+
+
   return (
     <Card className="w-full max-w-md mt-12 mb-8 shadow-lg border-2 border-primary/20">
       <CardHeader>
@@ -160,64 +175,64 @@ export default function AdvancedSettings() {
             {getTranslation(locale, 'localApiKeyHelp')}
           </p>
         </div>
-
-        <hr/>
         
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="developer-mode"
-            checked={isDeveloperMode}
-            onCheckedChange={toggleDeveloperMode}
-            disabled={!clientHasMounted}
-          />
-          <Label htmlFor="developer-mode" className="flex items-center font-medium">
-            <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> {getTranslation(locale, 'developerModeLabel')}
-          </Label>
-        </div>
-        {isDeveloperMode && clientHasMounted && (
-          <Button asChild variant="outline" className="w-full">
-            <Link href="/developer/api-test">
-              <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
-            </Link>
-          </Button>
+        {isAdminPanelVisible && clientHasMounted && (
+          <>
+            <hr/>
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="developer-mode"
+                checked={isDeveloperMode}
+                onCheckedChange={toggleDeveloperMode}
+                disabled={!clientHasMounted}
+              />
+              <Label htmlFor="developer-mode" className="flex items-center font-medium">
+                <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> {getTranslation(locale, 'developerModeLabel')}
+              </Label>
+            </div>
+            {isDeveloperMode && (
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/developer/api-test">
+                  <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
+                </Link>
+              </Button>
+            )}
+
+            <hr/>
+            <div className="space-y-3">
+                <h3 className="font-medium flex items-center"><CloudDownload className="mr-2 h-5 w-5 text-primary" />{getTranslation(locale, 'manualCachingLabel')}</h3>
+                <div>
+                    <Button onClick={handleCacheGlobalMusic} variant="outline" className="w-full">
+                        {getTranslation(locale, 'cacheGlobalMusicButton')}
+                    </Button>
+                </div>
+                <div>
+                    <Label htmlFor="cacheNickname" className="text-sm">{getTranslation(locale, 'cacheUserNicknameLabel')}</Label>
+                     <Input
+                        id="cacheNickname"
+                        type="text"
+                        placeholder={getTranslation(locale, 'cacheUserNicknamePlaceholder')}
+                        value={cacheNickname}
+                        onChange={(e) => setCacheNickname(e.target.value)}
+                        className="mt-1"
+                    />
+                    <Button onClick={handleCacheUserRecords} variant="outline" className="w-full mt-1" disabled={!cacheNickname.trim()}>
+                        <UserCircle className="mr-2 h-4 w-4"/> {getTranslation(locale, 'cacheUserRecordsButton')}
+                    </Button>
+                </div>
+            </div>
+            
+            <hr/>
+            <div>
+              <Button onClick={handleClearAllLocalData} variant="destructive" className="w-full">
+                <Trash2 className="mr-2 h-4 w-4" /> {getTranslation(locale, 'clearLocalDataButton')}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-1">
+                {getTranslation(locale, 'clearLocalDataHelp')}
+              </p>
+            </div>
+          </>
         )}
-
-
-        <hr/>
-
-        <div className="space-y-3">
-            <h3 className="font-medium flex items-center"><CloudDownload className="mr-2 h-5 w-5 text-primary" />{getTranslation(locale, 'manualCachingLabel')}</h3>
-            <div>
-                <Button onClick={handleCacheGlobalMusic} variant="outline" className="w-full">
-                    {getTranslation(locale, 'cacheGlobalMusicButton')}
-                </Button>
-            </div>
-            <div>
-                <Label htmlFor="cacheNickname" className="text-sm">{getTranslation(locale, 'cacheUserNicknameLabel')}</Label>
-                 <Input
-                    id="cacheNickname"
-                    type="text"
-                    placeholder={getTranslation(locale, 'cacheUserNicknamePlaceholder')}
-                    value={cacheNickname}
-                    onChange={(e) => setCacheNickname(e.target.value)}
-                    className="mt-1"
-                />
-                <Button onClick={handleCacheUserRecords} variant="outline" className="w-full mt-1" disabled={!cacheNickname.trim()}>
-                    <UserCircle className="mr-2 h-4 w-4"/> {getTranslation(locale, 'cacheUserRecordsButton')}
-                </Button>
-            </div>
-        </div>
-        
-        <hr/>
-
-        <div>
-          <Button onClick={handleClearAllLocalData} variant="destructive" className="w-full">
-            <Trash2 className="mr-2 h-4 w-4" /> {getTranslation(locale, 'clearLocalDataButton')}
-          </Button>
-          <p className="text-xs text-muted-foreground mt-1">
-            {getTranslation(locale, 'clearLocalDataHelp')}
-          </p>
-        </div>
         
         <hr/>
         
@@ -229,6 +244,12 @@ export default function AdvancedSettings() {
             )}
         </div>
       </CardContent>
+      <CardFooter>
+        <Button onClick={toggleAdminPanel} variant="outline" className="w-full">
+            <ShieldAlert className="mr-2 h-4 w-4" /> 
+            {isAdminPanelVisible ? getTranslation(locale, 'adminPanelToggleHide') : getTranslation(locale, 'adminPanelToggleShow')}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }
