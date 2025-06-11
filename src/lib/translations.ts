@@ -6,14 +6,13 @@ export const translations = {
     languageToggleJP: "JP (日本語)",
     // ChuniCalcForm
     formTitle: "ChuniCalc",
-    formDescription: "츄니즘 성장 시뮬레이터. 닉네임으로 레이팅을 조회하거나 직접 입력하세요.",
+    formDescription: "츄니즘 성장 시뮬레이터.",
     nicknameLabel: "닉네임 (Chunirec User Name)",
     nicknamePlaceholder: "예: chunirec",
     fetchRatingButton: "조회",
     nicknameHelp: "Chunirec 닉네임을 입력하여 현재 레이팅을 조회합니다.",
     currentRatingLabel: "현재 레이팅",
     currentRatingPlaceholder: "Chunirec 유저명을 입력해 조회하세요",
-    currentRatingHelp: "Chunirec 유저명을 입력해 조회하세요.", // 이 부분은 ChuniCalcForm.tsx에서 더 이상 사용되지 않습니다.
     targetRatingLabel: "목표 레이팅",
     targetRatingPlaceholder: "예: 16.00",
     targetRatingHelp: "목표 레이팅을 입력하세요. (최대 17.50)",
@@ -46,14 +45,13 @@ export const translations = {
     languageToggleJP: "JP (日本語)",
     // ChuniCalcForm
     formTitle: "チュニカルク",
-    formDescription: "チュウニズム成長シミュレーター。ニックネームでレーティングを照会するか、直接入力してください。",
+    formDescription: "チュウニズム成長シミュレーター。",
     nicknameLabel: "ニックネーム (Chunirec User Name)",
     nicknamePlaceholder: "例: chunirec",
     fetchRatingButton: "照会",
     nicknameHelp: "Chunirecのニックネームを入力して現在のレーティングを照会します。",
     currentRatingLabel: "現在レーティング",
     currentRatingPlaceholder: "Chunirecユーザー名を入力して照会してください",
-    currentRatingHelp: "Chunirecユーザー名を入力して照会してください。", // 이 부분은 ChuniCalcForm.tsx에서 더 이상 사용되지 않습니다.
     targetRatingLabel: "目標レーティング",
     targetRatingPlaceholder: "例: 16.00",
     targetRatingHelp: "目標レーティングを入力してください。(最大 17.50)",
