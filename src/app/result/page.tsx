@@ -1,7 +1,6 @@
-
 "use client";
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -10,14 +9,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
-import { useChuniResultData } from "@/hooks/useChuniResultData"; // New hook import
-import type { CalculationStrategy, Song } from "@/types/result-page"; // Types import
+import { useChuniResultData } from "@/hooks/useChuniResultData"; 
+import type { CalculationStrategy } from "@/types/result-page"; 
+import { getApiToken } from '@/lib/get-api-token';
+import { LOCAL_STORAGE_PREFIX } from '@/lib/cache';
 
 
 function ResultContent() {
@@ -38,12 +39,11 @@ function ResultContent() {
 
   useEffect(() => {
     setClientHasMounted(true);
-    // Set initial values from searchParams once client has mounted
     setUserNameForApi(initialUserName || getTranslation(locale, 'resultPageDefaultPlayerName'));
     setCurrentRatingDisplay(initialCurrentRating || getTranslation(locale, 'resultPageNotAvailable'));
     setTargetRatingDisplay(initialTargetRating || getTranslation(locale, 'resultPageNotAvailable'));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialUserName, initialCurrentRating, initialTargetRating, locale]); // Add locale to deps if getTranslation is used for defaults
+  }, [initialUserName, initialCurrentRating, initialTargetRating, locale]);
 
   const {
     apiPlayerName,
@@ -53,10 +53,10 @@ function ResultContent() {
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
-    // isScoreLimitReleased, // This state is now managed and used within the hook for future calculations
-    // nonUpdatableB30Songs, // These are examples of states now managed by the hook
-    // updatableB30Songs,
-    // averageRatingOfUpdatableB30,
+    simulatedAverageB30Rating, // Added for display
+    targetRatingReached,      // Added for display
+    allUpdatableSongsCapped,  // Added for display
+    simulationStatus,         // Added for display
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -64,6 +64,7 @@ function ResultContent() {
     locale,
     refreshNonce,
     clientHasMounted,
+    calculationStrategy, // Pass calculationStrategy to the hook
   });
 
   const handleRefreshData = useCallback(() => {
@@ -77,7 +78,6 @@ function ResultContent() {
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
         localStorage.removeItem(combinedDataKey);
-        // localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Optionally clear global music too
         console.log(`User-specific cache cleared for user: ${userNameForApi}`);
     }
     setRefreshNonce(prev => prev + 1);
@@ -85,7 +85,46 @@ function ResultContent() {
 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  // const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"; // Can use best30GridCols for all
+
+  const renderSimulationStatus = () => {
+    if (calculationStrategy !== 'average' || simulationStatus === 'idle' || isLoadingSongs) return null;
+
+    let statusText = "";
+    let bgColor = "bg-blue-100 dark:bg-blue-900";
+    let textColor = "text-blue-700 dark:text-blue-300";
+
+    switch (simulationStatus) {
+      case 'running':
+        statusText = "평균 옵션 시뮬레이션 실행 중...";
+        bgColor = "bg-yellow-100 dark:bg-yellow-900";
+        textColor = "text-yellow-700 dark:text-yellow-300";
+        break;
+      case 'target_reached':
+        statusText = `목표 레이팅 ${targetRatingDisplay} 달성! (시뮬레이션된 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)})`;
+        bgColor = "bg-green-100 dark:bg-green-900";
+        textColor = "text-green-700 dark:text-green-300";
+        break;
+      case 'capped_target_not_reached':
+        statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) 다음 단계(B30 교체)가 필요할 수 있습니다.`;
+        bgColor = "bg-red-100 dark:bg-red-900";
+        textColor = "text-red-700 dark:text-red-300";
+        break;
+      case 'error':
+         statusText = "시뮬레이션 중 오류가 발생했습니다.";
+         bgColor = "bg-red-100 dark:bg-red-900";
+         textColor = "text-red-700 dark:text-red-300";
+         break;
+      default:
+        return null;
+    }
+
+    return (
+      <div className={cn("p-3 my-4 rounded-md text-sm flex items-center", bgColor, textColor)}>
+        <Info className="w-5 h-5 mr-2" />
+        <p>{statusText}</p>
+      </div>
+    );
+  };
 
 
   return (
@@ -142,7 +181,7 @@ function ResultContent() {
           </CardHeader>
           <CardContent>
             <RadioGroup
-              value={calculationStrategy} // Controlled component
+              value={calculationStrategy} 
               onValueChange={(value) => setCalculationStrategy(value as CalculationStrategy)}
               className="flex flex-col sm:flex-row gap-4"
             >
@@ -171,6 +210,8 @@ function ResultContent() {
           </CardContent>
         </Card>
 
+        {renderSimulationStatus()}
+
         <Tabs defaultValue="best30" className="w-full">
           <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg">
             <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabBest30')}</TabsTrigger>
@@ -184,7 +225,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted && userNameForApi && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName')
-                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`)) // Simplified check
+                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`)) 
                     ? getTranslation(locale, 'resultPageLoadingCacheCheck')
                     : getTranslation(locale, 'resultPageLoadingApiFetch'))
                   : getTranslation(locale, 'resultPageLoadingDataStateCheck')
@@ -250,7 +291,7 @@ function ResultContent() {
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleCombined')}</CardTitle>
                   </CardHeader>
-                  <CardContent> {/* Removed flex classes for single grid */}
+                  <CardContent> 
                     {combinedTopSongs.length > 0 ? (
                       <div className={cn("grid grid-cols-1 gap-4", best30GridCols)}>
                         {combinedTopSongs.map((song) => (
