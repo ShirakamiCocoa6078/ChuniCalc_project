@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
@@ -47,16 +48,16 @@ function ResultContent() {
 
   const {
     apiPlayerName,
-    best30SongsData,
+    best30SongsData, // This will be simulatedB30Songs if strategy is 'average' and simulation is active
     new20SongsData,
     combinedTopSongs,
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
-    simulatedAverageB30Rating, // Added for display
-    targetRatingReached,      // Added for display
-    allUpdatableSongsCapped,  // Added for display
-    simulationStatus,         // Added for display
+    simulatedAverageB30Rating,
+    targetRatingReached,
+    allUpdatableSongsCapped,
+    simulationStatus,
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -64,7 +65,7 @@ function ResultContent() {
     locale,
     refreshNonce,
     clientHasMounted,
-    calculationStrategy, // Pass calculationStrategy to the hook
+    calculationStrategy,
   });
 
   const handleRefreshData = useCallback(() => {
@@ -94,8 +95,8 @@ function ResultContent() {
     let textColor = "text-blue-700 dark:text-blue-300";
 
     switch (simulationStatus) {
-      case 'running':
-        statusText = "평균 옵션 시뮬레이션 실행 중...";
+      case 'running_score_increase':
+        statusText = "평균 옵션: 점수 상승 시뮬레이션 실행 중...";
         bgColor = "bg-yellow-100 dark:bg-yellow-900";
         textColor = "text-yellow-700 dark:text-yellow-300";
         break;
@@ -104,18 +105,29 @@ function ResultContent() {
         bgColor = "bg-green-100 dark:bg-green-900";
         textColor = "text-green-700 dark:text-green-300";
         break;
-      case 'capped_target_not_reached':
-        statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) 다음 단계(B30 교체)가 필요할 수 있습니다.`;
-        bgColor = "bg-red-100 dark:bg-red-900";
-        textColor = "text-red-700 dark:text-red-300";
+      case 'awaiting_replacement_loop':
+        statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) B30 곡 교체 시뮬레이션을 준비 중입니다.`;
+        bgColor = "bg-orange-100 dark:bg-orange-900"; // Changed color for this status
+        textColor = "text-orange-700 dark:text-orange-300";
+        break;
+      case 'replacing_song':
+        statusText = "평균 옵션: B30 곡 교체 시뮬레이션 실행 중...";
+        bgColor = "bg-purple-100 dark:bg-purple-900";
+        textColor = "text-purple-700 dark:text-purple-300";
         break;
       case 'error':
          statusText = "시뮬레이션 중 오류가 발생했습니다.";
          bgColor = "bg-red-100 dark:bg-red-900";
          textColor = "text-red-700 dark:text-red-300";
          break;
-      default:
-        return null;
+      default: // Handles 'idle' or other unlisted statuses if any
+        if (allUpdatableSongsCapped && !targetRatingReached && simulatedAverageB30Rating) { // This covers the old 'capped_target_not_reached' idea implicitly if it ends up 'idle' after capping
+             statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (최종 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)})`;
+             bgColor = "bg-red-100 dark:bg-red-900";
+             textColor = "text-red-700 dark:text-red-300";
+        } else {
+            return null;
+        }
     }
 
     return (
@@ -219,7 +231,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {isLoadingSongs ? (
+          {isLoadingSongs && simulationStatus === 'idle' ? ( // Show loading only if truly loading initial data and not mid-simulation
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
@@ -320,3 +332,5 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
+    
