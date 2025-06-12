@@ -8,7 +8,7 @@ import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, GLOBAL_MUSIC_CACHE_EXPIRY_MS, LOCAL_STORAGE_PREFIX, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
 import { getTranslation, type Locale } from '@/lib/translations';
-import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateChunithmSongRating } from '@/lib/rating-utils';
+import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateChunithmSongRating, findMinScoreForTargetRating } from '@/lib/rating-utils';
 import type { Song, ProfileData, RatingApiResponse, GlobalMusicApiResponse, UserShowallApiResponse, ShowallApiSongEntry, RatingApiSongEntry, CalculationStrategy } from "@/types/result-page";
 
 const BEST_COUNT = 30;
@@ -54,13 +54,12 @@ export function useChuniResultData({
   const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
   const [targetRatingReached, setTargetRatingReached] = useState(false);
   const [allUpdatableSongsCapped, setAllUpdatableSongsCapped] = useState(false);
-  const [simulationStatus, setSimulationStatus] = useState<'idle' | 'running_score_increase' | 'target_reached' | 'awaiting_replacement_loop' | 'replacing_song' | 'awaiting_external_data_for_replacement' | 'identifying_candidates' | 'candidates_identified' | 'error'>('idle');
+  const [simulationStatus, setSimulationStatus] = useState<'idle' | 'running_score_increase' | 'target_reached' | 'awaiting_replacement_loop' | 'replacing_song' | 'awaiting_external_data_for_replacement' | 'identifying_candidates' | 'candidates_identified' | 'selecting_optimal_candidate' | 'optimal_candidate_selected' | 'error'>('idle');
   const [songToReplace, setSongToReplace] = useState<Song | null>(null);
-  
-  // 상태 추가 for 1-15
   const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
   const [userPlayHistory, setUserPlayHistory] = useState<ShowallApiSongEntry[]>([]);
   const [candidateSongsForReplacement, setCandidateSongsForReplacement] = useState<Song[]>([]);
+  const [optimalCandidateSong, setOptimalCandidateSong] = useState<Song | null>(null);
 
 
   useEffect(() => {
@@ -104,7 +103,8 @@ export function useChuniResultData({
       setApiPlayerName(userNameForApi);
       setSimulationStatus('idle'); 
       setSongToReplace(null);
-      setCandidateSongsForReplacement([]); // Reset candidates on new data load
+      setCandidateSongsForReplacement([]); 
+      setOptimalCandidateSong(null);
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
@@ -410,12 +410,13 @@ export function useChuniResultData({
         setAllUpdatableSongsCapped(false);
         setSimulationStatus('idle');
         setSongToReplace(null);
+        setOptimalCandidateSong(null);
         console.log("[SIM_RESET] Simulation states reset due to strategy change or re-evaluation.");
     }
   }, [calculationStrategy, best30SongsData, simulationStatus, isLoadingSongs]); 
 
   useEffect(() => {
-    if (calculationStrategy !== 'average' || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'awaiting_external_data_for_replacement' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified' || isLoadingSongs) {
+    if (calculationStrategy !== 'average' || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'awaiting_external_data_for_replacement' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified' || simulationStatus === 'selecting_optimal_candidate' || simulationStatus === 'optimal_candidate_selected' || isLoadingSongs) {
       if (simulationStatus === 'running_score_increase') setSimulationStatus('idle'); 
       return;
     }
@@ -436,7 +437,9 @@ export function useChuniResultData({
             if (songInSimulatedA && songInSimulatedA.currentScore < (isScoreLimitReleased ? 1010000 : 1009000)) {
                 const { newScore, newRating } = findScoreForTargetRating(songInSimulatedA, 0.001, isScoreLimitReleased);
                 if (newScore > songInSimulatedA.currentScore || (newScore === songInSimulatedA.currentScore && newRating > songInSimulatedA.currentRating) ) { 
-                    songInSimulatedA.currentScore = newScore;
+                    songInSimulatedA.targetScore = newScore; // Update targetScore as well
+                    songInSimulatedA.targetRating = newRating; // Update targetRating
+                    songInSimulatedA.currentScore = newScore; // Update current for next sim step
                     songInSimulatedA.currentRating = newRating;
                     console.log(`[SIM_GROUP_A_UPDATE_1-9] Song: ${songInSimulatedA.title}, New Score: ${newScore}, New Rating: ${newRating.toFixed(2)}`);
                     songsUpdatedInIter = true;
@@ -451,7 +454,9 @@ export function useChuniResultData({
             if (songInSimulatedB && songInSimulatedB.currentScore < (isScoreLimitReleased ? 1010000 : 1009000)) {
                 const { newScore, newRating } = findScoreForTargetRating(songInSimulatedB, 0.0005, isScoreLimitReleased);
                  if (newScore > songInSimulatedB.currentScore || (newScore === songInSimulatedB.currentScore && newRating > songInSimulatedB.currentRating)) { 
-                    songInSimulatedB.currentScore = newScore;
+                    songInSimulatedB.targetScore = newScore;
+                    songInSimulatedB.targetRating = newRating;
+                    songInSimulatedB.currentScore = newScore; 
                     songInSimulatedB.currentRating = newRating;
                     console.log(`[SIM_GROUP_B_UPDATE_1-10] Song: ${songInSimulatedB.title}, New Score: ${newScore}, New Rating: ${newRating.toFixed(2)}`);
                     songsUpdatedInIter = true;
@@ -519,8 +524,8 @@ export function useChuniResultData({
     if (allCappedInSim) {
       setAllUpdatableSongsCapped(true);
       if (!targetRatingReached) { 
-        setSimulationStatus('awaiting_replacement_loop');
-        console.log("[CHAL_1-13_AWAITING_REPLACEMENT] All updatable B30 songs have reached score cap, target not met. Awaiting B30 replacement loop.");
+        setSimulationStatus('awaiting_replacement_loop'); // CHAL_1-13
+        console.log("[CHAL_1-13_AWAITING_REPLACEMENT] All updatable B30 songs have reached score cap, target not met. Status to 'awaiting_replacement_loop'.");
       } else {
         setSimulationStatus('target_reached');
         console.log("[SIM_ALL_CAPPED_TARGET_MET_1-12] All updatable B30 songs capped, target rating was met.");
@@ -529,14 +534,14 @@ export function useChuniResultData({
   }, [simulatedB30Songs, updatableB30Songs, isScoreLimitReleased, targetRatingReached, simulationStatus, calculationStrategy, allUpdatableSongsCapped]);
 
   useEffect(() => {
-    if (simulationStatus === 'awaiting_replacement_loop' && !targetRatingReached) {
+    if (simulationStatus === 'awaiting_replacement_loop' && !targetRatingReached) { // CHAL_1-14
       if (simulatedB30Songs.length > 0) {
         const currentB30ForReplacement = sortSongsByRatingDesc([...simulatedB30Songs]).slice(0, BEST_COUNT);
         if (currentB30ForReplacement.length > 0) {
             const sortedForMinRating = [...currentB30ForReplacement].sort((a,b) => a.currentRating - b.currentRating);
             const songToReplaceCandidate = sortedForMinRating[0];
             setSongToReplace(songToReplaceCandidate);
-            setSimulationStatus('replacing_song'); // Ready for 1-15
+            setSimulationStatus('replacing_song'); 
             console.log(`[CHAL_1-14_SONG_TO_REPLACE] Identified song to replace: ${songToReplaceCandidate.title} (Rating: ${songToReplaceCandidate.currentRating.toFixed(2)}). Status to 'replacing_song'.`);
         } else {
             console.error("[CHAL_1-14_ERROR] No songs in B30 to consider for replacement.");
@@ -549,42 +554,34 @@ export function useChuniResultData({
     }
   }, [simulationStatus, simulatedB30Songs, targetRatingReached]);
 
-  // 1-15: 외부 후보 탐색
-  useEffect(() => {
+  useEffect(() => { // CHAL_1-15: External candidate search
     if (simulationStatus === 'replacing_song' && songToReplace) {
-        console.log("[CHAL_1-15_PREP] Preparing for candidate identification. Song to replace:", songToReplace.title);
         if (allMusicData.length === 0 || userPlayHistory.length === 0) {
-            console.log("[CHAL_1-15_WAIT_DATA] Waiting for allMusicData and userPlayHistory to be loaded.");
+            console.log("[CHAL_1-15_WAIT_DATA] Waiting for allMusicData and/or userPlayHistory. Status to 'awaiting_external_data_for_replacement'.");
             setSimulationStatus('awaiting_external_data_for_replacement');
-            // If data isn't loaded, fetchAndProcessData should eventually set it,
-            // or a direct fetch might be needed if this effect is meant to trigger it.
-            // For now, assume fetchAndProcessData handles loading allMusicData and userPlayHistory.
-            return;
+            return; 
         }
+        console.log("[CHAL_1-15_START_IDENTIFY] Starting candidate identification. Song to replace:", songToReplace.title);
         setSimulationStatus('identifying_candidates');
     }
 
     if (simulationStatus === 'identifying_candidates' && songToReplace && allMusicData.length > 0) {
-        console.log(`[CHAL_1-15_EXEC] Identifying candidates. AllMusicData: ${allMusicData.length}, UserPlayHistory: ${userPlayHistory.length}. Target rating to beat: ${songToReplace.currentRating.toFixed(2)}`);
+        console.log(`[CHAL_1-15_EXEC_IDENTIFY] Identifying candidates. AllMusicData: ${allMusicData.length}, UserPlayHistory: ${userPlayHistory.length}. Target rating to beat: ${songToReplace.currentRating.toFixed(2)}`);
         
         const currentB30IdsAndDiffs = new Set(simulatedB30Songs.slice(0, BEST_COUNT).map(s => `${s.id}_${s.diff}`));
         const candidates: Song[] = [];
 
         allMusicData.forEach((apiSongEntry, index) => {
             if (currentB30IdsAndDiffs.has(`${apiSongEntry.id}_${apiSongEntry.diff.toUpperCase()}`)) {
-                return; // Skip if already in B30
+                return; 
             }
 
-            // Use mapApiSongToAppSong to correctly determine chartConstant
-            // We pass a dummy score/rating for now, as we only need chartConstant for potential calculation
             const tempSongForConst = mapApiSongToAppSong({ ...apiSongEntry, score: 0, rating: 0 }, index);
             const chartConstant = tempSongForConst.chartConstant;
 
             if (chartConstant && chartConstant > 0) {
-                const potentialMaxRating = calculateChunithmSongRating(1010000, chartConstant); // Max possible score
+                const potentialMaxRating = calculateChunithmSongRating(1010000, chartConstant); 
                 if (potentialMaxRating > songToReplace.currentRating) {
-                    // This song is a potential candidate.
-                    // Now, find its actual play record or create a non-played entry.
                     const userPlayRecord = userPlayHistory.find(
                         (play) => play.id === apiSongEntry.id && play.diff.toUpperCase() === apiSongEntry.diff.toUpperCase()
                     );
@@ -593,7 +590,6 @@ export function useChuniResultData({
                     if (userPlayRecord && typeof userPlayRecord.score === 'number') {
                         candidateSong = mapApiSongToAppSong(userPlayRecord, index);
                     } else {
-                        // Not played or no score, create a base entry
                         candidateSong = mapApiSongToAppSong({ ...apiSongEntry, score: 0, rating: 0 }, index);
                     }
                     candidates.push(candidateSong);
@@ -602,17 +598,77 @@ export function useChuniResultData({
         });
 
         setCandidateSongsForReplacement(candidates);
-        console.log(`[CHAL_1-15_RESULT] Identified ${candidates.length} candidates for replacement. Sample:`, candidates.slice(0, 3).map(c => ({ title: c.title, diff: c.diff, rating: c.currentRating, const: c.chartConstant })));
-        setSimulationStatus('candidates_identified'); // Move to next step
+        console.log(`[CHAL_1-15_RESULT_CANDIDATES] Identified ${candidates.length} candidates. Sample:`, candidates.slice(0, 3).map(c => ({ title: c.title, diff: c.diff, rating: c.currentRating, const: c.chartConstant })));
+        setSimulationStatus('candidates_identified');
     }
   }, [simulationStatus, songToReplace, allMusicData, userPlayHistory, simulatedB30Songs]);
+
+  // CHAL_1-16: Select optimal candidate
+  useEffect(() => {
+    if (simulationStatus === 'candidates_identified' && candidateSongsForReplacement.length > 0 && songToReplace) {
+        console.log(`[CHAL_1-16_START_OPTIMAL_SELECT] Selecting optimal candidate. Candidates: ${candidateSongsForReplacement.length}, To Replace: ${songToReplace.title} (Rating: ${songToReplace.currentRating.toFixed(2)})`);
+        setSimulationStatus('selecting_optimal_candidate');
+
+        let bestCandidateInfo: { song: Song; effort: number; neededScore: number; resultingRating: number } | null = null;
+        const targetRatingToBeat = songToReplace.currentRating + 0.001;
+
+        candidateSongsForReplacement.forEach(candidate => {
+            if (!candidate.chartConstant) return;
+
+            const scoreInfo = findMinScoreForTargetRating(candidate, targetRatingToBeat, isScoreLimitReleased);
+
+            if (scoreInfo.possible) {
+                const effort = candidate.currentScore > 0 ? (scoreInfo.score - candidate.currentScore) : scoreInfo.score;
+                
+                if (bestCandidateInfo === null || effort < bestCandidateInfo.effort) {
+                    bestCandidateInfo = {
+                        song: candidate,
+                        effort: effort,
+                        neededScore: scoreInfo.score,
+                        resultingRating: scoreInfo.rating,
+                    };
+                } else if (effort === bestCandidateInfo.effort) {
+                    // Tie-breaking: higher resulting rating is better
+                    if (scoreInfo.rating > bestCandidateInfo.resultingRating) {
+                         bestCandidateInfo = {
+                            song: candidate,
+                            effort: effort,
+                            neededScore: scoreInfo.score,
+                            resultingRating: scoreInfo.rating,
+                        };
+                    }
+                }
+            }
+        });
+
+        if (bestCandidateInfo) {
+            const finalOptimalCandidate = {
+                ...bestCandidateInfo.song,
+                targetScore: bestCandidateInfo.neededScore,
+                targetRating: bestCandidateInfo.resultingRating,
+            };
+            setOptimalCandidateSong(finalOptimalCandidate);
+            setSimulationStatus('optimal_candidate_selected');
+            console.log(`[CHAL_1-16_OPTIMAL_SELECTED] Optimal candidate: ${finalOptimalCandidate.title} (Diff: ${finalOptimalCandidate.diff}). Score needed: ${finalOptimalCandidate.targetScore}, New Rating: ${finalOptimalCandidate.targetRating.toFixed(2)}, Effort: ${bestCandidateInfo.effort}`);
+        } else {
+            console.warn("[CHAL_1-16_NO_OPTIMAL_CANDIDATE] No suitable optimal candidate found to replace the song. This might indicate an issue or that no external song can improve the B30 average further with less effort than alternatives.");
+            // Potentially loop back or handle error state - for now, log and change status
+            // This could mean we need to try replacing a different song from B30, or the simulation ends.
+            // For now, setting to error to highlight. A more robust solution might try replacing the *next* lowest B30 song.
+            setSimulationStatus('error'); 
+        }
+    } else if (simulationStatus === 'candidates_identified' && candidateSongsForReplacement.length === 0 && songToReplace) {
+        console.warn(`[CHAL_1-16_NO_CANDIDATES_FOUND] No candidates were identified in step 1-15 for song: ${songToReplace.title}. Cannot select optimal candidate.`);
+        setSimulationStatus('error'); // Or another state indicating no way forward with this replacement
+    }
+  }, [simulationStatus, candidateSongsForReplacement, songToReplace, isScoreLimitReleased, findMinScoreForTargetRating]);
 
 
   useEffect(() => {
     if (!isLoadingSongs) {
       if (best30SongsData.length > 0 || new20SongsData.length > 0) {
         const songMap = new Map<string, Song>();
-        const baseB30 = (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified')) ? simulatedB30Songs : best30SongsData;
+        const baseB30 = (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified' || simulationStatus === 'selecting_optimal_candidate' || simulationStatus === 'optimal_candidate_selected' )) ? simulatedB30Songs : best30SongsData;
         
         baseB30.forEach(song => songMap.set(`${song.id}_${song.diff}`, {...song}));
         new20SongsData.forEach(song => {
@@ -636,7 +692,7 @@ export function useChuniResultData({
 
   return {
     apiPlayerName,
-    best30SongsData: (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified')) ? simulatedB30Songs : best30SongsData,
+    best30SongsData: (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus.startsWith('awaiting') || simulationStatus.startsWith('replacing') || simulationStatus.startsWith('identifying') || simulationStatus.startsWith('candidate') || simulationStatus.startsWith('selecting') || simulationStatus.startsWith('optimal') || simulationStatus === 'target_reached' )) ? simulatedB30Songs : best30SongsData,
     new20SongsData,
     combinedTopSongs,
     isLoadingSongs,
@@ -653,7 +709,8 @@ export function useChuniResultData({
     allUpdatableSongsCapped,
     simulationStatus,
     songToReplace,
-    candidateSongsForReplacement, // 반환값에 추가
+    candidateSongsForReplacement, 
+    optimalCandidateSong,
   };
 }
 

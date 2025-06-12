@@ -21,29 +21,14 @@ export const calculateChunithmSongRating = (score: number, chartConstant: number
   if (score >= 1009000) { // SSS+
     ratingValue = chartConstant + 2.15;
   } else if (score >= 1007500) { // SSS
-    // 1007500 to 1008999: const + 2.00 to const + 2.14 (100점당 0.01, 총 1500점 = 0.15)
-    // SSS (1,007,500점): 보면 정수 + 2.0
-    // SSS (1,007,500) ~ SSS+ (1,009,000): 100점마다 레이팅 값 +0.01 (총 1500점 / 100점 = 15단계 * 0.01 = +0.15)
     ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
   } else if (score >= 1005000) { // SS+
-    // 1005000 to 1007499: const + 1.50 to const + 1.99 (50점당 0.01, 총 2500점 = 0.50)
-    // SS+ (1,005,000점): 보면 정수 + 1.5
-    // SS+ (1,005,000) ~ SSS (1,007,500): 50점마다 레이팅 값 +0.01 (총 2500점 / 50점 = 50단계 * 0.01 = +0.50)
     ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
   } else if (score >= 1000000) { // SS
-    // 1000000 to 1004999: const + 1.00 to const + 1.49 (100점당 0.01, 총 5000점 = 0.50)
-    // SS (1,000,000점): 보면 정수 + 1.0
-    // SS (1,000,000) ~ SS+ (1,005,000): 100점마다 레이팅 값 +0.01 (총 5000점 / 100점 = 50단계 * 0.01 = +0.50)
     ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
   } else if (score >= 990000) { // S+
-    // 990000 to 999999: const + 0.60 to const + 0.99 (250점당 0.01, 총 10000점 = 0.40)
-    // S+ (990,000점): 보면 정수 + 0.6
-    // S+ (990,000) ~ SS (1,000,000): 250점마다 레이팅 값 +0.01 (총 10000점 / 250점 = 40단계 * 0.01 = +0.40)
     ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
   } else if (score >= 975000) { // S
-    // 975000 to 989999: const + 0.00 to const + 0.59 (250점당 0.01, 총 15000점 = 0.60)
-    // S (975,000점): 보면 정수 + 0.0
-    // S (975,000) ~ S+ (990,000): 250점마다 레이팅 값 +0.01 (총 15000점 / 250점 = 60단계 * 0.01 = +0.60)
     ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
   } else if (score >= 950000) { // AAA
     ratingValue = chartConstant - 1.50;
@@ -62,28 +47,25 @@ export const calculateChunithmSongRating = (score: number, chartConstant: number
 
 export const mapApiSongToAppSong = (
     apiSong: RatingApiSongEntry | ShowallApiSongEntry,
-    _index: number, // index might not be needed if not used for unique key generation here
-    chartConstantOverride?: number // This override is primarily for rating_data.json best30 entries
+    _index: number, 
+    chartConstantOverride?: number 
 ): Song => {
   const score = typeof apiSong.score === 'number' ? apiSong.score : 0;
 
   let effectiveChartConstant: number | null = null;
 
-  // Priority 1: chartConstantOverride if provided and valid
   if (typeof chartConstantOverride === 'number' && chartConstantOverride > 0) {
     effectiveChartConstant = chartConstantOverride;
   } else {
-    // Priority 2: apiSong.const if it's a positive number
     if (typeof apiSong.const === 'number' && apiSong.const > 0) {
       effectiveChartConstant = apiSong.const;
     } 
-    // Priority 3: apiSong.const is 0, use apiSong.level if it's an integer or x.5
     else if (apiSong.const === 0) {
       if ((typeof apiSong.level === 'string' || typeof apiSong.level === 'number') && String(apiSong.level).trim() !== "") {
         const parsedLevel = parseFloat(String(apiSong.level));
         if (!isNaN(parsedLevel) && parsedLevel > 0) {
           const isInteger = parsedLevel % 1 === 0;
-          const isXpoint5 = Math.abs((parsedLevel * 10) % 10) === 5; // handles x.5
+          const isXpoint5 = Math.abs((parsedLevel * 10) % 10) === 5; 
 
           if (isInteger || isXpoint5) {
             effectiveChartConstant = parsedLevel;
@@ -91,8 +73,6 @@ export const mapApiSongToAppSong = (
         }
       }
     } 
-    // Priority 4: Fallback for is_const_unknown (if const was not positive or 0, i.e., likely null or undefined)
-    // This applies if effectiveChartConstant is still null at this point.
     else if (effectiveChartConstant === null && (apiSong as ShowallApiSongEntry).is_const_unknown && 
              (typeof apiSong.level === 'string' || typeof apiSong.level === 'number') &&
              String(apiSong.level).trim() !== "") {
@@ -107,13 +87,10 @@ export const mapApiSongToAppSong = (
   if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0 && score > 0) {
     calculatedCurrentRating = calculateChunithmSongRating(score, effectiveChartConstant);
   } else {
-    // Fallback if no valid chart constant determined, use API's rating if available
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
   const currentRating = calculatedCurrentRating;
-
-  // Placeholder target score/rating logic (from original code)
-  // This will be replaced by the more detailed calculation logic later.
+  
   const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
   const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
 
@@ -131,8 +108,8 @@ export const mapApiSongToAppSong = (
     chartConstant: effectiveChartConstant,
     currentScore: score,
     currentRating: currentRating,
-    targetScore: targetScore, // Placeholder, to be refined by specific calculation strategies
-    targetRating: targetRating, // Placeholder
+    targetScore: targetScore, 
+    targetRating: targetRating, 
     genre: apiSong.genre,
     level: apiSong.level,
   };
@@ -159,4 +136,38 @@ export const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
     const diffBOrder = difficultyOrder[b.diff.toUpperCase() as keyof typeof difficultyOrder] || 0;
     return diffBOrder - diffAOrder;
   });
+};
+
+// Helper function to find the minimum score to achieve a target rating
+export const findMinScoreForTargetRating = (
+  currentSong: Song,
+  absoluteTargetRating: number,
+  isLimitReleasedLocal: boolean
+): { score: number; rating: number; possible: boolean } => {
+  if (typeof currentSong.chartConstant !== 'number' || currentSong.chartConstant <= 0) {
+    return { score: currentSong.currentScore, rating: currentSong.currentRating, possible: false };
+  }
+
+  const maxScore = isLimitReleasedLocal ? 1010000 : 1009000;
+  
+  // If current rating already meets target, score is current score
+  if (currentSong.currentRating >= absoluteTargetRating && currentSong.currentScore > 0) { // Ensure score > 0 for played songs
+      return { score: currentSong.currentScore, rating: currentSong.currentRating, possible: true };
+  }
+
+  // Iterate from current score + 1 (or 1 if current is 0) up to maxScore
+  // If currentScore is 0, start checking from score 1.
+  // Otherwise, start from currentScore + 1 (or smallest increment possible, e.g. 1 point)
+  const startingScore = currentSong.currentScore > 0 ? currentSong.currentScore + 1 : 1;
+
+  for (let scoreAttempt = startingScore; scoreAttempt <= maxScore; scoreAttempt += 1) { // Increment by 1 for fine-grained check
+    const calculatedRating = calculateChunithmSongRating(scoreAttempt, currentSong.chartConstant);
+    if (calculatedRating >= absoluteTargetRating) {
+      return { score: scoreAttempt, rating: parseFloat(calculatedRating.toFixed(2)), possible: true };
+    }
+  }
+  
+  // If loop finishes, it means target rating wasn't reached even at maxScore
+  const ratingAtMaxScore = calculateChunithmSongRating(maxScore, currentSong.chartConstant);
+  return { score: maxScore, rating: parseFloat(ratingAtMaxScore.toFixed(2)), possible: ratingAtMaxScore >= absoluteTargetRating };
 };
