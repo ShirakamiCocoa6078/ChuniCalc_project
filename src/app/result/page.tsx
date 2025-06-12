@@ -220,10 +220,35 @@ function ResultContent() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [clientHasMounted, setClientHasMounted] = useState(false);
+  const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false); // For 과제 1-1
 
   useEffect(() => {
     setClientHasMounted(true);
   }, []);
+
+  // 과제 1-1: '점수 상한 한계 해제' 플래그 결정
+  useEffect(() => {
+    if (clientHasMounted) {
+      const currentIsValidNumber = currentRatingDisplay && !isNaN(parseFloat(currentRatingDisplay));
+      const targetIsValidNumber = targetRatingDisplay && !isNaN(parseFloat(targetRatingDisplay));
+
+      if (currentIsValidNumber && targetIsValidNumber) {
+        const currentRatingNum = parseFloat(currentRatingDisplay);
+        const targetRatingNum = parseFloat(targetRatingDisplay);
+
+        if ((targetRatingNum - currentRatingNum) * 50 > 10) {
+          setIsScoreLimitReleased(true);
+          console.log(`[SCORE_CAP_RELEASE_CHECK] Score cap release flag SET to true. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 > 10)`);
+        } else {
+          setIsScoreLimitReleased(false);
+          console.log(`[SCORE_CAP_RELEASE_CHECK] Score cap release flag SET to false. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 <= 10)`);
+        }
+      } else {
+        setIsScoreLimitReleased(false); // 유효한 숫자가 아니면 기본값 false
+        console.log(`[SCORE_CAP_RELEASE_CHECK] Ratings ('${currentRatingDisplay}', '${targetRatingDisplay}') not valid numbers or not available, flag defaults to false.`);
+      }
+    }
+  }, [clientHasMounted, currentRatingDisplay, targetRatingDisplay]);
 
 
   const handleRefreshData = useCallback(() => {
@@ -590,8 +615,6 @@ function ResultContent() {
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
   const new20GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
-  // const combinedBest30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4"; // No longer needed
-  // const combinedNew20GridCols = "sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"; // No longer needed
 
 
   return (
@@ -757,11 +780,11 @@ function ResultContent() {
                   <CardHeader>
                     <CardTitle className="font-headline text-2xl">{getTranslation(locale, 'resultPageCardTitleCombined')}</CardTitle>
                   </CardHeader>
-                  <CardContent> {/* Removed flex classes here */}
+                  <CardContent>
                     {combinedTopSongs.length > 0 ? (
                       <div className={cn(
                         "grid grid-cols-1 gap-4",
-                        best30GridCols // Reusing best30GridCols for the combined list
+                        best30GridCols 
                       )}>
                         {combinedTopSongs.map((song) => (
                           <SongCard key={`combined-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
