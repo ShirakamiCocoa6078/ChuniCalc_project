@@ -221,17 +221,15 @@ function ResultContent() {
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [clientHasMounted, setClientHasMounted] = useState(false);
   
-  // 과제 1-1: '점수 상한 한계 해제' 플래그
   const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false);
-  // 과제 1-3: 갱신 불가 B30 곡 목록
   const [nonUpdatableB30Songs, setNonUpdatableB30Songs] = useState<Song[]>([]);
+  const [updatableB30Songs, setUpdatableB30Songs] = useState<Song[]>([]);
 
 
   useEffect(() => {
     setClientHasMounted(true);
   }, []);
 
-  // 과제 1-1: '점수 상한 한계 해제' 플래그 결정 로직
   useEffect(() => {
     if (clientHasMounted) {
       const currentIsValidNumber = currentRatingDisplay && !isNaN(parseFloat(currentRatingDisplay));
@@ -607,14 +605,18 @@ function ResultContent() {
     }
   }, [best30SongsData, new20SongsData, isLoadingSongs]);
 
-  // 과제 1-3: 갱신 불가 B30 곡 분류
   useEffect(() => {
     if (best30SongsData.length > 0) {
       const nonUpdatable = best30SongsData.filter(song => song.currentScore >= 1009000);
       setNonUpdatableB30Songs(nonUpdatable);
       console.log(`[CHAL_1-3_NON_UPDATABLE_B30] Non-updatable B30 songs (score >= 1,009,000): ${nonUpdatable.length} songs.`, nonUpdatable.map(s => ({ title: s.title, score: s.currentScore })));
+      
+      const updatable = best30SongsData.filter(song => song.currentScore < 1009000);
+      setUpdatableB30Songs(updatable);
+      console.log(`[CHAL_1-4_UPDATABLE_B30] Updatable B30 songs (score < 1,009,000): ${updatable.length} songs.`, updatable.map(s => ({ title: s.title, score: s.currentScore, rating: s.currentRating })).slice(0, 5));
     } else {
       setNonUpdatableB30Songs([]);
+      setUpdatableB30Songs([]);
     }
   }, [best30SongsData]);
 
