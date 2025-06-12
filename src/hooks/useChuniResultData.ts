@@ -45,7 +45,8 @@ export function useChuniResultData({
   const [nonUpdatableB30Songs, setNonUpdatableB30Songs] = useState<Song[]>([]);
   const [updatableB30Songs, setUpdatableB30Songs] = useState<Song[]>([]);
   const [averageRatingOfUpdatableB30, setAverageRatingOfUpdatableB30] = useState<number | null>(null);
-  
+  const [groupAB30Songs, setGroupAB30Songs] = useState<Song[]>([]); // Step 1-6
+
   // 과제 1-1: 점수 상한 한계 해제 플래그 결정
   useEffect(() => {
     if (clientHasMounted) {
@@ -85,7 +86,7 @@ export function useChuniResultData({
 
       setIsLoadingSongs(true);
       setErrorLoadingSongs(null);
-      setApiPlayerName(userNameForApi); // Initially set to user input, API might override
+      setApiPlayerName(userNameForApi); 
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
@@ -162,7 +163,7 @@ export function useChuniResultData({
                     if (res.type === 'profile' && !profileData) {
                       setApiPlayerName(res.data.player_name || userNameForApi);
                       setCachedData<ProfileData>(profileKey, res.data);
-                      profileData = res.data; // Update local var for current execution
+                      profileData = res.data; 
                     }
                     if (res.type === 'rating' && !ratingData) {
                       const bestEntriesApi = res.data.best?.entries?.filter((e: any): e is RatingApiSongEntry =>
@@ -172,7 +173,7 @@ export function useChuniResultData({
                       setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
                       console.log("[CHAL_1-2_B30_LOAD] Best 30 songs data loaded from API. Count:", mappedBestEntries.length, mappedBestEntries.slice(0,2));
                       setCachedData<RatingApiResponse>(ratingDataKey, res.data);
-                      ratingData = res.data; // Update local var
+                      ratingData = res.data; 
                     }
                     if (res.type === 'globalMusic' && !globalMusicData?.records) {
                         let rawApiRecordsForGlobal: any[] = [];
@@ -214,7 +215,6 @@ export function useChuniResultData({
                         );
                         setCachedData<GlobalMusicApiResponse>(globalMusicKey, { records: globalMusicRecordsFromDataSource }, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
                         console.log("[N20_PREP_2_API] Global music data (flattened & filtered) fetched from API and cached. Count:", globalMusicRecordsFromDataSource.length);
-                        // No need to update globalMusicData local var as its records are directly used via globalMusicRecordsFromDataSource
                     }
                     if (res.type === 'userShowall' && !userShowallData?.records) {
                         userShowallRecordsFromDataSource = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
@@ -222,7 +222,6 @@ export function useChuniResultData({
                         );
                         setCachedData<UserShowallApiResponse>(userShowallKey, { records: userShowallRecordsFromDataSource }, USER_DATA_CACHE_EXPIRY_MS);
                         console.log("[N20_PREP_3_API] User's showall data fetched from API and cached. Count:", userShowallRecordsFromDataSource.length);
-                        // No need to update userShowallData local var
                     }
                 }
                 if (criticalError) throw new Error(criticalError);
@@ -241,13 +240,13 @@ export function useChuniResultData({
                 setErrorLoadingSongs(detailedErrorMessage);
                 if (!apiPlayerName && userNameForApi !== defaultPlayerName) setApiPlayerName(userNameForApi);
             }
-        } else { // All data came from cache
+        } else { 
              toast({ 
                 title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), 
                 description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') 
             });
         }
-      } else { // All data came from cache initially
+      } else { 
          toast({ 
             title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), 
             description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') 
@@ -300,7 +299,7 @@ export function useChuniResultData({
       fetchAndProcessData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, clientHasMounted, locale]); // currentRatingDisplay, targetRatingDisplay removed to avoid re-fetch on param change after initial load for this effect
+  }, [userNameForApi, refreshNonce, clientHasMounted, locale]); 
 
   // 과제 1-3 & 1-4: 갱신 불가/가능 곡 분류
   useEffect(() => {
@@ -331,6 +330,23 @@ export function useChuniResultData({
     }
   }, [updatableB30Songs]);
 
+  // 과제 1-6: 그룹 A 분류 (중간값 이하, 레이팅 낮은 순 정렬)
+  useEffect(() => {
+    if (updatableB30Songs.length > 0 && averageRatingOfUpdatableB30 !== null) {
+      const groupA = updatableB30Songs
+        .filter(song => song.currentRating <= averageRatingOfUpdatableB30)
+        .sort((a, b) => a.currentRating - b.currentRating); // 레이팅 낮은 순 (오름차순)
+      setGroupAB30Songs(groupA);
+      console.log(`[CHAL_1-6_GROUP_A_B30] Group A (<= avg rating, sorted asc): ${groupA.length} songs. Avg Rating: ${averageRatingOfUpdatableB30}. Sample:`, groupA.slice(0,3).map(s => ({title: s.title, rating: s.currentRating})));
+    } else {
+      setGroupAB30Songs([]);
+      if (averageRatingOfUpdatableB30 === null && updatableB30Songs.length > 0) {
+        console.log(`[CHAL_1-6_GROUP_A_B30] Group A not set because average rating is null, though updatable songs exist.`);
+      }
+    }
+  }, [updatableB30Songs, averageRatingOfUpdatableB30]);
+
+
   // Combined songs logic
   useEffect(() => {
     if (!isLoadingSongs) {
@@ -354,7 +370,7 @@ export function useChuniResultData({
       const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`;
       const dataToCache = { best30: best30SongsData, new20: new20SongsData };
       setCachedData(combinedDataKey, dataToCache, USER_DATA_CACHE_EXPIRY_MS);
-      toast({ title: getTranslation(locale, 'toastInfoCombinedCacheSuccessTitle'), description: getTranslation(locale, 'toastInfoCombinedCacheSuccessDesc') });
+      // toast({ title: getTranslation(locale, 'toastInfoCombinedCacheSuccessTitle'), description: getTranslation(locale, 'toastInfoCombinedCacheSuccessDesc') }); // Consider if this toast is too frequent
     }
   }, [best30SongsData, new20SongsData, userNameForApi, isLoadingSongs, locale, clientHasMounted, toast]);
 
@@ -370,5 +386,7 @@ export function useChuniResultData({
     nonUpdatableB30Songs,
     updatableB30Songs,
     averageRatingOfUpdatableB30,
+    groupAB30Songs, // Exporting Group A
   };
 }
+
