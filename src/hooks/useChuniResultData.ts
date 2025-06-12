@@ -45,7 +45,8 @@ export function useChuniResultData({
   const [nonUpdatableB30Songs, setNonUpdatableB30Songs] = useState<Song[]>([]);
   const [updatableB30Songs, setUpdatableB30Songs] = useState<Song[]>([]);
   const [averageRatingOfUpdatableB30, setAverageRatingOfUpdatableB30] = useState<number | null>(null);
-  const [groupAB30Songs, setGroupAB30Songs] = useState<Song[]>([]); // Step 1-6
+  const [groupAB30Songs, setGroupAB30Songs] = useState<Song[]>([]);
+  const [groupBB30Songs, setGroupBB30Songs] = useState<Song[]>([]); // 1-7단계: 그룹 B 상태 변수
 
   // 과제 1-1: 점수 상한 한계 해제 플래그 결정
   useEffect(() => {
@@ -330,7 +331,7 @@ export function useChuniResultData({
     }
   }, [updatableB30Songs]);
 
-  // 과제 1-6: 그룹 A 분류 (중간값 이하, 레이팅 낮은 순 정렬)
+  // 과제 1-6 (그룹 A 분류) & 1-7 (그룹 B 분류)
   useEffect(() => {
     if (updatableB30Songs.length > 0 && averageRatingOfUpdatableB30 !== null) {
       const groupA = updatableB30Songs
@@ -338,10 +339,19 @@ export function useChuniResultData({
         .sort((a, b) => a.currentRating - b.currentRating); // 레이팅 낮은 순 (오름차순)
       setGroupAB30Songs(groupA);
       console.log(`[CHAL_1-6_GROUP_A_B30] Group A (<= avg rating, sorted asc): ${groupA.length} songs. Avg Rating: ${averageRatingOfUpdatableB30}. Sample:`, groupA.slice(0,3).map(s => ({title: s.title, rating: s.currentRating})));
+
+      const groupB = updatableB30Songs
+        .filter(song => song.currentRating > averageRatingOfUpdatableB30)
+        .sort((a, b) => a.currentRating - b.currentRating); // 레이팅 낮은 순 (오름차순)
+      setGroupBB30Songs(groupB);
+      console.log(`[CHAL_1-7_GROUP_B_B30] Group B (> avg rating, sorted asc): ${groupB.length} songs. Avg Rating: ${averageRatingOfUpdatableB30}. Sample:`, groupB.slice(0,3).map(s => ({title: s.title, rating: s.currentRating})));
+
     } else {
       setGroupAB30Songs([]);
+      setGroupBB30Songs([]);
       if (averageRatingOfUpdatableB30 === null && updatableB30Songs.length > 0) {
         console.log(`[CHAL_1-6_GROUP_A_B30] Group A not set because average rating is null, though updatable songs exist.`);
+        console.log(`[CHAL_1-7_GROUP_B_B30] Group B not set because average rating is null, though updatable songs exist.`);
       }
     }
   }, [updatableB30Songs, averageRatingOfUpdatableB30]);
@@ -386,7 +396,8 @@ export function useChuniResultData({
     nonUpdatableB30Songs,
     updatableB30Songs,
     averageRatingOfUpdatableB30,
-    groupAB30Songs, // Exporting Group A
+    groupAB30Songs,
+    groupBB30Songs, // 1-7단계: 그룹 B 반환
   };
 }
 
