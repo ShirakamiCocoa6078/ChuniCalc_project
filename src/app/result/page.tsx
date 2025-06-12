@@ -48,7 +48,7 @@ function ResultContent() {
 
   const {
     apiPlayerName,
-    best30SongsData, // This will be simulatedB30Songs if strategy is 'average' and simulation is active
+    best30SongsData, 
     new20SongsData,
     combinedTopSongs,
     isLoadingSongs,
@@ -58,6 +58,8 @@ function ResultContent() {
     targetRatingReached,
     allUpdatableSongsCapped,
     simulationStatus,
+    songToReplace, // 과제 1-14 반환값
+    candidateSongsForReplacement, // 과제 1-15 반환값
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -106,22 +108,37 @@ function ResultContent() {
         textColor = "text-green-700 dark:text-green-300";
         break;
       case 'awaiting_replacement_loop':
-        statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) B30 곡 교체 시뮬레이션을 준비 중입니다.`;
-        bgColor = "bg-orange-100 dark:bg-orange-900"; // Changed color for this status
+        statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) B30 곡 교체 시뮬레이션 준비 중입니다.`;
+        bgColor = "bg-orange-100 dark:bg-orange-900"; 
         textColor = "text-orange-700 dark:text-orange-300";
         break;
       case 'replacing_song':
-        statusText = "평균 옵션: B30 곡 교체 시뮬레이션 실행 중...";
+        statusText = `B30 곡 교체 대상 식별 완료: '${songToReplace?.title || 'N/A'}' (레이팅: ${songToReplace?.currentRating.toFixed(2) || 'N/A'}). 외부 데이터 로딩 또는 후보 탐색 대기 중...`;
         bgColor = "bg-purple-100 dark:bg-purple-900";
         textColor = "text-purple-700 dark:text-purple-300";
         break;
+      case 'awaiting_external_data_for_replacement':
+        statusText = `B30 곡 교체 대상: '${songToReplace?.title || 'N/A'}'. 전체 악곡/플레이 기록 로딩 대기 중...`;
+        bgColor = "bg-purple-100 dark:bg-purple-900";
+        textColor = "text-purple-700 dark:text-purple-300";
+        break;
+      case 'identifying_candidates':
+        statusText = `B30 곡 교체 대상: '${songToReplace?.title || 'N/A'}'. 외부 곡에서 교체 후보 탐색 중...`;
+        bgColor = "bg-indigo-100 dark:bg-indigo-900";
+        textColor = "text-indigo-700 dark:text-indigo-300";
+        break;
+      case 'candidates_identified':
+         statusText = `교체 후보 ${candidateSongsForReplacement.length}곡 식별 완료. 최적 후보 선정 단계(1-16)로 진행 예정.`;
+         bgColor = "bg-teal-100 dark:bg-teal-900";
+         textColor = "text-teal-700 dark:text-teal-300";
+         break;
       case 'error':
          statusText = "시뮬레이션 중 오류가 발생했습니다.";
          bgColor = "bg-red-100 dark:bg-red-900";
          textColor = "text-red-700 dark:text-red-300";
          break;
-      default: // Handles 'idle' or other unlisted statuses if any
-        if (allUpdatableSongsCapped && !targetRatingReached && simulatedAverageB30Rating) { // This covers the old 'capped_target_not_reached' idea implicitly if it ends up 'idle' after capping
+      default: 
+        if (allUpdatableSongsCapped && !targetRatingReached && simulatedAverageB30Rating) { 
              statusText = `모든 갱신 가능 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (최종 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)})`;
              bgColor = "bg-red-100 dark:bg-red-900";
              textColor = "text-red-700 dark:text-red-300";
@@ -231,7 +248,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {isLoadingSongs && simulationStatus === 'idle' ? ( // Show loading only if truly loading initial data and not mid-simulation
+          {isLoadingSongs && simulationStatus === 'idle' ? ( 
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>

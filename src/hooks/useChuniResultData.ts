@@ -50,16 +50,19 @@ export function useChuniResultData({
   const [groupAB30Songs, setGroupAB30Songs] = useState<Song[]>([]);
   const [groupBB30Songs, setGroupBB30Songs] = useState<Song[]>([]);
 
-  // State variables for simulation ( 과제 1-8 ~ )
   const [simulatedB30Songs, setSimulatedB30Songs] = useState<Song[]>([]);
   const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
   const [targetRatingReached, setTargetRatingReached] = useState(false);
   const [allUpdatableSongsCapped, setAllUpdatableSongsCapped] = useState(false);
-  const [simulationStatus, setSimulationStatus] = useState<'idle' | 'running_score_increase' | 'target_reached' | 'awaiting_replacement_loop' | 'replacing_song' | 'error'>('idle');
-  const [songToReplace, setSongToReplace] = useState<Song | null>(null); // 과제 1-14
+  const [simulationStatus, setSimulationStatus] = useState<'idle' | 'running_score_increase' | 'target_reached' | 'awaiting_replacement_loop' | 'replacing_song' | 'awaiting_external_data_for_replacement' | 'identifying_candidates' | 'candidates_identified' | 'error'>('idle');
+  const [songToReplace, setSongToReplace] = useState<Song | null>(null);
+  
+  // 상태 추가 for 1-15
+  const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
+  const [userPlayHistory, setUserPlayHistory] = useState<ShowallApiSongEntry[]>([]);
+  const [candidateSongsForReplacement, setCandidateSongsForReplacement] = useState<Song[]>([]);
 
 
-  // 과제 1-1: 점수 상한 한계 해제 플래그 결정 (0-2단계 규칙 적용)
   useEffect(() => {
     if (clientHasMounted) {
       const currentIsValidNumber = currentRatingDisplay && !isNaN(parseFloat(currentRatingDisplay)) && isFinite(parseFloat(currentRatingDisplay));
@@ -79,7 +82,6 @@ export function useChuniResultData({
   }, [clientHasMounted, currentRatingDisplay, targetRatingDisplay]);
 
 
-  // 과제 1-2: 데이터 로드 (b30, n20 등)
   useEffect(() => {
     const fetchAndProcessData = async () => {
       const defaultPlayerName = getTranslation(locale, 'resultPageDefaultPlayerName');
@@ -101,7 +103,8 @@ export function useChuniResultData({
       setErrorLoadingSongs(null);
       setApiPlayerName(userNameForApi);
       setSimulationStatus('idle'); 
-      setSongToReplace(null); // Reset song to replace on new data load
+      setSongToReplace(null);
+      setCandidateSongsForReplacement([]); // Reset candidates on new data load
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
@@ -127,11 +130,11 @@ export function useChuniResultData({
 
       let profileData = getCachedData<ProfileData>(profileKey);
       let ratingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
-      let globalMusicData = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
-      let userShowallData = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
+      let globalMusicCachedData = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+      let userShowallCachedData = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
       
-      let globalMusicRecordsFromDataSource: ShowallApiSongEntry[] = globalMusicData?.records || [];
-      let userShowallRecordsFromDataSource: ShowallApiSongEntry[] = userShowallData?.records || [];
+      let tempGlobalMusicRecords: ShowallApiSongEntry[] = globalMusicCachedData?.records || [];
+      let tempUserShowallRecords: ShowallApiSongEntry[] = userShowallCachedData?.records || [];
 
       let b30Loaded = false;
       if (profileData) {
@@ -150,13 +153,13 @@ export function useChuniResultData({
         b30Loaded = true;
       }
 
-      if (!profileData || !ratingData || !globalMusicData?.records || !userShowallData?.records) {
+      if (!profileData || !ratingData || !globalMusicCachedData?.records || !userShowallCachedData?.records) {
         console.log("Fetching some data from API as cache is missing or expired...");
         const apiRequests = [];
         if (!profileData) apiRequests.push(fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'profile', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'profile', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
         if (!ratingData) apiRequests.push(fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'rating', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'rating', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
-        if (!globalMusicData?.records) apiRequests.push(fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'globalMusic', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'globalMusic', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
-        if (!userShowallData?.records) apiRequests.push(fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'userShowall', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'userShowall', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
+        if (!globalMusicCachedData?.records) apiRequests.push(fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'globalMusic', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'globalMusic', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
+        if (!userShowallCachedData?.records) apiRequests.push(fetch(`https://api.chunirec.net/2.0/records/showall.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({type: 'userShowall', data, ok: res.ok, status: res.status, statusText: res.statusText})).catch(() => ({type: 'userShowall', error: 'JSON_PARSE_ERROR', ok: false, status: res.status, statusText: res.statusText }))));
         
         if (apiRequests.length > 0) {
             try {
@@ -188,7 +191,7 @@ export function useChuniResultData({
                       setCachedData<RatingApiResponse>(ratingDataKey, res.data);
                       ratingData = res.data; 
                     }
-                    if (res.type === 'globalMusic' && !globalMusicData?.records) {
+                    if (res.type === 'globalMusic' && !globalMusicCachedData?.records) {
                         let rawApiRecordsForGlobal: any[] = [];
                         if (Array.isArray(res.data)) rawApiRecordsForGlobal = res.data;
                         else if (res.data && Array.isArray(res.data.records)) rawApiRecordsForGlobal = res.data.records; 
@@ -216,20 +219,20 @@ export function useChuniResultData({
                         } else if (rawApiRecordsForGlobal.length > 0) { 
                              rawApiRecordsForGlobal.forEach(entry => flattenedGlobalMusicEntries.push(entry as ShowallApiSongEntry)); 
                         }
-                        globalMusicRecordsFromDataSource = flattenedGlobalMusicEntries.filter((e: any): e is ShowallApiSongEntry =>
+                        tempGlobalMusicRecords = flattenedGlobalMusicEntries.filter((e: any): e is ShowallApiSongEntry =>
                             e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' &&
                             typeof e.title === 'string' && e.title.trim() !== '' && (typeof e.release === 'string') && 
                             (e.const !== undefined) && e.level !== undefined && String(e.level).trim() !== '' 
                         );
-                        setCachedData<GlobalMusicApiResponse>(globalMusicKey, { records: globalMusicRecordsFromDataSource }, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+                        setCachedData<GlobalMusicApiResponse>(globalMusicKey, { records: tempGlobalMusicRecords }, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
                     }
-                    if (res.type === 'userShowall' && !userShowallData?.records) {
-                        userShowallRecordsFromDataSource = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
+                    if (res.type === 'userShowall' && !userShowallCachedData?.records) {
+                        tempUserShowallRecords = (res.data.records || []).filter((e: any): e is ShowallApiSongEntry =>
                             e && e.id && typeof e.id === 'string' && e.id.trim() !== '' &&
                             e.diff && typeof e.diff === 'string' && e.diff.trim() !== '' &&
                             (e.score !== undefined) && e.title && typeof e.title === 'string' && e.title.trim() !== ''
                         );
-                        setCachedData<UserShowallApiResponse>(userShowallKey, { records: userShowallRecordsFromDataSource }, USER_DATA_CACHE_EXPIRY_MS);
+                        setCachedData<UserShowallApiResponse>(userShowallKey, { records: tempUserShowallRecords }, USER_DATA_CACHE_EXPIRY_MS);
                     }
                 }
                 if (criticalError) throw new Error(criticalError);
@@ -253,10 +256,14 @@ export function useChuniResultData({
          toast({ title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') });
       }
 
-      // N20 Calculation
+      setAllMusicData(tempGlobalMusicRecords);
+      setUserPlayHistory(tempUserShowallRecords);
+      console.log(`[DATA_LOAD_COMPLETE] AllMusicData: ${tempGlobalMusicRecords.length} records, UserPlayHistory: ${tempUserShowallRecords.length} records.`);
+
+
       let definedSongPoolEntries: ShowallApiSongEntry[] = [];
-      if (globalMusicRecordsFromDataSource.length > 0) {
-        definedSongPoolEntries = globalMusicRecordsFromDataSource.filter(globalSong => {
+      if (tempGlobalMusicRecords.length > 0) {
+        definedSongPoolEntries = tempGlobalMusicRecords.filter(globalSong => {
             if (globalSong.title) {
                 const apiTitleTrimmedLower = globalSong.title.trim().toLowerCase();
                 return newSongTitlesToMatch.includes(apiTitleTrimmedLower);
@@ -265,10 +272,10 @@ export function useChuniResultData({
         });
       }
       
-      if (definedSongPoolEntries.length > 0 && userShowallRecordsFromDataSource.length > 0) {
+      if (definedSongPoolEntries.length > 0 && tempUserShowallRecords.length > 0) {
           const playedNewSongsForRating: Song[] = [];
           const userPlayedMap = new Map<string, ShowallApiSongEntry>();
-          userShowallRecordsFromDataSource.forEach(usrSong => {
+          tempUserShowallRecords.forEach(usrSong => {
               if (usrSong.id && usrSong.diff) {
                   userPlayedMap.set(`${usrSong.id}_${usrSong.diff.toUpperCase()}`, usrSong);
               }
@@ -296,7 +303,6 @@ export function useChuniResultData({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userNameForApi, refreshNonce, clientHasMounted, locale]); 
 
-  // 과제 1-3 (갱신 불가 곡 분류) & 1-4 (갱신 가능 곡 분류)
   useEffect(() => {
     if (best30SongsData.length > 0) {
       const nonUpdatable = best30SongsData.filter(song => song.currentScore >= 1009000);
@@ -312,7 +318,6 @@ export function useChuniResultData({
     }
   }, [best30SongsData]);
 
-  // 과제 1-5: '갱신 가능' 그룹 곡들의 현재 레이팅 값 평균을 '중간값'으로 계산
   useEffect(() => {
     if (updatableB30Songs.length > 0) {
       const sumOfRatings = updatableB30Songs.reduce((sum, song) => sum + song.currentRating, 0);
@@ -325,7 +330,6 @@ export function useChuniResultData({
     }
   }, [updatableB30Songs]);
 
-  // 과제 1-6 (그룹 A 분류) & 1-7 (그룹 B 분류)
   useEffect(() => {
     if (updatableB30Songs.length > 0 && averageRatingOfUpdatableB30 !== null) {
       const groupA = updatableB30Songs
@@ -345,7 +349,6 @@ export function useChuniResultData({
     }
   }, [updatableB30Songs, averageRatingOfUpdatableB30]);
 
-  // Helper function to find score for target rating (1-9, 1-10)
   const findScoreForTargetRating = useCallback((
     currentSong: Song,
     desiredRatingIncrease: number,
@@ -391,7 +394,6 @@ export function useChuniResultData({
     return { newScore, newRating: parseFloat(newRating.toFixed(2)), capped: newScore >= maxScore || cappedAtMax };
   }, []);
 
-  // 과제 1-8: 1차 상승 루프 시작 (상태 초기화)
   useEffect(() => {
     if (calculationStrategy === 'average' && best30SongsData.length > 0 && simulationStatus === 'idle' && !isLoadingSongs) {
       console.log("[SIM_INIT_AVERAGE_1-8] Initializing B30 simulation for 'Average' strategy.");
@@ -412,9 +414,8 @@ export function useChuniResultData({
     }
   }, [calculationStrategy, best30SongsData, simulationStatus, isLoadingSongs]); 
 
-  // 과제 1-9, 1-10 (점수 상승) & 메인 시뮬레이션 루프 제어
   useEffect(() => {
-    if (calculationStrategy !== 'average' || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || isLoadingSongs) {
+    if (calculationStrategy !== 'average' || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'awaiting_external_data_for_replacement' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified' || isLoadingSongs) {
       if (simulationStatus === 'running_score_increase') setSimulationStatus('idle'); 
       return;
     }
@@ -428,7 +429,6 @@ export function useChuniResultData({
         let internalSimulatedSongs = [...simulatedB30Songs.map(s => ({...s}))]; 
         let songsUpdatedInIter = false;
         
-        // 1-9: 그룹 A 점수 상승
         if (groupAB30Songs.length > 0) {
             const songToUpdateInA_original = groupAB30Songs[0]; 
             const songInSimulatedA = internalSimulatedSongs.find(s => s.id === songToUpdateInA_original.id && s.diff === songToUpdateInA_original.diff);
@@ -444,7 +444,6 @@ export function useChuniResultData({
             }
         }
 
-        // 1-10: 그룹 B 점수 상승
         if (groupBB30Songs.length > 0) {
             const songToUpdateInB_original = groupBB30Songs[0]; 
             const songInSimulatedB = internalSimulatedSongs.find(s => s.id === songToUpdateInB_original.id && s.diff === songToUpdateInB_original.diff);
@@ -480,7 +479,6 @@ export function useChuniResultData({
     findScoreForTargetRating
   ]);
 
-  // 과제 1-11: 중간 결과 확인 (타겟 달성 여부)
   useEffect(() => {
     if (simulatedB30Songs.length > 0 && targetRatingDisplay && calculationStrategy === 'average') {
       const currentSimAvg = simulatedB30Songs.slice(0, BEST_COUNT).reduce((sum, s) => sum + s.currentRating, 0) / Math.min(simulatedB30Songs.length, BEST_COUNT);
@@ -498,7 +496,6 @@ export function useChuniResultData({
     }
   }, [simulatedB30Songs, targetRatingDisplay, simulationStatus, targetRatingReached, calculationStrategy]);
 
-  // 과제 1-12: 1차 상승 종료 확인 (모든 곡 상한 도달) & 1-13 (B30 교체 루프 준비)
   useEffect(() => {
     if (targetRatingReached || simulationStatus !== 'idle' || updatableB30Songs.length === 0 || simulatedB30Songs.length === 0 || calculationStrategy !== 'average' || allUpdatableSongsCapped) {
       return;
@@ -522,7 +519,7 @@ export function useChuniResultData({
     if (allCappedInSim) {
       setAllUpdatableSongsCapped(true);
       if (!targetRatingReached) { 
-        setSimulationStatus('awaiting_replacement_loop'); // 과제 1-13
+        setSimulationStatus('awaiting_replacement_loop');
         console.log("[CHAL_1-13_AWAITING_REPLACEMENT] All updatable B30 songs have reached score cap, target not met. Awaiting B30 replacement loop.");
       } else {
         setSimulationStatus('target_reached');
@@ -531,19 +528,16 @@ export function useChuniResultData({
     }
   }, [simulatedB30Songs, updatableB30Songs, isScoreLimitReleased, targetRatingReached, simulationStatus, calculationStrategy, allUpdatableSongsCapped]);
 
-  // 과제 1-14: 교체 대상 식별
   useEffect(() => {
     if (simulationStatus === 'awaiting_replacement_loop' && !targetRatingReached) {
       if (simulatedB30Songs.length > 0) {
-        // B30에 포함된 곡들만 고려 (상위 BEST_COUNT개)
         const currentB30ForReplacement = sortSongsByRatingDesc([...simulatedB30Songs]).slice(0, BEST_COUNT);
         if (currentB30ForReplacement.length > 0) {
-            // 레이팅 오름차순으로 정렬하여 가장 낮은 곡을 찾음
             const sortedForMinRating = [...currentB30ForReplacement].sort((a,b) => a.currentRating - b.currentRating);
             const songToReplaceCandidate = sortedForMinRating[0];
             setSongToReplace(songToReplaceCandidate);
-            setSimulationStatus('replacing_song');
-            console.log(`[CHAL_1-14_SONG_TO_REPLACE] Identified song to replace: ${songToReplaceCandidate.title} (Rating: ${songToReplaceCandidate.currentRating.toFixed(2)}). Status changed to 'replacing_song'.`);
+            setSimulationStatus('replacing_song'); // Ready for 1-15
+            console.log(`[CHAL_1-14_SONG_TO_REPLACE] Identified song to replace: ${songToReplaceCandidate.title} (Rating: ${songToReplaceCandidate.currentRating.toFixed(2)}). Status to 'replacing_song'.`);
         } else {
             console.error("[CHAL_1-14_ERROR] No songs in B30 to consider for replacement.");
             setSimulationStatus('error'); 
@@ -555,18 +549,75 @@ export function useChuniResultData({
     }
   }, [simulationStatus, simulatedB30Songs, targetRatingReached]);
 
+  // 1-15: 외부 후보 탐색
+  useEffect(() => {
+    if (simulationStatus === 'replacing_song' && songToReplace) {
+        console.log("[CHAL_1-15_PREP] Preparing for candidate identification. Song to replace:", songToReplace.title);
+        if (allMusicData.length === 0 || userPlayHistory.length === 0) {
+            console.log("[CHAL_1-15_WAIT_DATA] Waiting for allMusicData and userPlayHistory to be loaded.");
+            setSimulationStatus('awaiting_external_data_for_replacement');
+            // If data isn't loaded, fetchAndProcessData should eventually set it,
+            // or a direct fetch might be needed if this effect is meant to trigger it.
+            // For now, assume fetchAndProcessData handles loading allMusicData and userPlayHistory.
+            return;
+        }
+        setSimulationStatus('identifying_candidates');
+    }
 
-  // Combined songs logic
+    if (simulationStatus === 'identifying_candidates' && songToReplace && allMusicData.length > 0) {
+        console.log(`[CHAL_1-15_EXEC] Identifying candidates. AllMusicData: ${allMusicData.length}, UserPlayHistory: ${userPlayHistory.length}. Target rating to beat: ${songToReplace.currentRating.toFixed(2)}`);
+        
+        const currentB30IdsAndDiffs = new Set(simulatedB30Songs.slice(0, BEST_COUNT).map(s => `${s.id}_${s.diff}`));
+        const candidates: Song[] = [];
+
+        allMusicData.forEach((apiSongEntry, index) => {
+            if (currentB30IdsAndDiffs.has(`${apiSongEntry.id}_${apiSongEntry.diff.toUpperCase()}`)) {
+                return; // Skip if already in B30
+            }
+
+            // Use mapApiSongToAppSong to correctly determine chartConstant
+            // We pass a dummy score/rating for now, as we only need chartConstant for potential calculation
+            const tempSongForConst = mapApiSongToAppSong({ ...apiSongEntry, score: 0, rating: 0 }, index);
+            const chartConstant = tempSongForConst.chartConstant;
+
+            if (chartConstant && chartConstant > 0) {
+                const potentialMaxRating = calculateChunithmSongRating(1010000, chartConstant); // Max possible score
+                if (potentialMaxRating > songToReplace.currentRating) {
+                    // This song is a potential candidate.
+                    // Now, find its actual play record or create a non-played entry.
+                    const userPlayRecord = userPlayHistory.find(
+                        (play) => play.id === apiSongEntry.id && play.diff.toUpperCase() === apiSongEntry.diff.toUpperCase()
+                    );
+
+                    let candidateSong: Song;
+                    if (userPlayRecord && typeof userPlayRecord.score === 'number') {
+                        candidateSong = mapApiSongToAppSong(userPlayRecord, index);
+                    } else {
+                        // Not played or no score, create a base entry
+                        candidateSong = mapApiSongToAppSong({ ...apiSongEntry, score: 0, rating: 0 }, index);
+                    }
+                    candidates.push(candidateSong);
+                }
+            }
+        });
+
+        setCandidateSongsForReplacement(candidates);
+        console.log(`[CHAL_1-15_RESULT] Identified ${candidates.length} candidates for replacement. Sample:`, candidates.slice(0, 3).map(c => ({ title: c.title, diff: c.diff, rating: c.currentRating, const: c.chartConstant })));
+        setSimulationStatus('candidates_identified'); // Move to next step
+    }
+  }, [simulationStatus, songToReplace, allMusicData, userPlayHistory, simulatedB30Songs]);
+
+
   useEffect(() => {
     if (!isLoadingSongs) {
       if (best30SongsData.length > 0 || new20SongsData.length > 0) {
         const songMap = new Map<string, Song>();
-        const baseB30 = (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song')) ? simulatedB30Songs : best30SongsData;
+        const baseB30 = (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified')) ? simulatedB30Songs : best30SongsData;
         
-        baseB30.forEach(song => songMap.set(`${song.id}_${song.diff}`, {...song})); // Ensure copies
+        baseB30.forEach(song => songMap.set(`${song.id}_${song.diff}`, {...song}));
         new20SongsData.forEach(song => {
           const key = `${song.id}_${song.diff}`;
-          if (!songMap.has(key)) songMap.set(key, {...song}); // Ensure copies
+          if (!songMap.has(key)) songMap.set(key, {...song});
         });
         setCombinedTopSongs(sortSongsByRatingDesc(Array.from(songMap.values())));
       } else {
@@ -575,7 +626,6 @@ export function useChuniResultData({
     }
   }, [best30SongsData, new20SongsData, isLoadingSongs, simulatedB30Songs, calculationStrategy, simulationStatus]);
 
-  // Cache combined data
   useEffect(() => {
     if (!isLoadingSongs && userNameForApi && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName') && clientHasMounted && (best30SongsData.length > 0 || new20SongsData.length > 0)) {
       const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`;
@@ -586,7 +636,7 @@ export function useChuniResultData({
 
   return {
     apiPlayerName,
-    best30SongsData: (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song')) ? simulatedB30Songs : best30SongsData,
+    best30SongsData: (calculationStrategy === 'average' && simulatedB30Songs.length > 0 && (simulationStatus.startsWith('running') || simulationStatus === 'target_reached' || simulationStatus === 'awaiting_replacement_loop' || simulationStatus === 'replacing_song' || simulationStatus === 'identifying_candidates' || simulationStatus === 'candidates_identified')) ? simulatedB30Songs : best30SongsData,
     new20SongsData,
     combinedTopSongs,
     isLoadingSongs,
@@ -602,7 +652,9 @@ export function useChuniResultData({
     targetRatingReached,
     allUpdatableSongsCapped,
     simulationStatus,
-    songToReplace, // 과제 1-14 반환값 추가
+    songToReplace,
+    candidateSongsForReplacement, // 반환값에 추가
   };
 }
 
+    
