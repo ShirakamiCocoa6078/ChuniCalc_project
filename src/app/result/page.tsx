@@ -224,6 +224,7 @@ function ResultContent() {
   const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false);
   const [nonUpdatableB30Songs, setNonUpdatableB30Songs] = useState<Song[]>([]);
   const [updatableB30Songs, setUpdatableB30Songs] = useState<Song[]>([]);
+  const [averageRatingOfUpdatableB30, setAverageRatingOfUpdatableB30] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -619,6 +620,18 @@ function ResultContent() {
       setUpdatableB30Songs([]);
     }
   }, [best30SongsData]);
+
+  useEffect(() => {
+    if (updatableB30Songs.length > 0) {
+      const sumOfRatings = updatableB30Songs.reduce((sum, song) => sum + song.currentRating, 0);
+      const average = sumOfRatings / updatableB30Songs.length;
+      setAverageRatingOfUpdatableB30(parseFloat(average.toFixed(2))); // 소수점 2자리까지
+      console.log(`[CHAL_1-5_AVG_RATING_UPDATABLE_B30] Average rating of updatable B30 songs: ${average.toFixed(2)} (${updatableB30Songs.length} songs)`);
+    } else {
+      setAverageRatingOfUpdatableB30(null);
+      console.log(`[CHAL_1-5_AVG_RATING_UPDATABLE_B30] No updatable B30 songs to calculate average rating.`);
+    }
+  }, [updatableB30Songs]);
 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
