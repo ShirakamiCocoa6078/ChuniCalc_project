@@ -220,12 +220,18 @@ function ResultContent() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [clientHasMounted, setClientHasMounted] = useState(false);
+  
+  // 과제 1-1: '점수 상한 한계 해제' 플래그
   const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false);
+  // 과제 1-3: 갱신 불가 B30 곡 목록
+  const [nonUpdatableB30Songs, setNonUpdatableB30Songs] = useState<Song[]>([]);
+
 
   useEffect(() => {
     setClientHasMounted(true);
   }, []);
 
+  // 과제 1-1: '점수 상한 한계 해제' 플래그 결정 로직
   useEffect(() => {
     if (clientHasMounted) {
       const currentIsValidNumber = currentRatingDisplay && !isNaN(parseFloat(currentRatingDisplay));
@@ -236,10 +242,10 @@ function ResultContent() {
         const targetRatingNum = parseFloat(targetRatingDisplay);
         const limitReleaseCondition = (targetRatingNum - currentRatingNum) * 50 > 10;
         setIsScoreLimitReleased(limitReleaseCondition);
-        console.log(`[SCORE_CAP_RELEASE_CHECK_1-1] Score cap release flag SET to ${limitReleaseCondition}. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 > 10)`);
+        console.log(`[CHAL_1-1_SCORE_CAP_RELEASE_CHECK] Score cap release flag SET to ${limitReleaseCondition}. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 > 10)`);
       } else {
         setIsScoreLimitReleased(false); 
-        console.log(`[SCORE_CAP_RELEASE_CHECK_1-1] Ratings ('${currentRatingDisplay}', '${targetRatingDisplay}') not valid numbers or not available, score cap release flag defaults to false.`);
+        console.log(`[CHAL_1-1_SCORE_CAP_RELEASE_CHECK] Ratings ('${currentRatingDisplay}', '${targetRatingDisplay}') not valid numbers or not available, score cap release flag defaults to false.`);
       }
     }
   }, [clientHasMounted, currentRatingDisplay, targetRatingDisplay]);
@@ -328,7 +334,7 @@ function ResultContent() {
         ) || [];
         const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
-        console.log("[B30_LOAD_STEP_1-2] Best 30 songs data loaded from cache. Count:", mappedBestEntries.length);
+        console.log("[CHAL_1-2_B30_LOAD] Best 30 songs data loaded from cache. Count:", mappedBestEntries.length, mappedBestEntries.slice(0,2));
       }
 
       if (cachedGlobalMusicData && cachedGlobalMusicData.records) {
@@ -383,7 +389,7 @@ function ResultContent() {
                       ) || [];
                       const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
                       setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
-                      console.log("[B30_LOAD_STEP_1-2] Best 30 songs data loaded from API. Count:", mappedBestEntries.length);
+                      console.log("[CHAL_1-2_B30_LOAD] Best 30 songs data loaded from API. Count:", mappedBestEntries.length, mappedBestEntries.slice(0,2));
                       setCachedData<RatingApiResponse>(ratingDataKey, res.data);
                     }
                     if (res.type === 'globalMusic' && (!cachedGlobalMusicData || !cachedGlobalMusicData.records)) {
@@ -600,6 +606,17 @@ function ResultContent() {
       }
     }
   }, [best30SongsData, new20SongsData, isLoadingSongs]);
+
+  // 과제 1-3: 갱신 불가 B30 곡 분류
+  useEffect(() => {
+    if (best30SongsData.length > 0) {
+      const nonUpdatable = best30SongsData.filter(song => song.currentScore >= 1009000);
+      setNonUpdatableB30Songs(nonUpdatable);
+      console.log(`[CHAL_1-3_NON_UPDATABLE_B30] Non-updatable B30 songs (score >= 1,009,000): ${nonUpdatable.length} songs.`, nonUpdatable.map(s => ({ title: s.title, score: s.currentScore })));
+    } else {
+      setNonUpdatableB30Songs([]);
+    }
+  }, [best30SongsData]);
 
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
