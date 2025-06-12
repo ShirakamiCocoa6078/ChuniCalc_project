@@ -220,13 +220,12 @@ function ResultContent() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [clientHasMounted, setClientHasMounted] = useState(false);
-  const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false); // For 과제 1-1
+  const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false);
 
   useEffect(() => {
     setClientHasMounted(true);
   }, []);
 
-  // 과제 1-1: '점수 상한 한계 해제' 플래그 결정
   useEffect(() => {
     if (clientHasMounted) {
       const currentIsValidNumber = currentRatingDisplay && !isNaN(parseFloat(currentRatingDisplay));
@@ -235,17 +234,12 @@ function ResultContent() {
       if (currentIsValidNumber && targetIsValidNumber) {
         const currentRatingNum = parseFloat(currentRatingDisplay);
         const targetRatingNum = parseFloat(targetRatingDisplay);
-
-        if ((targetRatingNum - currentRatingNum) * 50 > 10) {
-          setIsScoreLimitReleased(true);
-          console.log(`[SCORE_CAP_RELEASE_CHECK] Score cap release flag SET to true. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 > 10)`);
-        } else {
-          setIsScoreLimitReleased(false);
-          console.log(`[SCORE_CAP_RELEASE_CHECK] Score cap release flag SET to false. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 <= 10)`);
-        }
+        const limitReleaseCondition = (targetRatingNum - currentRatingNum) * 50 > 10;
+        setIsScoreLimitReleased(limitReleaseCondition);
+        console.log(`[SCORE_CAP_RELEASE_CHECK_1-1] Score cap release flag SET to ${limitReleaseCondition}. ((target:${targetRatingNum} - current:${currentRatingNum}) * 50 > 10)`);
       } else {
-        setIsScoreLimitReleased(false); // 유효한 숫자가 아니면 기본값 false
-        console.log(`[SCORE_CAP_RELEASE_CHECK] Ratings ('${currentRatingDisplay}', '${targetRatingDisplay}') not valid numbers or not available, flag defaults to false.`);
+        setIsScoreLimitReleased(false); 
+        console.log(`[SCORE_CAP_RELEASE_CHECK_1-1] Ratings ('${currentRatingDisplay}', '${targetRatingDisplay}') not valid numbers or not available, score cap release flag defaults to false.`);
       }
     }
   }, [clientHasMounted, currentRatingDisplay, targetRatingDisplay]);
@@ -334,6 +328,7 @@ function ResultContent() {
         ) || [];
         const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
         setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
+        console.log("[B30_LOAD_STEP_1-2] Best 30 songs data loaded from cache. Count:", mappedBestEntries.length);
       }
 
       if (cachedGlobalMusicData && cachedGlobalMusicData.records) {
@@ -388,6 +383,7 @@ function ResultContent() {
                       ) || [];
                       const mappedBestEntries = bestEntriesApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
                       setBest30SongsData(sortSongsByRatingDesc(mappedBestEntries));
+                      console.log("[B30_LOAD_STEP_1-2] Best 30 songs data loaded from API. Count:", mappedBestEntries.length);
                       setCachedData<RatingApiResponse>(ratingDataKey, res.data);
                     }
                     if (res.type === 'globalMusic' && (!cachedGlobalMusicData || !cachedGlobalMusicData.records)) {
@@ -396,14 +392,14 @@ function ResultContent() {
                             rawApiRecordsForGlobal = res.data;
                             console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is a direct array (expected [{meta,data},...]). Count:", rawApiRecordsForGlobal.length);
                         } else if (res.data && Array.isArray(res.data.records)) { 
-                            rawApiRecordsForGlobal = res.data.records; // This case might be for other APIs, music/showall is usually direct array
+                            rawApiRecordsForGlobal = res.data.records; 
                              console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] API response is an object with .records array. Count:", rawApiRecordsForGlobal.length);
                         } else {
                             console.warn("[RESULT_PAGE_GLOBAL_MUSIC_API_WARN] music/showall.json API response was not a direct array and did not have a .records array. Assuming empty or unexpected structure. Response:", res.data);
                         }
 
                         const flattenedGlobalMusicEntries: ShowallApiSongEntry[] = [];
-                        // Check if the first element looks like {meta: ..., data: {...}} structure, common for music/showall.json
+                        
                         if (rawApiRecordsForGlobal.length > 0 && rawApiRecordsForGlobal[0] && rawApiRecordsForGlobal[0].meta && typeof rawApiRecordsForGlobal[0].data === 'object') {
                             console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] Detected {meta, data} structure, proceeding with flattening.");
                             rawApiRecordsForGlobal.forEach(rawEntry => {
@@ -432,7 +428,7 @@ function ResultContent() {
                              console.log(`[RESULT_PAGE_GLOBAL_MUSIC_API] Flattened ${flattenedGlobalMusicEntries.length} entries from ${rawApiRecordsForGlobal.length} raw API records.`);
                         } else if (rawApiRecordsForGlobal.length > 0) { 
                              console.log("[RESULT_PAGE_GLOBAL_MUSIC_API] Assuming API provided already flattened records for global music (or structure not {meta,data}). Count:", rawApiRecordsForGlobal.length);
-                             // If not the {meta, data} structure, assume it's already an array of ShowallApiSongEntry-like objects
+                             
                              rawApiRecordsForGlobal.forEach(entry => flattenedGlobalMusicEntries.push(entry as ShowallApiSongEntry)); 
                         }
 
@@ -442,9 +438,9 @@ function ResultContent() {
                             typeof e.id === 'string' && e.id.trim() !== '' &&
                             typeof e.diff === 'string' && e.diff.trim() !== '' &&
                             typeof e.title === 'string' && e.title.trim() !== '' &&
-                            (typeof e.release === 'string') && // Ensure release is string, even if empty
-                            (e.const !== undefined) && // Ensure const exists (can be null)
-                            e.level !== undefined && String(e.level).trim() !== '' // Ensure level exists and is not empty
+                            (typeof e.release === 'string') && 
+                            (e.const !== undefined) && 
+                            e.level !== undefined && String(e.level).trim() !== '' 
                         );
                         setCachedData<GlobalMusicApiResponse>(globalMusicKey, { records: globalMusicRecordsFromDataSource }, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
                         console.log("[N20_PREP_2_API] Global music data (flattened & filtered) fetched from API and cached. Count:", globalMusicRecordsFromDataSource.length);
@@ -516,21 +512,19 @@ function ResultContent() {
           definedSongPoolEntries.forEach((newSongDef, index) => {
               const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
 
-              if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score > 0) { // score > 0 check to ensure played
+              if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score > 0) { 
                   const combinedSongEntry: ShowallApiSongEntry = {
                       ...newSongDef, 
                       score: userPlayRecord.score, 
-                      is_played: true, // Mark as played
-                      // Carry over any relevant play details from userPlayRecord if needed
+                      is_played: true, 
                       is_clear: userPlayRecord.is_clear,
                       is_fullcombo: userPlayRecord.is_fullcombo,
                       is_alljustice: userPlayRecord.is_alljustice,
                       is_fullchain: userPlayRecord.is_fullchain,
-                      // Ensure `const` and `level` from `newSongDef` (global music) are prioritized for rating calculation
                   };
                   
                   const appSong = mapApiSongToAppSong(combinedSongEntry, index); 
-                  if (appSong.currentRating > 0) { // Only add if it results in a valid rating
+                  if (appSong.currentRating > 0) { 
                        playedNewSongsForRating.push(appSong);
                   }
               }
@@ -547,7 +541,7 @@ function ResultContent() {
       } else if (definedSongPoolEntries.length === 0) {
           console.warn("[N20_CALC_USER] New song pool is empty. Cannot calculate New 20.");
           setNew20SongsData([]);
-      } else { // userShowallRecordsFromDataSource is empty or not available
+      } else { 
           console.warn("[N20_CALC_USER] User has no play records, or records/showall.json failed to load/returned empty. Cannot calculate New 20 based on user plays.");
           setNew20SongsData([]);
       }
@@ -561,13 +555,12 @@ function ResultContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userNameForApi, refreshNonce, clientHasMounted, locale]); 
 
-  // Effect to save combined b30 and n20 data to localStorage
   useEffect(() => {
     if (
       !isLoadingSongs &&
       userNameForApi &&
       userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName') &&
-      clientHasMounted && // Ensure this runs client-side only
+      clientHasMounted && 
       (best30SongsData.length > 0 || new20SongsData.length > 0)
     ) {
       const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`;
@@ -584,18 +577,15 @@ function ResultContent() {
     }
   }, [best30SongsData, new20SongsData, userNameForApi, isLoadingSongs, locale, clientHasMounted, toast]);
 
-  // Effect to merge and sort Best 30 and New 20 songs for the "Combined" tab
   useEffect(() => {
     if (!isLoadingSongs) {
       if (best30SongsData.length > 0 || new20SongsData.length > 0) {
         const songMap = new Map<string, Song>();
 
-        // Add Best 30 songs first to give them priority in case of duplicates
         best30SongsData.forEach(song => {
           songMap.set(`${song.id}_${song.diff}`, song);
         });
 
-        // Add New 20 songs, only if they are not already in the map (from Best 30)
         new20SongsData.forEach(song => {
           const key = `${song.id}_${song.diff}`;
           if (!songMap.has(key)) {
@@ -606,7 +596,6 @@ function ResultContent() {
         const mergedSongs = Array.from(songMap.values());
         setCombinedTopSongs(sortSongsByRatingDesc(mergedSongs));
       } else {
-        // Both lists are empty
         setCombinedTopSongs([]);
       }
     }
