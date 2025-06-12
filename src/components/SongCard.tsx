@@ -1,21 +1,12 @@
 
 "use client";
 
-import type { CalculationStrategy } from "@/app/result/page"; 
+import type { CalculationStrategy, Song } from "@/types/result-page"; // Updated import
 import { Card, CardContent } from "@/components/ui/card";
 import { Music2, Star, Target as TargetIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type Song = {
-  id: string;
-  diff: string; 
-  title: string;
-  chartConstant: number | null; 
-  currentScore: number;
-  currentRating: number;
-  targetScore: number;
-  targetRating: number;
-};
+// Song type is now imported from "@/types/result-page"
 
 type SongCardProps = {
   song: Song;
