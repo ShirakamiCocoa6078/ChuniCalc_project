@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
@@ -81,12 +81,10 @@ function ResultContent() {
         const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
         const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
         const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
-        // const combinedDataKey = `${LOCAL_STORAGE_PREFIX}combined_b30_n20_${userNameForApi}`; // Not used yet
         
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        // localStorage.removeItem(combinedDataKey);
         localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
         console.log(`User-specific (${userNameForApi}) and global music cache cleared for refresh trigger.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
@@ -106,13 +104,14 @@ function ResultContent() {
     let bgColor = "bg-blue-100 dark:bg-blue-900";
     let textColor = "text-blue-700 dark:text-blue-300";
     let IconComponent: React.ElementType = Info;
+    let iconShouldSpin = false;
 
     if (errorLoadingSongs) {
         statusText = getTranslation(locale, 'resultPageErrorLoadingTitle') + `: ${errorLoadingSongs}`;
         bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
     } else if (isLoadingSongs) {
       statusText = getTranslation(locale, 'resultPageLoadingSongsTitle');
-      IconComponent = Loader2;
+      IconComponent = Loader2; iconShouldSpin = true;
     } else if (!calculationStrategy) {
         statusText = getTranslation(locale, 'resultPageStrategyTitle') + "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.";
         bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
@@ -129,51 +128,51 @@ function ResultContent() {
             break;
           case 'initializing_leap_phase':
             statusText = "도약 페이즈(1-1): 대상 그룹 결정 중...";
-            IconComponent = ListChecks;
+            IconComponent = ListChecks; iconShouldSpin = true;
             break;
           case 'analyzing_leap_efficiency':
             statusText = "도약 페이즈(1-2): 곡별 다음 등급 도약 효율성 분석 중...";
-            IconComponent = Telescope;
+            IconComponent = Telescope; iconShouldSpin = true;
             break;
           case 'performing_leap_jump':
             statusText = "도약 페이즈(1-3): 최적 대상 곡 점수 상승 실행 중...";
-            IconComponent = Rocket;
+            IconComponent = Rocket; iconShouldSpin = true;
             break;
           case 'evaluating_leap_result':
             statusText = "도약 페이즈(1-4): 결과 확인 및 다음 페이즈 판단 중...";
-            IconComponent = BarChart3;
+            IconComponent = BarChart3; iconShouldSpin = true;
             break;
           case 'transitioning_to_fine_tuning':
-            statusText = "페이즈 전환: 미세 조정 페이즈('과제 2')로 이동 준비 중...";
-            IconComponent = Zap; 
+            statusText = "페이즈 전환: '미세 조정 페이즈'(과제 2)로 이동 준비 중...";
+            IconComponent = Shuffle; iconShouldSpin = true;
             break;
           case 'initializing_fine_tuning_phase':
             statusText = "미세 조정 페이즈(2-1): 대상 그룹 결정 중...";
-            IconComponent = FilterIcon;
+            IconComponent = FilterIcon; iconShouldSpin = true;
             break;
           case 'performing_fine_tuning':
             statusText = "미세 조정 페이즈(2-2): 점수 미세 조정 실행 중...";
-            IconComponent = TrendingUp;
+            IconComponent = TrendingUp; iconShouldSpin = true;
             break;
           case 'evaluating_fine_tuning_result':
             statusText = "미세 조정 페이즈(2-3): 결과 확인 중...";
-            IconComponent = Activity;
+            IconComponent = Activity; iconShouldSpin = true;
             break;
           case 'target_reached':
             statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_awaiting_replacement':
-            statusText = "현재 페이즈에서 더 이상 점수 상승이 불가능합니다. B30 곡 교체 로직(과제3)으로 전환합니다.";
+            statusText = "현재 페이즈에서 더 이상 점수 상승이 불가능합니다. B30 곡 교체 로직(과제3)으로 전환 대기 중...";
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'awaiting_external_data_for_replacement':
-            statusText = "곡 교체를 위한 외부 데이터(전체 곡 목록/사용자 기록) 로딩 대기 중...";
-            IconComponent = DatabaseZap; 
+            statusText = "곡 교체(3-1): 외부 데이터(전체 곡 목록/사용자 기록) 로딩 대기 중...";
+            IconComponent = DatabaseZap; iconShouldSpin = true;
             break;
           case 'identifying_candidates':
             statusText = "곡 교체(3-2): B30 외부에서 교체 후보 곡 탐색 중...";
-            IconComponent = FileSearch;
+            IconComponent = FileSearch; iconShouldSpin = true;
             break;
           case 'candidates_identified':
             statusText = "곡 교체(3-2): 후보 곡 탐색 완료. 최적 후보 선정 준비 중...";
@@ -181,7 +180,7 @@ function ResultContent() {
             break;
           case 'selecting_optimal_candidate':
             statusText = "곡 교체(3-2): 최적 교체 후보 선정 중...";
-            IconComponent = Brain;
+            IconComponent = Brain; iconShouldSpin = true;
             break;
           case 'optimal_candidate_selected':
             statusText = "곡 교체(3-2): 최적 교체 후보 선정 완료. B30 리스트 업데이트 준비 중...";
@@ -189,7 +188,7 @@ function ResultContent() {
             break;
           case 'replacing_song':
              statusText = "곡 교체(3-2): B30 리스트 업데이트 및 평균 레이팅 재계산 중...";
-             IconComponent = Replace;
+             IconComponent = Replace; iconShouldSpin = true;
              break;
           case 'error':
             statusText = "시뮬레이션 중 오류가 발생했습니다. 콘솔을 확인해주세요.";
@@ -204,26 +203,16 @@ function ResultContent() {
     if (simulatedAverageB30Rating !== null && currentPhase !== 'target_reached' && currentPhase !== 'idle' && !isLoadingSongs && !errorLoadingSongs) {
       statusText += ` (현재 B30 평균: ${simulatedAverageB30Rating.toFixed(4)})`;
     }
-    if (phaseTransitionPoint !== null && (currentPhase.includes('leap') || currentPhase.includes('fine_tuning') || currentPhase === 'idle') && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs) {
+    if (phaseTransitionPoint !== null && (currentPhase.includes('leap') || currentPhase.includes('fine_tuning') || currentPhase === 'idle' || currentPhase === 'evaluating_leap_result') && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs) {
       statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
     }
-     if (isScoreLimitReleased && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'idle') {
+     if (isScoreLimitReleased && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'idle' && currentPhase !== 'target_reached') {
       statusText += ` (점수 상한 한계 해제됨)`;
     }
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center shadow-md", bgColor, textColor)}>
-        <IconComponent className={cn("w-5 h-5 mr-3 shrink-0", 
-            (IconComponent === Loader2 || 
-             currentPhase.startsWith("performing_") || 
-             currentPhase.startsWith("analyzing_") || 
-             currentPhase === 'initializing_leap_phase' ||
-             currentPhase === 'evaluating_leap_result' ||
-             currentPhase === 'identifying_candidates' ||
-             currentPhase === 'selecting_optimal_candidate' ||
-             currentPhase === 'replacing_song' ||
-             currentPhase === 'awaiting_external_data_for_replacement'
-            ) && "animate-spin")} />
+        <IconComponent className={cn("w-5 h-5 mr-3 shrink-0", iconShouldSpin && "animate-spin")} />
         <p>{statusText}</p>
       </div>
     );
@@ -287,7 +276,7 @@ function ResultContent() {
               value={calculationStrategy || ""} 
               onValueChange={(value) => {
                 setCalculationStrategy(value as CalculationStrategy);
-                // setCurrentPhase('idle'); // Optionally reset phase on strategy change
+                // setCurrentPhase('idle'); // Reset phase on strategy change if needed
               }}
               className="flex flex-col sm:flex-row gap-4"
             >
@@ -336,18 +325,18 @@ function ResultContent() {
                 }
               </p>
             </div>
-          ) : !errorLoadingSongs && best30SongsData.length === 0 && (new20SongsData.length === 0 || (new20SongsData.length > 0 && currentPhase !== 'idle' && calculationStrategy)) ? ( // Show if B30 is empty AND (N20 is empty OR simulation has started for N20 relevance)
+          ) : !errorLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' ? ( 
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
-                    <CardTitle className="font-headline text-xl text-orange-600">데이터 부족</CardTitle>
+                    <CardTitle className="font-headline text-xl text-orange-600">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p>Best30 곡 데이터가 없습니다. Chunirec API에서 유효한 플레이 기록을 가져오지 못했을 수 있습니다.</p>
-                    <p className="text-sm text-muted-foreground mt-2">사용자 닉네임이 정확한지, 플레이 데이터가 공개되어 있는지 확인해주세요.</p>
+                    <p>{getTranslation(locale, 'resultPageNoBest30Data')}</p>
+                    <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : !errorLoadingSongs ? ( // No critical error, proceed to show tabs
+          ) : !errorLoadingSongs ? (
             <>
               <TabsContent value="best30">
                 <Card className="shadow-md">
@@ -422,3 +411,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
