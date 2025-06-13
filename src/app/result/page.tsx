@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
@@ -121,7 +121,11 @@ function ResultContent() {
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
                 statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다.";
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
-            } else {
+            } else if (simulatedAverageB30Rating && targetRatingDisplay && simulatedAverageB30Rating >= parseFloat(targetRatingDisplay) ){
+                statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
+                bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
+            }
+             else {
                  statusText = "시뮬레이션 대기 중. 조건 충족 시 자동으로 시작됩니다.";
                  IconComponent = PlaySquare;
             }
@@ -163,12 +167,12 @@ function ResultContent() {
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_awaiting_replacement':
-            statusText = "현재 페이즈에서 더 이상 점수 상승이 불가능합니다. B30 곡 교체 로직(과제3)으로 전환 대기 중...";
+            statusText = "현재 페이즈에서 더 이상 점수 상승이 불가능합니다. B30 곡 교체 로직(과제3)으로 전환 준비 중...";
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'awaiting_external_data_for_replacement':
             statusText = "곡 교체(3-1): 외부 데이터(전체 곡 목록/사용자 기록) 로딩 대기 중...";
-            IconComponent = DatabaseZap; iconShouldSpin = true;
+            IconComponent = Hourglass; iconShouldSpin = true;
             break;
           case 'identifying_candidates':
             statusText = "곡 교체(3-2): B30 외부에서 교체 후보 곡 탐색 중...";
@@ -208,9 +212,6 @@ function ResultContent() {
     ) {
       statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
     }
-    //  if (isScoreLimitReleased && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'idle' && currentPhase !== 'target_reached') {
-    //   statusText += ` (점수 상한 한계 해제됨)`;
-    // }
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center shadow-md", bgColor, textColor)}>
@@ -278,7 +279,7 @@ function ResultContent() {
               value={calculationStrategy || ""} 
               onValueChange={(value) => {
                 setCalculationStrategy(value as CalculationStrategy);
-                // setCurrentPhase('idle'); 
+                // setCurrentPhase('idle'); // Reset phase when strategy changes to re-trigger simulation
               }}
               className="flex flex-col sm:flex-row gap-4"
             >
@@ -301,7 +302,7 @@ function ResultContent() {
                 </Label>
               </div>
             </RadioGroup>
-            {calculationStrategy && <p className="text-xs text-muted-foreground mt-3">{getTranslation(locale, 'resultPageStrategyDisclaimer')}</p>}
+            {/* {calculationStrategy && <p className="text-xs text-muted-foreground mt-3">{getTranslation(locale, 'resultPageStrategyDisclaimer')}</p>} */}
           </CardContent>
         </Card>
 
@@ -328,25 +329,24 @@ function ResultContent() {
               </p>
             </div>
           ) : errorLoadingSongs ? (
-             <Card className="border-red-500/50 shadow-lg">
+             <Card className="border-destructive/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
-                    <AlertTriangle className="w-6 h-6 text-red-500" />
-                    <CardTitle className="font-headline text-xl text-red-600">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
+                    <AlertTriangle className="w-6 h-6 text-destructive" />
+                    <CardTitle className="font-headline text-xl text-destructive">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <p>{errorLoadingSongs}</p>
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' ? ( 
+          ) : best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' && !isLoadingSongs ? ( 
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
-                    <CardTitle className="font-headline text-xl text-orange-600">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
+                    <CardTitle className="font-headline text-xl text-orange-600">{getTranslation(locale, 'resultPageNoBest30Data')}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p>{getTranslation(locale, 'resultPageNoBest30Data')}</p>
-                    <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
+                    <p>{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
           ) : (
@@ -425,3 +425,4 @@ export default function ResultPage() {
   );
 }
 
+    

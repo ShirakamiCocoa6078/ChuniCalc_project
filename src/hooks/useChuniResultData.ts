@@ -15,6 +15,7 @@ const BEST_COUNT = 30;
 
 type SimulationPhase = 
   | 'idle'
+  // 과제 0: 초기 설정
   // 과제 1: 도약 페이즈
   | 'initializing_leap_phase' 
   | 'analyzing_leap_efficiency'
@@ -25,7 +26,7 @@ type SimulationPhase =
   // 과제 2: 미세 조정 페이즈
   | 'initializing_fine_tuning_phase' 
   | 'performing_fine_tuning'
-  | 'evaluating_fine_tuning_result'
+  | 'evaluating_fine_tuning_result' // New state for 2-3
   // 공통 종료/예외 상태
   | 'target_reached' 
   | 'stuck_awaiting_replacement' 
@@ -156,7 +157,7 @@ export function useChuniResultData({
 
       let profileData = getCachedData<ProfileData>(profileKey);
       let ratingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
-      let globalMusicCache = getCachedData<GlobalMusicApiResponse>(globalMusicKey, USER_DATA_CACHE_EXPIRY_MS);
+      let globalMusicCache = getCachedData<GlobalMusicApiResponse>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // Use specific expiry for global
       let userShowallCache = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
       
       let tempAllMusic: ShowallApiSongEntry[] = globalMusicCache?.records || [];
@@ -189,7 +190,7 @@ export function useChuniResultData({
               }
               if (res.type === 'globalMusic' && !globalMusicCache) {
                  tempAllMusic = res.data.records || [];
-                 setCachedData<GlobalMusicApiResponse>(globalMusicKey, res.data);
+                 setCachedData<GlobalMusicApiResponse>(globalMusicKey, res.data, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
               }
               if (res.type === 'userShowall' && !userShowallCache) {
                  tempUserHistory = res.data.records || [];
@@ -213,16 +214,10 @@ export function useChuniResultData({
       
       const mappedB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
       setBest30SongsData(mappedB30);
-      setSimulatedB30Songs([...mappedB30]); 
-      if (mappedB30.length > 0) {
-        const avg = mappedB30.slice(0, BEST_COUNT).reduce((sum, s) => sum + s.currentRating, 0) / Math.min(BEST_COUNT, mappedB30.length);
-        setSimulatedAverageB30Rating(parseFloat(avg.toFixed(4)));
-      } else {
-        setSimulatedAverageB30Rating(null);
-      }
-
-      setAllMusicData(tempAllMusic); // Save to state
-      setUserPlayHistory(tempUserHistory); // Save to state
+      setSimulatedB30Songs([...mappedB30]); // Initialize simulatedB30Songs
+      
+      setAllMusicData(tempAllMusic); 
+      setUserPlayHistory(tempUserHistory);
 
       if (tempAllMusic.length > 0 && tempUserHistory.length > 0) {
           const newSongTitlesRaw = NewSongsData.titles?.verse || [];
@@ -276,36 +271,40 @@ export function useChuniResultData({
       const newAverageFixed = parseFloat(newAverage.toFixed(4));
       setSimulatedAverageB30Rating(newAverageFixed);
       console.log(`[SIM_AVG_UPDATE] Simulated average B30 rating updated to: ${newAverageFixed}`);
+    } else if (best30SongsData.length > 0 && simulatedB30Songs.length === 0) { // For initial load before simulation can modify simB30
+        const initialAvg = best30SongsData.slice(0, BEST_COUNT).reduce((sum, s) => sum + s.currentRating, 0) / Math.min(BEST_COUNT, best30SongsData.length);
+        setSimulatedAverageB30Rating(parseFloat(initialAvg.toFixed(4)));
     } else {
       setSimulatedAverageB30Rating(null);
     }
-  }, [simulatedB30Songs]);
+  }, [simulatedB30Songs, best30SongsData]);
 
 
-  // --- 과제 1: 도약 페이즈 ---
-  // 1-0: 시뮬레이션 시작 조건
+  // --- 시뮬레이션 시작 조건 ---
   useEffect(() => {
     if (!isLoadingSongs && best30SongsData.length > 0 && calculationStrategy && currentPhase === 'idle' &&
         currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) < parseFloat(targetRatingDisplay)) {
-      console.log(`[HYBRID_ENGINE_START] Conditions met for Leap Phase. Current: ${currentRatingDisplay}, Target: ${targetRatingDisplay}. Strategy: ${calculationStrategy}.`);
-      setSimulatedB30Songs([...best30SongsData]); 
+      console.log(`[SIM_START_CONDITION_MET] Conditions met for starting simulation. Strategy: ${calculationStrategy}. Current: ${currentRatingDisplay}, Target: ${targetRatingDisplay}.`);
+      setSimulatedB30Songs([...best30SongsData]); // Ensure simulatedB30 is reset to original B30
       setCurrentPhase('initializing_leap_phase');
     }
   }, [isLoadingSongs, best30SongsData, calculationStrategy, currentPhase, currentRatingDisplay, targetRatingDisplay]);
 
+
+  // --- 과제 1: 도약 페이즈 ---
   // 1-1: 도약 대상 그룹 결정
   useEffect(() => {
     if (currentPhase === 'initializing_leap_phase' && !isLoadingSongs && simulatedB30Songs.length > 0 && calculationStrategy) {
       console.log("[LEAP_PHASE_1-1] Determining Leap Target Group...");
       
-      const updatable = simulatedB30Songs.filter(song => song.currentScore < 1009000);
+      const updatable = simulatedB30Songs.filter(song => song.currentScore < 1009000); // Per problem spec
       setUpdatableForLeapPhase(updatable);
       console.log(`[LEAP_PHASE_1-1_INFO] 'Updatable for Leap' (score < 1,009,000): ${updatable.length} songs from simulatedB30.`);
 
       if (updatable.length === 0) {
-        console.warn("[LEAP_PHASE_1-1_WARN] No songs in 'Updatable for Leap' group. Cannot proceed with leap phase.");
-        setCurrentPhase('stuck_awaiting_replacement'); 
+        console.warn("[LEAP_PHASE_1-1_WARN] No songs in 'Updatable for Leap' group. Cannot proceed with leap phase. Moving to replacement check.");
         setLeapTargetGroup([]);
+        setCurrentPhase('stuck_awaiting_replacement'); // Trigger replacement logic (3-x)
         return;
       }
 
@@ -333,7 +332,7 @@ export function useChuniResultData({
       
       if (determinedLeapTargetGroup.length > 0) setCurrentPhase('analyzing_leap_efficiency'); 
       else { 
-          console.warn(`[LEAP_PHASE_1-1_WARN] Leap Target Group is empty for strategy ${calculationStrategy}. Stuck.`); 
+          console.warn(`[LEAP_PHASE_1-1_WARN] Leap Target Group is empty for strategy ${calculationStrategy}. Stuck, moving to replacement.`); 
           setCurrentPhase('stuck_awaiting_replacement'); 
       }
     }
@@ -432,7 +431,7 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'initializing_fine_tuning_phase' && simulatedB30Songs.length > 0 && calculationStrategy) {
         console.log("[FINE_TUNING_PHASE_2-1] Determining Fine-tuning Target Group(s)...");
-        const updatable = simulatedB30Songs.filter(song => song.currentScore < 1009000); // 과제 명세상 1009000점
+        const updatable = simulatedB30Songs.filter(song => song.currentScore < 1009000); // Per problem spec
         setUpdatableForFineTuning(updatable);
         console.log(`[FINE_TUNING_PHASE_2-1_INFO] 'Updatable for Fine-tuning': ${updatable.length} songs.`);
 
@@ -499,14 +498,14 @@ export function useChuniResultData({
             const songIndexInSimulated = newSimulatedB30Songs.findIndex(s => s.id === songFromGroup.id && s.diff === songFromGroup.diff);
             if (songIndexInSimulated === -1) {
                  console.warn(`[FINE_TUNING_PHASE_2-2_WARN] Song from group ${songFromGroup.title} not found in current simulatedB30. Skipping.`);
-                 return; // Skip if not found (should not happen if groups are derived from simulatedB30)
+                 return; 
             }
             
             let currentSongInSim = newSimulatedB30Songs[songIndexInSimulated];
             const maxScoreAllowed = isScoreLimitReleased ? 1010000 : 1009000;
 
             if (currentSongInSim.currentScore < maxScoreAllowed) {
-                const targetMicroTuneRating = currentSongInSim.currentRating + 0.0001; // Aim for a tiny increase
+                const targetMicroTuneRating = currentSongInSim.currentRating + 0.0001; 
                 const minScoreInfo = findMinScoreForTargetRating(currentSongInSim, targetMicroTuneRating, isScoreLimitReleased);
 
                 if (minScoreInfo.possible && minScoreInfo.score > currentSongInSim.currentScore && minScoreInfo.score <= maxScoreAllowed) {
@@ -520,21 +519,40 @@ export function useChuniResultData({
                     };
                     newSimulatedB30Songs[songIndexInSimulated] = currentSongInSim;
                     madeChangeInFineTuning = true;
-                } else {
-                    // console.log(`[FINE_TUNING_PHASE_2-2_SKIP] No beneficial fine-tune for ${currentSongInSim.title} (${currentSongInSim.diff}). Possible: ${minScoreInfo.possible}, NewScore: ${minScoreInfo.score}, CurrentScore: ${currentSongInSim.currentScore}`);
                 }
             }
         });
         
         if (madeChangeInFineTuning) {
              console.log("[FINE_TUNING_PHASE_2-2_INFO] Changes made during fine-tuning. Updating B30 songs.");
-            setSimulatedB30Songs(sortSongsByRatingDesc(newSimulatedB30Songs));
+             setSimulatedB30Songs(sortSongsByRatingDesc(newSimulatedB30Songs));
         } else {
-            console.log("[FINE_TUNING_PHASE_2-2_INFO] No changes made during this fine-tuning iteration.");
+            console.log("[FINE_TUNING_PHASE_2-2_INFO] No changes made during this fine-tuning iteration. (This might lead to stuck_awaiting_replacement if target not met)");
         }
         setCurrentPhase('evaluating_fine_tuning_result');
     }
   }, [currentPhase, simulatedB30Songs, calculationStrategy, fineTuningGroupA, fineTuningGroupB, fineTuningTargetGroup, isScoreLimitReleased]);
+
+  // 2-3: 최종 목표 확인 (미세 조정 페이즈)
+  useEffect(() => {
+    if (currentPhase === 'evaluating_fine_tuning_result' && simulatedAverageB30Rating !== null && targetRatingDisplay) {
+      console.log(`[FINE_TUNING_PHASE_2-3] Evaluating fine-tuning result. Current avg B30: ${simulatedAverageB30Rating}, Target: ${targetRatingDisplay}`);
+      const targetRatingNum = parseFloat(targetRatingDisplay);
+
+      if (simulatedAverageB30Rating >= targetRatingNum) {
+        console.log(`[FINE_TUNING_PHASE_2-3_TARGET_REACHED] Target rating ${targetRatingNum} reached! Current avg: ${simulatedAverageB30Rating}`);
+        setCurrentPhase('target_reached');
+      } else {
+        // If no changes were made in the last 'performing_fine_tuning' and target is not met,
+        // it implies that fine-tuning cannot further improve the rating with the current B30 songs.
+        // We need a way to detect this "no effective change" state to prevent infinite loops if 2-1 keeps re-initializing with the same songs.
+        // For now, the problem statement says "loop back to 2-1".
+        // The breakout will happen if 2-1 determines no groups can be formed (e.g., all updatable songs are already at max for micro-tune).
+        console.log(`[FINE_TUNING_PHASE_2-3_LOOP_BACK] Target not reached. Looping back to re-initialize fine-tuning phase.`);
+        setCurrentPhase('initializing_fine_tuning_phase'); 
+      }
+    }
+  }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay]);
 
 
   // --- 과제 3: B30 교체 로직 ---
@@ -548,9 +566,12 @@ export function useChuniResultData({
         console.log(`[REPLACE_LOGIC] Song to replace: ${songOut.title} (Rating: ${songOut.currentRating.toFixed(4)})`);
         setCurrentPhase('awaiting_external_data_for_replacement'); 
       } else {
-        console.error("[REPLACE_LOGIC_ERROR] Could not find a song to replace in B30.");
+        console.error("[REPLACE_LOGIC_ERROR] Could not find a song to replace in B30 (simulatedB30Songs is empty or problematic).");
         setCurrentPhase('error');
       }
+    } else if (currentPhase === 'stuck_awaiting_replacement' && simulatedB30Songs.length === 0) {
+        console.error("[REPLACE_LOGIC_ERROR] Stuck, but simulatedB30Songs is empty. Cannot proceed with replacement.");
+        setCurrentPhase('error');
     }
   }, [currentPhase, simulatedB30Songs]);
 
@@ -559,12 +580,14 @@ export function useChuniResultData({
         if (allMusicData.length > 0 && userPlayHistory.length > 0 && songToReplace) {
             console.log("[REPLACE_LOGIC_DATA_READY] External data loaded. Proceeding to identify candidates.");
             setCurrentPhase('identifying_candidates');
-        } else if (allMusicData.length === 0 || userPlayHistory.length === 0) {
+        } else if (!songToReplace) {
+            console.warn("[REPLACE_LOGIC_DATA_WAIT] songToReplace is null. Cannot identify candidates yet. This might indicate an issue in prior phase.");
+             setCurrentPhase('error'); // Or some other recovery/stuck state
+        } else if (allMusicData.length === 0 || userPlayHistory.length === 0){
             console.log("[REPLACE_LOGIC_DATA_WAIT] Waiting for external music/play history data. Data might be loading or missing from initial fetch.");
             // Potentially trigger a re-fetch or notify user if data is persistently missing.
-            // For now, it relies on the initial fetch in fetchAndProcessData.
-        } else if (!songToReplace) {
-            console.warn("[REPLACE_LOGIC_DATA_WAIT] songToReplace is null. Cannot proceed with identifying candidates yet.");
+            // For now, it relies on the initial fetch in fetchAndProcessData. If it never arrives, it's stuck.
+            // Consider adding a timeout or explicit error state if data isn't available after a while.
         }
     }
   }, [currentPhase, allMusicData, userPlayHistory, songToReplace]);
@@ -573,12 +596,11 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'identifying_candidates' && songToReplace && allMusicData.length > 0) {
       console.log(`[REPLACE_LOGIC_IDENTIFYING] Identifying candidates to replace '${songToReplace.title}'.`);
-      setCurrentPhase('identifying_candidates'); // Explicitly stay or re-enter
       
       const currentB30IdsAndDiffs = new Set(simulatedB30Songs.map(s => `${s.id}_${s.diff}`));
       
       const potentialCandidatesApi = allMusicData.filter(globalSong => {
-        if (!globalSong.id || !globalSong.diff || !globalSong.title) return false; // Basic validation
+        if (!globalSong.id || !globalSong.diff || !globalSong.title) return false; 
         if (currentB30IdsAndDiffs.has(`${globalSong.id}_${globalSong.diff.toUpperCase()}`)) return false;
         
         const tempSongObjForConst = mapApiSongToAppSong(globalSong, 0, globalSong.const);
@@ -603,13 +625,18 @@ export function useChuniResultData({
   }, [currentPhase, songToReplace, allMusicData, userPlayHistory, simulatedB30Songs]);
 
   useEffect(() => {
-    if (currentPhase === 'candidates_identified' && candidateSongsForReplacement.length > 0 && songToReplace) {
+    if (currentPhase === 'candidates_identified' && songToReplace) { // Ensure songToReplace is still valid
+      if (candidateSongsForReplacement.length === 0) {
+          console.log("[REPLACE_LOGIC_NO_CANDIDATES_FOUND] No candidates found after identification. Simulation may be stuck or complete if no external improvements possible.");
+          setCurrentPhase('error'); // Or a specific "no_more_improvements" state
+          return;
+      }
       console.log("[REPLACE_LOGIC_SELECTING_OPTIMAL] Selecting optimal candidate.");
       setCurrentPhase('selecting_optimal_candidate');
       let bestCandidateInfo: { song: Song | null; effort: number; neededScore: number; resultingRating: number } = { song: null, effort: Infinity, neededScore: 0, resultingRating: 0 };
       
       candidateSongsForReplacement.forEach(candidate => {
-        if (!candidate.chartConstant) return; // Skip if no chart constant for safety
+        if (!candidate.chartConstant) return; 
         const minScoreInfo = findMinScoreForTargetRating(candidate, songToReplace.currentRating + 0.0001, isScoreLimitReleased);
         if (minScoreInfo.possible) {
           const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : minScoreInfo.score; 
@@ -632,9 +659,9 @@ export function useChuniResultData({
         console.log("[REPLACE_LOGIC_NO_OPTIMAL] No suitable optimal candidate found. Simulation may be stuck or complete if no further improvements possible.");
         setCurrentPhase('error'); 
       }
-    } else if (currentPhase === 'candidates_identified' && candidateSongsForReplacement.length === 0) {
-      console.log("[REPLACE_LOGIC_NO_CANDIDATES] No candidates found. Simulation may be stuck or complete.");
-      setCurrentPhase('error'); 
+    } else if (currentPhase === 'candidates_identified' && !songToReplace) {
+        console.error("[REPLACE_LOGIC_ERROR] In 'candidates_identified' but songToReplace is null. This shouldn't happen.");
+        setCurrentPhase('error');
     }
   }, [currentPhase, candidateSongsForReplacement, songToReplace, isScoreLimitReleased]);
 
@@ -651,9 +678,11 @@ export function useChuniResultData({
       updatedB30.push(newB30EntryForOptimalCandidate);
       
       setSimulatedB30Songs(sortSongsByRatingDesc(updatedB30));
-      console.log("[REPLACE_LOGIC_COMPLETE] B30 list updated. Resetting for next evaluation cycle.");
+      console.log("[REPLACE_LOGIC_COMPLETE] B30 list updated. Resetting for next evaluation cycle (back to Leap Phase).");
       setSongToReplace(null); setOptimalCandidateSong(null); setCandidateSongsForReplacement([]);
-      setCurrentPhase('idle'); 
+      // After replacement, always go back to the beginning of the Leap Phase (1-1)
+      // to re-evaluate the new B30 set from scratch.
+      setCurrentPhase('initializing_leap_phase'); 
     }
   }, [currentPhase, optimalCandidateSong, songToReplace, simulatedB30Songs]);
 
@@ -663,7 +692,7 @@ export function useChuniResultData({
 
   return {
     apiPlayerName,
-    best30SongsData: displaySongs,
+    best30SongsData: displaySongs, // Use displaySongs for UI
     new20SongsData,
     combinedTopSongs,
     isLoadingSongs,
@@ -688,6 +717,8 @@ export function useChuniResultData({
 
     songToReplace,
     optimalCandidateSong,
+    candidateSongsForReplacement, // For debugging if needed
   };
 }
 
+    
