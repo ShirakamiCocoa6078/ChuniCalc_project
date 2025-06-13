@@ -79,28 +79,53 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Also clear global music as it might affect New20
+        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
 
         // Clear simulation caches for this user
         const simCachePrefixBase = `${LOCAL_STORAGE_PREFIX}simulation_${userNameForApi}_`;
         console.log(`[CACHE_CLEAR_ON_REFRESH] Attempting to clear simulation caches starting with prefix: ${simCachePrefixBase}`);
         let clearedSimCacheCount = 0;
+        const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && key.startsWith(simCachePrefixBase)) {
-                localStorage.removeItem(key);
-                clearedSimCacheCount++;
-                console.log(`[CACHE_CLEAR_ON_REFRESH] Removed simulation cache: ${key}`);
+                keysToRemove.push(key);
             }
         }
+        keysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            clearedSimCacheCount++;
+            console.log(`[CACHE_CLEAR_ON_REFRESH] Removed simulation cache: ${key}`);
+        });
+        
         console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data, global music, and ${clearedSimCacheCount} simulation caches cleared for refresh trigger.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
-        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared for refresh trigger (no specific user).`);
+        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Also clear global if no specific user or default user
+        // For default user or no user, we might want to clear generic simulation caches if any (though unlikely to exist without username)
+        const genericSimCachePrefix = `${LOCAL_STORAGE_PREFIX}simulation_`;
+        const genericKeysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            // Clear simulation caches that might not be tied to a specific user (e.g. if userNameForApi was null when key was formed)
+            // OR if it's a default player name, clear its specific caches if any were formed.
+            if (key && key.startsWith(genericSimCachePrefix) && (!userNameForApi || userNameForApi === defaultPlayerName || !key.startsWith(`${LOCAL_STORAGE_PREFIX}simulation_${userNameForApi}_`))) {
+                 // This condition is a bit complex, aiming to clear broader simulation caches if not a specific user's refresh
+            }
+            if (userNameForApi === defaultPlayerName && key && key.startsWith(`${LOCAL_STORAGE_PREFIX}simulation_${defaultPlayerName}_`)) {
+                genericKeysToRemove.push(key);
+            }
+        }
+        let clearedGenericSimCount = 0;
+        genericKeysToRemove.forEach(key => {
+            localStorage.removeItem(key);
+            clearedGenericSimCount++;
+            console.log(`[CACHE_CLEAR_ON_REFRESH] Removed generic/default user simulation cache: ${key}`);
+        });
+        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared. Additionally cleared ${clearedGenericSimCount} generic/default user simulation caches.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: "글로벌 음악 목록 캐시를 삭제하고 새로고침을 시도합니다."});
     }
-    setCalculationStrategy(null); // Reset strategy to force re-evaluation including cache check
+    setCalculationStrategy(null); 
     setRefreshNonce(prev => prev + 1);
   }, [userNameForApi, locale, toast]);
 
@@ -438,3 +463,5 @@ export default function ResultPage() {
   );
 }
 
+
+    
