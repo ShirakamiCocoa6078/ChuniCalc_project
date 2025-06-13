@@ -34,6 +34,7 @@ function ResultContent() {
   const [currentRatingDisplay, setCurrentRatingDisplay] = useState<string | null>(null);
   const [targetRatingDisplay, setTargetRatingDisplay] = useState<string | null>(null);
 
+  // 0-3단계: 사용자 선택 기능 (계산 기준)
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("average");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [clientHasMounted, setClientHasMounted] = useState(false);
@@ -54,13 +55,13 @@ function ResultContent() {
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
+    // 0-2단계 값
+    isScoreLimitReleased,
+    // 0-4단계 값
+    phaseTransitionPoint,
+    // 시뮬레이션 결과 (향후 채워질 값들)
+    currentPhase,
     simulatedAverageB30Rating,
-    targetRatingReached,
-    allUpdatableSongsCapped,
-    simulationStatus,
-    songToReplace, 
-    candidateSongsForReplacement,
-    optimalCandidateSong, // Added
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -68,7 +69,7 @@ function ResultContent() {
     locale,
     refreshNonce,
     clientHasMounted,
-    calculationStrategy,
+    calculationStrategy, // 0-3단계 값 전달
   });
 
   const handleRefreshData = useCallback(() => {
@@ -90,73 +91,26 @@ function ResultContent() {
 
   const best30GridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
+  // 기존 시뮬레이션 상태 렌더링 함수는 새 과제에 맞게 수정되거나 제거될 수 있습니다.
+  // 우선 간단한 정보만 표시하도록 남겨둡니다.
   const renderSimulationStatus = () => {
-    if (calculationStrategy !== 'average' || simulationStatus === 'idle' || isLoadingSongs) return null;
+    if (isLoadingSongs || currentPhase === 'idle') return null;
 
     let statusText = "";
     let bgColor = "bg-blue-100 dark:bg-blue-900";
     let textColor = "text-blue-700 dark:text-blue-300";
 
-    switch (simulationStatus) {
-      case 'running_score_increase':
-        statusText = "평균 옵션: B30 곡 점수 상승 시뮬레이션 실행 중...";
-        bgColor = "bg-yellow-100 dark:bg-yellow-900";
-        textColor = "text-yellow-700 dark:text-yellow-300";
-        break;
-      case 'target_reached':
-        statusText = `목표 레이팅 ${targetRatingDisplay} 달성! (시뮬레이션된 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)})`;
-        bgColor = "bg-green-100 dark:bg-green-900";
-        textColor = "text-green-700 dark:text-green-300";
-        break;
-      case 'awaiting_replacement_loop':
-        statusText = `모든 B30 내 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (현 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)}) B30 곡 교체 시뮬레이션 준비 중입니다.`;
-        bgColor = "bg-orange-100 dark:bg-orange-900"; 
-        textColor = "text-orange-700 dark:text-orange-300";
-        break;
-      case 'replacing_song':
-        statusText = `B30 곡 교체 대상 식별 완료: '${songToReplace?.title || 'N/A'}' (레이팅: ${songToReplace?.currentRating.toFixed(2) || 'N/A'}). 외부 데이터 로딩 또는 후보 탐색 준비 중...`;
-        bgColor = "bg-purple-100 dark:bg-purple-900";
-        textColor = "text-purple-700 dark:text-purple-300";
-        break;
-      case 'awaiting_external_data_for_replacement':
-        statusText = `B30 곡 교체 대상: '${songToReplace?.title || 'N/A'}'. 교체 후보 탐색을 위한 전체 악곡/플레이 기록 로딩 대기 중...`;
-        bgColor = "bg-purple-100 dark:bg-purple-900";
-        textColor = "text-purple-700 dark:text-purple-300";
-        break;
-      case 'identifying_candidates':
-        statusText = `B30 곡 교체 대상: '${songToReplace?.title || 'N/A'}'. 전체 악곡(${candidateSongsForReplacement.length}개 후보 확인됨)에서 교체 후보 탐색 중...`;
-        bgColor = "bg-indigo-100 dark:bg-indigo-900";
-        textColor = "text-indigo-700 dark:text-indigo-300";
-        break;
-      case 'candidates_identified':
-         statusText = `교체 후보 ${candidateSongsForReplacement.length}곡 식별 완료. 최적 후보 선정 단계(1-16)로 진행합니다.`;
-         bgColor = "bg-teal-100 dark:bg-teal-900";
-         textColor = "text-teal-700 dark:text-teal-300";
-         break;
-      case 'selecting_optimal_candidate':
-         statusText = `선별된 ${candidateSongsForReplacement.length}개 후보 중에서 '${songToReplace?.title || 'N/A'}' (을)를 대체할 최적 후보 선정 중...`;
-         bgColor = "bg-cyan-100 dark:bg-cyan-900";
-         textColor = "text-cyan-700 dark:text-cyan-300";
-         break;
-      case 'optimal_candidate_selected':
-         statusText = `최적 교체 후보 선정 완료: '${optimalCandidateSong?.title || 'N/A'}' (점수: ${optimalCandidateSong?.targetScore}, 레이팅: ${optimalCandidateSong?.targetRating.toFixed(2)}). B30 리스트 교체 단계(1-17)로 진행합니다.`;
-         bgColor = "bg-lime-100 dark:bg-lime-900";
-         textColor = "text-lime-700 dark:text-lime-300";
-         break;
-      case 'error':
-         statusText = "시뮬레이션 중 오류가 발생했습니다. 자세한 내용은 콘솔을 확인해주세요.";
-         bgColor = "bg-red-100 dark:bg-red-900";
-         textColor = "text-red-700 dark:text-red-300";
-         break;
-      default: 
-        if (allUpdatableSongsCapped && !targetRatingReached && simulatedAverageB30Rating) { 
-             statusText = `모든 B30 내 곡이 점수 상한에 도달했지만 목표 레이팅 ${targetRatingDisplay}에 미치지 못했습니다. (최종 B30 평균: ${simulatedAverageB30Rating?.toFixed(2)})`;
-             bgColor = "bg-red-100 dark:bg-red-900";
-             textColor = "text-red-700 dark:text-red-300";
-        } else {
-            return null;
-        }
+    statusText = `현재 페이즈: ${currentPhase}. `;
+    if (simulatedAverageB30Rating !== null) {
+      statusText += `시뮬레이션된 B30 평균: ${simulatedAverageB30Rating.toFixed(4)}. `;
     }
+    if (phaseTransitionPoint !== null) {
+      statusText += `페이즈 전환점: ${phaseTransitionPoint.toFixed(4)}. `;
+    }
+    if (isScoreLimitReleased) {
+      statusText += `(점수 상한 한계 해제됨).`;
+    }
+
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center", bgColor, textColor)}>
@@ -215,6 +169,7 @@ function ResultContent() {
             </Button>
         </div>
 
+        {/* 0-3단계: 사용자 선택 기능 UI */}
         <Card className="mb-6">
           <CardHeader>
             <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
@@ -232,20 +187,21 @@ function ResultContent() {
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
-                <RadioGroupItem value="peak" id="r-peak" />
-                <Label htmlFor="r-peak" className="flex items-center cursor-pointer">
-                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyPeak')}
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
                 <RadioGroupItem value="floor" id="r-floor" />
                 <Label htmlFor="r-floor" className="flex items-center cursor-pointer">
                   <TrendingDown className="w-5 h-5 mr-2 text-green-600" /> {getTranslation(locale, 'resultPageStrategyFloor')}
                 </Label>
               </div>
+              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors">
+                <RadioGroupItem value="peak" id="r-peak" />
+                <Label htmlFor="r-peak" className="flex items-center cursor-pointer">
+                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyPeak')}
+                </Label>
+              </div>
             </RadioGroup>
             <p className="text-xs text-muted-foreground mt-2">
-              {getTranslation(locale, 'resultPageStrategyDisclaimer')}
+              {/* {getTranslation(locale, 'resultPageStrategyDisclaimer')} - 새 과제에서는 이 문구 제거 또는 수정 */}
+              선택한 기준으로 B30 곡 목표 레이팅을 시뮬레이션합니다.
             </p>
           </CardContent>
         </Card>
@@ -259,7 +215,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {isLoadingSongs && simulationStatus === 'idle' ? ( 
+          {isLoadingSongs ? ( 
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
@@ -360,5 +316,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    

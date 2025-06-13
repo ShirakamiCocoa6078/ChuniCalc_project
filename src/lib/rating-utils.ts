@@ -11,6 +11,7 @@ export const difficultyOrder: { [key: string]: number } = {
   BAS: 1,
 };
 
+// 0-1단계: 계산식 및 보간 규칙
 export const calculateChunithmSongRating = (score: number, chartConstant: number | undefined | null): number => {
   if (typeof chartConstant !== 'number' || chartConstant <= 0) {
     return 0;
@@ -21,15 +22,48 @@ export const calculateChunithmSongRating = (score: number, chartConstant: number
   if (score >= 1009000) { // SSS+
     ratingValue = chartConstant + 2.15;
   } else if (score >= 1007500) { // SSS
+    // SSS (1007500) = 정수+2.0. SSS+ 직전 (1008999)까지 100점당 0.01 (최대 0.14)
+    // (1008999 - 1007500) / 100 = 14.99 -> 14 increments of 0.01
     ratingValue = chartConstant + 2.00 + Math.min(0.14, Math.floor(Math.max(0, score - 1007500) / 100) * 0.01);
   } else if (score >= 1005000) { // SS+
+    // SS+ (1005000) = 정수+1.5. SSS 직전 (1007499)까지 50점당 0.01 (최대 0.49)
+    // (1007499 - 1005000) / 50 = 49.98 -> 49 increments of 0.01
     ratingValue = chartConstant + 1.50 + Math.min(0.49, Math.floor(Math.max(0, score - 1005000) / 50) * 0.01);
   } else if (score >= 1000000) { // SS
+    // SS (1000000) = 정수+1.0. SS+ 직전 (1004999)까지 100점당 0.01 (최대 0.49)
+    // (1004999 - 1000000) / 100 = 49.99 -> 49 increments of 0.01
     ratingValue = chartConstant + 1.00 + Math.min(0.49, Math.floor(Math.max(0, score - 1000000) / 100) * 0.01);
-  } else if (score >= 990000) { // S+
-    ratingValue = chartConstant + 0.60 + Math.min(0.39, Math.floor(Math.max(0, score - 990000) / 250) * 0.01);
   } else if (score >= 975000) { // S
-    ratingValue = chartConstant + 0.00 + Math.min(0.59, Math.floor(Math.max(0, score - 975000) / 250) * 0.01);
+    // S (975000) = 정수+0.0. SS 직전 (999999)까지 250점당 0.01 (최대 0.59 -> S에서 SS까지 1.0이므로, 이 구간은 1.0/ ( (1000000-975000)/250 ) = 1.0/100 = 0.01이 아님.
+    // S~SS 구간의 레이팅 증가폭은 1.0. 점수 구간은 25000점. 25000/250 = 100개의 스텝. 각 스텝당 +0.01. 총 +1.00.
+    // SSS (2.0) - SS+(1.5) = 0.5, SS+(1.5)-SS(1.0)=0.5, SS(1.0)-S(0.0)=1.0
+    // SSS+ (2.15)
+    // SSS (1,007,500) 정수 + 2.00. SSS+까지 1499점. 1400점까지 100점당 0.01 -> 0.14. 즉 2.14
+    // 1009000점일 때 +2.15 이므로, SSS->SSS+ 구간은 0.15 상승.
+    // 1,007,500 ~ 1,008,999: 100점당 +0.01 (최대 +0.15까지 가능해야 함). 1499점. 14개 스텝. 0.14.
+    // 1,008,900 ~ 1,008,999 에서 2.14, 1,009,000에서 2.15. 이 마지막 100점 구간에서 0.01이 추가됨.
+    // 수정: SSS (1,007,500) ~ SSS+ (1,009,000점 미만) : 100점당 +0.01. 총 1500점차. 15스텝. 최대 +0.15. (2.00 ~ 2.15)
+    // 수정: SS+ (1,005,000) ~ SSS (1,007,500점 미만) : 50점당 +0.01. 총 2500점차. 50스텝. 최대 +0.50. (1.50 ~ 2.00)
+    // 수정: SS (1,000,000) ~ SS+ (1,005,000점 미만) : 100점당 +0.01. 총 5000점차. 50스텝. 최대 +0.50. (1.00 ~ 1.50)
+    // 수정: S (975,000) ~ SS (1,000,000점 미만) : 250점당 +0.01. 총 25000점차. 100스텝. 최대 +1.00. (0.00 ~ 1.00)
+
+    // 새로운 보간 규칙 적용
+    if (score >= 1007500) { // SSS to SSS+
+        ratingValue = chartConstant + 2.00 + Math.floor(Math.max(0, score - 1007500) / 100) * 0.01;
+         if (score >= 1009000) ratingValue = chartConstant + 2.15; // Cap at SSS+
+         else ratingValue = Math.min(chartConstant + 2.15, ratingValue);
+    } else if (score >= 1005000) { // SS+ to SSS
+        ratingValue = chartConstant + 1.50 + Math.floor(Math.max(0, score - 1005000) / 50) * 0.01;
+        ratingValue = Math.min(chartConstant + 2.00, ratingValue); // Cap at SSS
+    } else if (score >= 1000000) { // SS to SS+
+        ratingValue = chartConstant + 1.00 + Math.floor(Math.max(0, score - 1000000) / 100) * 0.01;
+        ratingValue = Math.min(chartConstant + 1.50, ratingValue); // Cap at SS+
+    } else if (score >= 975000) { // S to SS
+        ratingValue = chartConstant + 0.00 + Math.floor(Math.max(0, score - 975000) / 250) * 0.01;
+        ratingValue = Math.min(chartConstant + 1.00, ratingValue); // Cap at SS
+    }
+
+  // 기존 AAA 이하 구간은 유지
   } else if (score >= 950000) { // AAA
     ratingValue = chartConstant - 1.50;
   } else if (score >= 925000) { // AA
@@ -41,8 +75,13 @@ export const calculateChunithmSongRating = (score: number, chartConstant: number
   } else { // C and below
     ratingValue = 0;
   }
+  // 최종적으로 SSS+ 값을 넘지 않도록 한 번 더 확인 (보간 중 +2.15를 초과하는 경우 방지)
+  if (score >= 1007500 && ratingValue > chartConstant + 2.15) {
+    ratingValue = chartConstant + 2.15;
+  }
 
-  return Math.max(0, parseFloat(ratingValue.toFixed(2)));
+
+  return Math.max(0, parseFloat(ratingValue.toFixed(4))); // 소수점 4자리까지 정밀도 유지
 };
 
 export const mapApiSongToAppSong = (
@@ -89,17 +128,11 @@ export const mapApiSongToAppSong = (
   } else {
     calculatedCurrentRating = typeof apiSong.rating === 'number' ? apiSong.rating : 0;
   }
-  const currentRating = calculatedCurrentRating;
+  const currentRating = parseFloat(calculatedCurrentRating.toFixed(4)); // 소수점 4자리
   
-  const targetScoreImprovementFactor = (1001000 - score > 0 && score > 0) ? (1001000 - score) / 10 : 10000;
-  const targetScore = Math.max(score, Math.min(1001000, score + Math.floor(Math.random() * targetScoreImprovementFactor)));
-
-  let targetRating: number;
-  if (typeof effectiveChartConstant === 'number' && effectiveChartConstant > 0) {
-    targetRating = calculateChunithmSongRating(targetScore, effectiveChartConstant);
-  } else {
-     targetRating = parseFloat(Math.max(currentRating, Math.min(17.85, currentRating + Math.random() * 0.2)).toFixed(2));
-  }
+  // 초기 targetScore, targetRating은 current와 동일하게 설정. 시뮬레이션 과정에서 변경됨.
+  const targetScore = score;
+  const targetRating = currentRating;
   
   const baseSong: Song = {
     id: apiSong.id,
@@ -138,7 +171,6 @@ export const sortSongsByRatingDesc = (songs: Song[]): Song[] => {
   });
 };
 
-// Helper function to find the minimum score to achieve a target rating
 export const findMinScoreForTargetRating = (
   currentSong: Song,
   absoluteTargetRating: number,
@@ -150,24 +182,30 @@ export const findMinScoreForTargetRating = (
 
   const maxScore = isLimitReleasedLocal ? 1010000 : 1009000;
   
-  // If current rating already meets target, score is current score
-  if (currentSong.currentRating >= absoluteTargetRating && currentSong.currentScore > 0) { // Ensure score > 0 for played songs
+  if (currentSong.currentRating >= absoluteTargetRating && currentSong.currentScore > 0) {
       return { score: currentSong.currentScore, rating: currentSong.currentRating, possible: true };
   }
 
-  // Iterate from current score + 1 (or 1 if current is 0) up to maxScore
-  // If currentScore is 0, start checking from score 1.
-  // Otherwise, start from currentScore + 1 (or smallest increment possible, e.g. 1 point)
   const startingScore = currentSong.currentScore > 0 ? currentSong.currentScore + 1 : 1;
 
-  for (let scoreAttempt = startingScore; scoreAttempt <= maxScore; scoreAttempt += 1) { // Increment by 1 for fine-grained check
+  for (let scoreAttempt = startingScore; scoreAttempt <= maxScore; scoreAttempt += 1) { 
     const calculatedRating = calculateChunithmSongRating(scoreAttempt, currentSong.chartConstant);
     if (calculatedRating >= absoluteTargetRating) {
-      return { score: scoreAttempt, rating: parseFloat(calculatedRating.toFixed(2)), possible: true };
+      return { score: scoreAttempt, rating: parseFloat(calculatedRating.toFixed(4)), possible: true };
     }
   }
   
-  // If loop finishes, it means target rating wasn't reached even at maxScore
   const ratingAtMaxScore = calculateChunithmSongRating(maxScore, currentSong.chartConstant);
-  return { score: maxScore, rating: parseFloat(ratingAtMaxScore.toFixed(2)), possible: ratingAtMaxScore >= absoluteTargetRating };
+  return { score: maxScore, rating: parseFloat(ratingAtMaxScore.toFixed(4)), possible: ratingAtMaxScore >= absoluteTargetRating };
+};
+
+// 다음 등급 경계 점수를 찾는 함수 (과제 1-2용)
+export const getNextGradeBoundaryScore = (currentScore: number): number | null => {
+    if (currentScore >= 1009000) return null; // 이미 최고 등급이거나 그 이상
+    if (currentScore < 975000) return 975000;  // S
+    if (currentScore < 1000000) return 1000000; // SS
+    if (currentScore < 1005000) return 1005000; // SS+
+    if (currentScore < 1007500) return 1007500; // SSS
+    if (currentScore < 1009000) return 1009000; // SSS+
+    return null;
 };
