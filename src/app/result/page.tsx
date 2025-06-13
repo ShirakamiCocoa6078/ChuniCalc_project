@@ -56,7 +56,7 @@ function ResultContent() {
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
-    isScoreLimitReleased,
+    // isScoreLimitReleased,
     phaseTransitionPoint,
     currentPhase,
     simulatedAverageB30Rating,
@@ -203,12 +203,14 @@ function ResultContent() {
     if (simulatedAverageB30Rating !== null && currentPhase !== 'target_reached' && currentPhase !== 'idle' && !isLoadingSongs && !errorLoadingSongs) {
       statusText += ` (현재 B30 평균: ${simulatedAverageB30Rating.toFixed(4)})`;
     }
-    if (phaseTransitionPoint !== null && (currentPhase.includes('leap') || currentPhase.includes('fine_tuning') || currentPhase === 'idle' || currentPhase === 'evaluating_leap_result') && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs) {
+    if (phaseTransitionPoint !== null && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs &&
+        (currentPhase.includes('leap') || currentPhase.includes('fine_tuning') || currentPhase === 'idle' || currentPhase === 'evaluating_leap_result' || currentPhase === 'evaluating_fine_tuning_result')
+    ) {
       statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
     }
-     if (isScoreLimitReleased && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'idle' && currentPhase !== 'target_reached') {
-      statusText += ` (점수 상한 한계 해제됨)`;
-    }
+    //  if (isScoreLimitReleased && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'idle' && currentPhase !== 'target_reached') {
+    //   statusText += ` (점수 상한 한계 해제됨)`;
+    // }
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center shadow-md", bgColor, textColor)}>
@@ -276,7 +278,7 @@ function ResultContent() {
               value={calculationStrategy || ""} 
               onValueChange={(value) => {
                 setCalculationStrategy(value as CalculationStrategy);
-                // setCurrentPhase('idle'); // Reset phase on strategy change if needed
+                // setCurrentPhase('idle'); 
               }}
               className="flex flex-col sm:flex-row gap-4"
             >
@@ -325,7 +327,18 @@ function ResultContent() {
                 }
               </p>
             </div>
-          ) : !errorLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' ? ( 
+          ) : errorLoadingSongs ? (
+             <Card className="border-red-500/50 shadow-lg">
+                <CardHeader className="flex flex-row items-center space-x-2">
+                    <AlertTriangle className="w-6 h-6 text-red-500" />
+                    <CardTitle className="font-headline text-xl text-red-600">{getTranslation(locale, 'resultPageErrorLoadingTitle')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p>{errorLoadingSongs}</p>
+                    <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
+                </CardContent>
+            </Card>
+          ) : best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' ? ( 
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
@@ -336,7 +349,7 @@ function ResultContent() {
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : !errorLoadingSongs ? (
+          ) : (
             <>
               <TabsContent value="best30">
                 <Card className="shadow-md">
@@ -395,7 +408,7 @@ function ResultContent() {
                 </Card>
               </TabsContent>
             </>
-          ) : null 
+          )
         }
         </Tabs>
       </div>
