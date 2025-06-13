@@ -56,15 +56,9 @@ function ResultContent() {
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
-    // isScoreLimitReleased,
     phaseTransitionPoint,
     currentPhase,
     simulatedAverageB30Rating,
-    // updatableForLeapPhase, 
-    // leapTargetGroup, 
-    // songsWithLeapEfficiency,
-    // songToReplace,
-    // optimalCandidateSong,
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -122,28 +116,27 @@ function ResultContent() {
                 statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다.";
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
             } else if (simulatedAverageB30Rating && targetRatingDisplay && simulatedAverageB30Rating >= parseFloat(targetRatingDisplay) ){
-                statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
-                bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
-            }
-             else {
+                 statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
+                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
+            } else {
                  statusText = "시뮬레이션 대기 중. 조건 충족 시 자동으로 시작됩니다.";
                  IconComponent = PlaySquare;
             }
             break;
           case 'initializing_leap_phase':
-            statusText = "도약 페이즈(1-1): 대상 그룹 결정 중...";
+            statusText = "도약 페이즈 (1-1): 대상 그룹 결정 중...";
             IconComponent = ListChecks; iconShouldSpin = true;
             break;
           case 'analyzing_leap_efficiency':
-            statusText = "도약 페이즈(1-2): 곡별 다음 등급 도약 효율성 분석 중...";
+            statusText = "도약 페이즈 (1-2): 곡별 다음 등급 도약 효율성 분석 중...";
             IconComponent = Telescope; iconShouldSpin = true;
             break;
           case 'performing_leap_jump':
-            statusText = "도약 페이즈(1-3): 최적 대상 곡 점수 상승 실행 중...";
+            statusText = "도약 페이즈 (1-3): 최적 대상 곡 점수 상승 실행 중...";
             IconComponent = Rocket; iconShouldSpin = true;
             break;
           case 'evaluating_leap_result':
-            statusText = "도약 페이즈(1-4): 결과 확인 및 다음 페이즈 판단 중...";
+            statusText = "도약 페이즈 (1-4): 결과 확인 및 다음 페이즈 판단 중...";
             IconComponent = BarChart3; iconShouldSpin = true;
             break;
           case 'transitioning_to_fine_tuning':
@@ -151,15 +144,15 @@ function ResultContent() {
             IconComponent = Shuffle; iconShouldSpin = true;
             break;
           case 'initializing_fine_tuning_phase':
-            statusText = "미세 조정 페이즈(2-1): 대상 그룹 결정 중...";
+            statusText = "미세 조정 페이즈 (2-1): 대상 그룹 결정 중...";
             IconComponent = FilterIcon; iconShouldSpin = true;
             break;
           case 'performing_fine_tuning':
-            statusText = "미세 조정 페이즈(2-2): 점수 미세 조정 실행 중...";
+            statusText = "미세 조정 페이즈 (2-2): 점수 미세 조정 실행 중...";
             IconComponent = TrendingUp; iconShouldSpin = true;
             break;
           case 'evaluating_fine_tuning_result':
-            statusText = "미세 조정 페이즈(2-3): 결과 확인 중...";
+            statusText = "미세 조정 페이즈 (2-3): 결과 확인 중...";
             IconComponent = Activity; iconShouldSpin = true;
             break;
           case 'target_reached':
@@ -167,31 +160,31 @@ function ResultContent() {
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_awaiting_replacement':
-            statusText = "현재 페이즈에서 더 이상 점수 상승이 불가능합니다. B30 곡 교체 로직(과제3)으로 전환 준비 중...";
+            statusText = "현 페이즈에서 점수 상승 불가. B30 곡 교체 로직 (과제 3-2) 준비 중...";
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'awaiting_external_data_for_replacement':
-            statusText = "곡 교체(3-1): 외부 데이터(전체 곡 목록/사용자 기록) 로딩 대기 중...";
+            statusText = "B30 교체 (3-2): 외부 데이터 (전체 곡 목록/사용자 기록) 로딩 대기 중...";
             IconComponent = Hourglass; iconShouldSpin = true;
             break;
           case 'identifying_candidates':
-            statusText = "곡 교체(3-2): B30 외부에서 교체 후보 곡 탐색 중...";
+            statusText = "B30 교체 (3-2): B30 외부에서 교체 후보 곡 탐색 중...";
             IconComponent = FileSearch; iconShouldSpin = true;
             break;
           case 'candidates_identified':
-            statusText = "곡 교체(3-2): 후보 곡 탐색 완료. 최적 후보 선정 준비 중...";
+            statusText = "B30 교체 (3-2): 교체 후보 곡 탐색 완료. 최적 후보 선정 준비 중...";
             IconComponent = CheckCircle2;
             break;
           case 'selecting_optimal_candidate':
-            statusText = "곡 교체(3-2): 최적 교체 후보 선정 중...";
+            statusText = "B30 교체 (3-2): 최적 교체 후보 선정 중...";
             IconComponent = Brain; iconShouldSpin = true;
             break;
           case 'optimal_candidate_selected':
-            statusText = "곡 교체(3-2): 최적 교체 후보 선정 완료. B30 리스트 업데이트 준비 중...";
+            statusText = "B30 교체 (3-2): 최적 교체 후보 선정 완료. B30 리스트 업데이트 준비 중...";
             IconComponent = CheckCircle2;
             break;
           case 'replacing_song':
-             statusText = "곡 교체(3-2): B30 리스트 업데이트 및 평균 레이팅 재계산 중...";
+             statusText = "B30 교체 (3-2): B30 리스트 업데이트 및 평균 레이팅 재계산 중...";
              IconComponent = Replace; iconShouldSpin = true;
              break;
           case 'error':
@@ -208,10 +201,13 @@ function ResultContent() {
       statusText += ` (현재 B30 평균: ${simulatedAverageB30Rating.toFixed(4)})`;
     }
     if (phaseTransitionPoint !== null && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs &&
-        (currentPhase.includes('leap') || currentPhase.includes('fine_tuning') || currentPhase === 'idle' || currentPhase === 'evaluating_leap_result' || currentPhase === 'evaluating_fine_tuning_result')
+        (currentPhase.startsWith('initializing_leap') || currentPhase.startsWith('analyzing_leap') || currentPhase.startsWith('performing_leap') || currentPhase.startsWith('evaluating_leap') ||
+         currentPhase.startsWith('initializing_fine_tuning') || currentPhase.startsWith('performing_fine_tuning') || currentPhase.startsWith('evaluating_fine_tuning') ||
+         currentPhase === 'idle')
     ) {
       statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
     }
+    
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center shadow-md", bgColor, textColor)}>
@@ -279,7 +275,7 @@ function ResultContent() {
               value={calculationStrategy || ""} 
               onValueChange={(value) => {
                 setCalculationStrategy(value as CalculationStrategy);
-                // setCurrentPhase('idle'); // Reset phase when strategy changes to re-trigger simulation
+                // Consider resetting currentPhase to 'idle' if strategy change should restart simulation
               }}
               className="flex flex-col sm:flex-row gap-4"
             >
@@ -315,7 +311,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {(isLoadingSongs && currentPhase === 'idle' && !errorLoadingSongs) ? ( 
+          {(isLoadingSongs && currentPhase === 'idle' && !errorLoadingSongs && !calculationStrategy) ? ( 
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
@@ -339,7 +335,7 @@ function ResultContent() {
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : best30SongsData.length === 0 && new20SongsData.length === 0 && currentPhase === 'idle' && !isLoadingSongs ? ( 
+          ) : !isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy && currentPhase === 'idle' ? ( 
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
@@ -347,6 +343,7 @@ function ResultContent() {
                 </CardHeader>
                 <CardContent>
                     <p>{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
+                     <p className="text-sm mt-1">API 응답에 유효한 Best 30 또는 New 20 곡 데이터가 없습니다. Chunirec 데이터를 확인하거나 새로고침 해보세요.</p>
                 </CardContent>
             </Card>
           ) : (
@@ -424,5 +421,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
-    
