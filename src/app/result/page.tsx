@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
@@ -272,33 +272,42 @@ function ResultContent() {
           </CardHeader>
           <CardContent>
             <RadioGroup
-              value={calculationStrategy || ""} 
+              value={calculationStrategy || "none"} 
               onValueChange={(value) => {
-                setCalculationStrategy(value as CalculationStrategy);
-                // Consider resetting currentPhase to 'idle' if strategy change should restart simulation
+                if (value === "none") {
+                  setCalculationStrategy(null);
+                  setCurrentPhase('idle'); // Reset phase if strategy is deselected
+                } else {
+                  setCalculationStrategy(value as CalculationStrategy);
+                }
               }}
-              className="flex flex-col sm:flex-row gap-4"
+              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
             >
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="average" id="r-average" />
-                <Label htmlFor="r-average" className="flex items-center cursor-pointer w-full">
-                  <BarChartHorizontalBig className="w-5 h-5 mr-2 text-primary" /> {getTranslation(locale, 'resultPageStrategyAverage')}
+                <Label htmlFor="r-average" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
+                  <BarChartHorizontalBig className="w-4 h-4 mr-1 sm:mr-2" /> {getTranslation(locale, 'resultPageStrategyAverage')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="floor" id="r-floor" />
-                <Label htmlFor="r-floor" className="flex items-center cursor-pointer w-full">
-                  <TrendingDown className="w-5 h-5 mr-2 text-green-600" /> {getTranslation(locale, 'resultPageStrategyFloor')}
+                <Label htmlFor="r-floor" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
+                  <TrendingDown className="w-4 h-4 mr-1 sm:mr-2 text-green-600" /> {getTranslation(locale, 'resultPageStrategyFloor')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="peak" id="r-peak" />
-                <Label htmlFor="r-peak" className="flex items-center cursor-pointer w-full">
-                  <TrendingUp className="w-5 h-5 mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyPeak')}
+                <Label htmlFor="r-peak" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
+                  <TrendingUp className="w-4 h-4 mr-1 sm:mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyPeak')}
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
+                <RadioGroupItem value="none" id="r-none" />
+                <Label htmlFor="r-none" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
+                  <X className="w-4 h-4 mr-1 sm:mr-2 text-muted-foreground" /> {getTranslation(locale, 'resultPageStrategyNone')}
                 </Label>
               </div>
             </RadioGroup>
-            {/* {calculationStrategy && <p className="text-xs text-muted-foreground mt-3">{getTranslation(locale, 'resultPageStrategyDisclaimer')}</p>} */}
           </CardContent>
         </Card>
 
