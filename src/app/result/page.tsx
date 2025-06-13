@@ -79,14 +79,28 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
-        console.log(`User-specific (${userNameForApi}) and global music cache cleared for refresh trigger.`);
+        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Also clear global music as it might affect New20
+
+        // Clear simulation caches for this user
+        const simCachePrefixBase = `${LOCAL_STORAGE_PREFIX}simulation_${userNameForApi}_`;
+        console.log(`[CACHE_CLEAR_ON_REFRESH] Attempting to clear simulation caches starting with prefix: ${simCachePrefixBase}`);
+        let clearedSimCacheCount = 0;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith(simCachePrefixBase)) {
+                localStorage.removeItem(key);
+                clearedSimCacheCount++;
+                console.log(`[CACHE_CLEAR_ON_REFRESH] Removed simulation cache: ${key}`);
+            }
+        }
+        console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data, global music, and ${clearedSimCacheCount} simulation caches cleared for refresh trigger.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
         localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
-        console.log(`Global music cache cleared for refresh trigger (no specific user).`);
+        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared for refresh trigger (no specific user).`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: "글로벌 음악 목록 캐시를 삭제하고 새로고침을 시도합니다."});
     }
+    setCalculationStrategy(null); // Reset strategy to force re-evaluation including cache check
     setRefreshNonce(prev => prev + 1);
   }, [userNameForApi, locale, toast]);
 
@@ -276,12 +290,11 @@ function ResultContent() {
               onValueChange={(value) => {
                 if (value === "none") {
                   setCalculationStrategy(null);
-                  // setCurrentPhase('idle'); // Phase reset is handled in the hook
                 } else {
                   setCalculationStrategy(value as CalculationStrategy);
                 }
               }}
-              className="grid grid-cols-1 sm:grid-cols-3 gap-2" // Adjusted for 3 items
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2" 
             >
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="floor" id="r-floor" />
@@ -314,7 +327,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {(isLoadingSongs && currentPhase === 'idle' && !errorLoadingSongs && !calculationStrategy) ? ( 
+          {(isLoadingSongs && currentPhase === 'idle' && !calculationStrategy) ? ( 
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>

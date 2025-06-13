@@ -4,6 +4,7 @@
 export const LOCAL_STORAGE_PREFIX = 'chuniCalcData_';
 export const USER_DATA_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for user data
 export const GLOBAL_MUSIC_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for global music list
+export const SIMULATION_CACHE_EXPIRY_MS = 1 * 24 * 60 * 60 * 1000; // 1 day for simulation results
 export const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
 
 export type CachedData<T> = {
@@ -31,12 +32,12 @@ export function getCachedData<T>(key: string, expiryMs: number = USER_DATA_CACHE
   }
 }
 
-export function setCachedData<T>(key: string, data: T): void {
+export function setCachedData<T>(key: string, data: T, expiryMs?: number): void { // expiryMs is optional here to not break existing calls
   if (typeof window === 'undefined') return;
   try {
     const item: CachedData<T> = { timestamp: Date.now(), data };
     localStorage.setItem(key, JSON.stringify(item));
-    console.log(`Data cached for key: ${key}`);
+    console.log(`Data cached for key: ${key}` + (expiryMs ? ` with expiry ${expiryMs}ms` : ''));
   } catch (error) {
     console.error("Error writing to localStorage for key:", key, error);
     if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
@@ -44,3 +45,4 @@ export function setCachedData<T>(key: string, data: T): void {
     }
   }
 }
+

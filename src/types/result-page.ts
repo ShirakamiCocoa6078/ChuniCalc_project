@@ -40,12 +40,6 @@ export type ShowallApiSongEntry = {
 
 export type CalculationStrategy = "peak" | "floor";
 
-// Re-defining Song type here if it's more central to result page logic
-// or ensure SongCardSongType is sufficient and imported correctly.
-// For this refactor, let's assume Song type from SongCard is the one to use,
-// or we can define it here if it's more general.
-// To avoid circular dependencies if SongCard needs types from here,
-// it's better to define common types like Song here.
 export type Song = {
   id: string;
   diff: string;
@@ -68,15 +62,41 @@ export type Song = {
 
 
 export type GlobalMusicApiResponse = {
-    records?: ShowallApiSongEntry[]; // Assuming music/showall.json returns ShowallApiSongEntry structure
+    records?: ShowallApiSongEntry[]; 
 };
 
 export type UserShowallApiResponse = {
-    records?: ShowallApiSongEntry[]; // Assuming records/showall.json returns ShowallApiSongEntry structure
+    records?: ShowallApiSongEntry[]; 
 };
 
 export type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
-    // other fields from rating_data.json if needed
 };
 
+export type SimulationPhase =
+  | 'idle'
+  | 'initializing_leap_phase'
+  | 'analyzing_leap_efficiency'
+  | 'performing_leap_jump'
+  | 'evaluating_leap_result'
+  | 'transitioning_to_fine_tuning'
+  | 'initializing_fine_tuning_phase'
+  | 'performing_fine_tuning'
+  | 'evaluating_fine_tuning_result'
+  | 'target_reached'
+  | 'stuck_awaiting_replacement' 
+  | 'awaiting_external_data_for_replacement'
+  | 'identifying_candidates'
+  | 'candidates_identified'
+  | 'selecting_optimal_candidate'
+  | 'optimal_candidate_selected'
+  | 'replacing_song'
+  | 'error';
+
+export type CachedSimulationResult = {
+  timestamp: number; // Timestamp of when this simulation result was cached
+  sourceDataTimestamp: number; // Timestamp of the rating_data used for this simulation
+  simulatedB30Songs: Song[];
+  simulatedAverageB30Rating: number | null;
+  finalPhase: SimulationPhase;
+};
