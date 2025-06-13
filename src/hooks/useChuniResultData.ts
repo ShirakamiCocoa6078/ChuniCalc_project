@@ -26,12 +26,6 @@ const getSimulationCacheKey = (
   return `${LOCAL_STORAGE_PREFIX}simulation_${userName}_${normCurrent}_${normTarget}_${strategy}`;
 };
 
-const isSongHighConstantForFloor = (song: Song, currentOverallRating: number | null): boolean => {
-  if (!song.chartConstant || currentOverallRating === null) return false; 
-  const threshold = parseFloat((currentOverallRating - 1.8).toFixed(1));
-  return song.chartConstant > threshold;
-};
-
 // Helper function to flatten raw global music entries
 const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
     const flattenedEntries: ShowallApiSongEntry[] = [];
@@ -51,9 +45,7 @@ const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
                         level: String(diffData.level || "N/A"),
                         const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
                         is_const_unknown: diffData.is_const_unknown === true,
-                        // score, rating, etc., are not typically in global music/showall meta/data,
-                        // they come from user records. Initialize as undefined or default.
-                        score: undefined,
+                        score: undefined, 
                         rating: undefined,
                         is_played: undefined,
                     });
@@ -61,10 +53,18 @@ const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
             }
         }
     } else if (rawEntry && rawEntry.id && rawEntry.title && rawEntry.diff) {
-        // Already a flat entry (e.g. from an older cache or different API structure)
         flattenedEntries.push(rawEntry as ShowallApiSongEntry);
     }
     return flattenedEntries;
+};
+
+// Helper: Check if a song is considered "high constant" for the floor strategy
+const isSongHighConstantForFloor = (song: Song, currentOverallRating: number | null): boolean => {
+  if (!song.chartConstant || currentOverallRating === null) return false;
+  // 현재 B30 평균값 - 1.8 을 하고, 그 결과값에 대해 소수점 한자리만 남긴 값 (버림)
+  const thresholdBase = currentOverallRating - 1.8;
+  const threshold = Math.floor(thresholdBase * 10) / 10; // 소수점 첫째 자리까지 버림
+  return song.chartConstant > threshold;
 };
 
 
@@ -106,11 +106,9 @@ export function useChuniResultData({
   const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
   
   const [sortedPrimaryLeapCandidates, setSortedPrimaryLeapCandidates] = useState<Song[]>([]);
-  // const [sortedSecondaryLeapCandidates, setSortedSecondaryLeapCandidates] = useState<Song[]>([]); // Kept for 'peak' strategy, floor might not use.
   const [currentLeapProcessingGroup, setCurrentLeapProcessingGroup] = useState<'primary' | 'secondary' | null>(null);
 
   const [fineTuningCandidateSongs, setFineTuningCandidateSongs] = useState<Song[]>([]); 
-  // const [currentFineTuneProcessingGroup, setCurrentFineTuneProcessingGroup] = useState<'primary' | 'secondary' | null>(null); 
 
   const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
   const [userPlayHistory, setUserPlayHistory] = useState<ShowallApiSongEntry[]>([]);
@@ -149,8 +147,7 @@ export function useChuniResultData({
       if (!userNameForApi || userNameForApi === defaultPlayerName) { setErrorLoadingSongs(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult')); setApiPlayerName(defaultPlayerName); setIsLoadingSongs(false); return; }
 
       setIsLoadingSongs(true); setErrorLoadingSongs(null); setApiPlayerName(userNameForApi); 
-      
-      setNew20SongsData([]); setCombinedTopSongs([]); 
+      setOriginalB30SongsData([]); setNew20SongsData([]); setCombinedTopSongs([]); 
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
@@ -166,34 +163,34 @@ export function useChuniResultData({
 
       let profileData = getCachedData<ProfileData>(profileKey);
       let ratingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
-      let globalMusicCacheRaw = getCachedData<any[]>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // Expect raw array from API or flattened from previous cache
+      let globalMusicCacheRaw = getCachedData<any[]>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS); 
       let userShowallCache = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
 
       if (profileData) setApiPlayerName(profileData.player_name || userNameForApi);
       
       let flattenedGlobalMusicRecords: ShowallApiSongEntry[] = [];
       if (globalMusicCacheRaw) {
-          console.log(`[DATA_FETCH] Global music cache found. First item sample:`, globalMusicCacheRaw[0]);
-          // Check if it needs flattening (e.g., from a direct API response structure)
+          console.log(`[DATA_FETCH] Global music cache found. Count: ${globalMusicCacheRaw.length}. Sample:`, globalMusicCacheRaw.slice(0,1));
           if (globalMusicCacheRaw.length > 0 && globalMusicCacheRaw[0]?.meta && globalMusicCacheRaw[0]?.data) {
               console.log("[DATA_FETCH] Global music cache seems raw (nested meta/data). Flattening...");
               flattenedGlobalMusicRecords = globalMusicCacheRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
           } else {
-              // Assume it's already flat if it doesn't have meta/data structure.
               console.log("[DATA_FETCH] Global music cache seems already flat or is not nested.");
               flattenedGlobalMusicRecords = globalMusicCacheRaw as ShowallApiSongEntry[];
           }
       }
-      console.log(`[DATA_FETCH] Cache status - Profile: ${!!profileData}, Rating: ${!!ratingData}, GlobalMusic (after potential flattening): ${flattenedGlobalMusicRecords.length}, UserShowall: ${!!userShowallCache}`);
+      setAllMusicData(flattenedGlobalMusicRecords); // Set state early if cache exists
 
+      let tempUserShowallRecords: ShowallApiSongEntry[] = userShowallCache?.records || [];
+      setUserPlayHistory(tempUserShowallRecords); // Set state early if cache exists
+
+      console.log(`[DATA_FETCH] Cache status - Profile: ${!!profileData}, Rating: ${!!ratingData}, GlobalMusic (after potential flattening): ${flattenedGlobalMusicRecords.length}, UserShowall: ${tempUserShowallRecords.length}`);
 
       let initialB30ApiEntries: RatingApiSongEntry[] = [];
       if (ratingData?.best?.entries) {
         initialB30ApiEntries = ratingData.best.entries.filter((e: any): e is RatingApiSongEntry => e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && typeof e.title === 'string' && e.title.trim() !== '') || [];
       }
       
-      let tempUserShowallRecords: ShowallApiSongEntry[] = userShowallCache?.records || [];
-
       if (!profileData || !ratingData || !globalMusicCacheRaw || !userShowallCache) {
         console.log("[DATA_FETCH] Cache miss for one or more items. Fetching from API.");
         const apiRequestsMap = new Map<string, Promise<any>>();
@@ -216,16 +213,18 @@ export function useChuniResultData({
               }
               if (res.type === 'globalMusic' && !globalMusicCacheRaw) {
                 const fetchedGlobalMusicRaw = Array.isArray(res.data) ? res.data : (res.data?.records || []); 
-                flattenedGlobalMusicRecords = fetchedGlobalMusicRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
-                console.log(`[DATA_FETCH_API] Fetched and flattened global music: ${flattenedGlobalMusicRecords.length} entries.`);
-                setCachedData<ShowallApiSongEntry[]>(globalMusicKey, flattenedGlobalMusicRecords, GLOBAL_MUSIC_CACHE_EXPIRY_MS); 
-                globalMusicCacheRaw = flattenedGlobalMusicRecords; // Keep consistent type for subsequent logic
+                const justFetchedFlattenedGlobal = fetchedGlobalMusicRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
+                console.log(`[DATA_FETCH_API] Fetched and flattened global music: ${justFetchedFlattenedGlobal.length} entries.`);
+                setAllMusicData(justFetchedFlattenedGlobal); 
+                setCachedData<ShowallApiSongEntry[]>(globalMusicKey, justFetchedFlattenedGlobal, GLOBAL_MUSIC_CACHE_EXPIRY_MS); 
+                flattenedGlobalMusicRecords = justFetchedFlattenedGlobal; // Update main variable too
               }
               if (res.type === 'userShowall' && !userShowallCache) {
                 const fetchedUserShowallRecords = Array.isArray(res.data) ? res.data : (res.data?.records || []);
+                setUserPlayHistory(fetchedUserShowallRecords);
                 setCachedData<UserShowallApiResponse>(userShowallKey, { records: fetchedUserShowallRecords });
                 userShowallCache = { records: fetchedUserShowallRecords };
-                tempUserShowallRecords = fetchedUserShowallRecords;
+                tempUserShowallRecords = fetchedUserShowallRecords; // Update main variable
               }
             }
             if (criticalError) throw new Error(criticalError);
@@ -241,14 +240,14 @@ export function useChuniResultData({
         }
       } else {
         console.log("[DATA_FETCH] All data loaded from cache.");
-        // Ensure flattenedGlobalMusicRecords is set even if only cache was hit
-        if (globalMusicCacheRaw && flattenedGlobalMusicRecords.length === 0) {
-             if (globalMusicCacheRaw.length > 0 && globalMusicCacheRaw[0]?.meta && globalMusicCacheRaw[0]?.data) {
-                flattenedGlobalMusicRecords = globalMusicCacheRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
-             } else {
-                flattenedGlobalMusicRecords = globalMusicCacheRaw as ShowallApiSongEntry[];
-             }
-             console.log(`[DATA_FETCH] Global music from cache re-processed/validated flat: ${flattenedGlobalMusicRecords.length} entries.`);
+        // Ensure allMusicData and userPlayHistory are set from potentially already processed cache
+        if (flattenedGlobalMusicRecords.length > 0 && allMusicData.length === 0) {
+            setAllMusicData(flattenedGlobalMusicRecords);
+            console.log(`[DATA_FETCH] Set allMusicData from processed cache: ${flattenedGlobalMusicRecords.length}`);
+        }
+        if (tempUserShowallRecords.length > 0 && userPlayHistory.length === 0) {
+            setUserPlayHistory(tempUserShowallRecords);
+            console.log(`[DATA_FETCH] Set userPlayHistory from processed cache: ${tempUserShowallRecords.length}`);
         }
         toast({ title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') });
       }
@@ -256,10 +255,6 @@ export function useChuniResultData({
       const mappedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
       setOriginalB30SongsData(mappedOriginalB30);
       console.log(`[DATA_FETCH] Original B30 songs mapped: ${mappedOriginalB30.length}`);
-
-      setAllMusicData(flattenedGlobalMusicRecords); // Ensure this is always the flattened version
-      setUserPlayHistory(tempUserShowallRecords);
-      console.log(`[DATA_FETCH] Final allMusicData (flattened): ${flattenedGlobalMusicRecords.length}, User showall records: ${tempUserShowallRecords.length}`);
       
       if (flattenedGlobalMusicRecords.length > 0 && tempUserShowallRecords.length > 0) {
         console.log("[NEW20_PROCESS] Starting New20 processing.");
@@ -267,7 +262,7 @@ export function useChuniResultData({
         const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
         console.log(`[NEW20_PROCESS] Titles from NewSongs.json: ${newSongTitlesToMatch.length}`);
 
-        const newSongDefinitions = flattenedGlobalMusicRecords.filter(globalSong => // Use already flattened data
+        const newSongDefinitions = flattenedGlobalMusicRecords.filter(globalSong => 
           globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase())
         );
         console.log(`[NEW20_PROCESS] Matched new song definitions from global music: ${newSongDefinitions.length}`);
@@ -329,10 +324,8 @@ export function useChuniResultData({
     if (actualStrategyChanged) {
         console.log(`[SIM_STRATEGY_EFFECT] Strategy changed from ${prevStrategy} to ${currentStrat}. Resetting simulation states.`);
         setSortedPrimaryLeapCandidates([]);
-        // setSortedSecondaryLeapCandidates([]); // Not used in current floor/simplified peak
         setCurrentLeapProcessingGroup(null);
         setFineTuningCandidateSongs([]);
-        // setCurrentFineTuneProcessingGroup(null); // Not used
         setSongToReplace(null);
         setCandidateSongsForReplacement([]);
         setOptimalCandidateSong(null);
@@ -517,37 +510,35 @@ export function useChuniResultData({
             setCurrentPhase('stuck_awaiting_replacement'); return;
         }
 
+        let sortedAllUpdatable: Song[] = [];
         if (calculationStrategy === 'floor') {
-            const sortedAllUpdatable = [...updatableSongs].sort((a, b) => {
-                // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating); // No HighConstantRule for this version
-                // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating); // No HighConstantRule for this version
-                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; // No HighConstantRule for this version
-
-                if ((a.chartConstant ?? Infinity) !== (b.chartConstant ?? Infinity)) return (a.chartConstant ?? Infinity) - (b.chartConstant ?? Infinity);
+            // "저점" 전략: 악곡 상수 낮은 순 -> 레이팅 낮은 순 -> 점수 낮은 순 (높은 상수곡 후순위 처리 임시 비활성화)
+            sortedAllUpdatable = [...updatableSongs].sort((a, b) => {
+                 // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating); // 주석 처리됨
+                 // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating); // 주석 처리됨
+                 // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; // 주석 처리됨
+                
+                const constA = a.chartConstant ?? Infinity;
+                const constB = b.chartConstant ?? Infinity;
+                if (constA !== constB) return constA - constB;
                 if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
                 return a.targetScore - b.targetScore;
             });
-            setSortedPrimaryLeapCandidates(sortedAllUpdatable);
-            // setSortedSecondaryLeapCandidates([]); // Not used for this simplified floor
-            setCurrentLeapProcessingGroup('primary'); 
             console.log(`[SIM_DEBUG_LEAP_INIT] Floor Strategy (No HighConstantRule) - Sorted all updatable: ${sortedAllUpdatable.length}. Sample:`, sortedAllUpdatable.slice(0,3).map(s=>({t:s.title, cnst:s.chartConstant, r:s.targetRating.toFixed(2)})));
-            
-            if (false && updatableSongs.length > 0) { // Existing median-based logic, now 비활성화
-                // ... (기존 중앙값 기반 로직 주석 처리 또는 삭제) ...
-            }
+
         } else if (calculationStrategy === 'peak') {
-            // Peak strategy: Sort by targetRating descending (highest first)
-            const sortedPeakCandidates = [...updatableSongs].sort((a, b) => {
+            // "고점" 전략: (현재는 단순화된 레이팅 높은 순)
+             sortedAllUpdatable = [...updatableSongs].sort((a, b) => {
                 if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating;
-                return b.targetScore - a.targetScore; // Higher score as tie-breaker
+                return b.targetScore - a.targetScore;
             });
-            setSortedPrimaryLeapCandidates(sortedPeakCandidates);
-            // setSortedSecondaryLeapCandidates([]); // Peak doesn't use secondary group in this simplified model
-            setCurrentLeapProcessingGroup('primary');
-            console.log(`[SIM_DEBUG_LEAP_INIT] Peak Strategy - Sorted all updatable by targetRating desc: ${sortedPeakCandidates.length}`);
+            console.log(`[SIM_DEBUG_LEAP_INIT] Peak Strategy - Sorted all updatable by targetRating desc: ${sortedAllUpdatable.length}`);
         }
         
-        if (sortedPrimaryLeapCandidates.length > 0 ) { // This condition is simplified as secondary is not used for floor/peak now
+        setSortedPrimaryLeapCandidates(sortedAllUpdatable);
+        setCurrentLeapProcessingGroup('primary'); // 항상 primary로 시작 (secondary는 현재 사용 안함)
+            
+        if (sortedAllUpdatable.length > 0 ) {
             setCurrentPhase('analyzing_leap_efficiency');
         } else if (updatableSongs.length > 0) { 
             console.log("[SIM_DEBUG_LEAP_INIT] Updatable songs exist, but candidate list is empty after sort. This is unexpected. Moving to stuck/replacement.");
@@ -560,7 +551,7 @@ export function useChuniResultData({
   }, [currentPhase, isLoadingSongs, simulatedB30Songs, calculationStrategy, isScoreLimitReleased, simulatedAverageB30Rating]);
 
   useEffect(() => {
-    if (currentPhase === 'analyzing_leap_efficiency' && currentLeapProcessingGroup === 'primary') { // Simplified: only primary group considered for now
+    if (currentPhase === 'analyzing_leap_efficiency' && currentLeapProcessingGroup === 'primary') { 
         const candidatesToAnalyze = sortedPrimaryLeapCandidates;
         console.log(`[SIM_DEBUG_LEAP_ANALYZE] Phase: Analyzing Leap Efficiency for primary group. Candidates: ${candidatesToAnalyze.length}`);
         
@@ -576,12 +567,12 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'performing_leap_jump' && calculationStrategy && simulatedB30Songs.length > 0) {
         let optimalLeapSong: (Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }) | null = null;
-        const candidatesToConsider = sortedPrimaryLeapCandidates; // Always use primary for current simplified logic
+        const candidatesToConsider = sortedPrimaryLeapCandidates; 
 
         if (calculationStrategy === 'floor') {
-            console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Attempting leap for top candidate. Candidates count: ${candidatesToConsider.length}`);
+            console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Attempting leap for top candidate from sorted list. Candidates count: ${candidatesToConsider.length}`);
             if (candidatesToConsider.length > 0) {
-                const songToAttemptLeap = candidatesToConsider[0]; // Try the first one (lowest const etc.)
+                const songToAttemptLeap = candidatesToConsider[0]; // 정렬된 목록의 첫 번째 곡 (가장 낮은 상수 등)
                  const nextGradeScore = getNextGradeBoundaryScore(songToAttemptLeap.targetScore);
                  let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
 
@@ -599,16 +590,15 @@ export function useChuniResultData({
                     console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Valid leap found for ${optimalLeapSong.title}. Eff: ${leapEfficiency.toFixed(4)}`);
                 } else {
                     console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Leap not possible or not efficient for ${songToAttemptLeap.title}. Moving to fine-tuning init.`);
-                    setCurrentPhase('initializing_fine_tuning_phase');
+                    setCurrentPhase('initializing_fine_tuning_phase'); // 바로 미세조정으로
                     return; 
                 }
             } else {
                  console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: No candidates in sortedPrimaryLeapCandidates. Moving to fine-tuning init.`);
-                 setCurrentPhase('initializing_fine_tuning_phase');
+                 setCurrentPhase('initializing_fine_tuning_phase'); // 바로 미세조정으로
                  return;
             }
         } else if (calculationStrategy === 'peak') {
-            // Peak strategy: find the one with highest leap efficiency among all candidates
             const songsWithCalculatedEfficiency = candidatesToConsider.map(song => {
                 const nextGradeScore = getNextGradeBoundaryScore(song.targetScore);
                 let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
@@ -695,18 +685,20 @@ export function useChuniResultData({
         let sortedCandidatesForFineTune: Song[] = [];
         if (calculationStrategy === 'floor') {
             sortedCandidatesForFineTune = [...updatableSongs].sort((a, b) => {
-                // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating); // No HighConstantRule for this version
-                // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating); // No HighConstantRule for this version
-                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; // No HighConstantRule for this version
-                
-                if ((a.chartConstant ?? Infinity) !== (b.chartConstant ?? Infinity)) return (a.chartConstant ?? Infinity) - (b.chartConstant ?? Infinity);
+                // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating); // 주석 처리됨
+                // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating); // 주석 처리됨
+                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; // 주석 처리됨
+
+                const constA = a.chartConstant ?? Infinity;
+                const constB = b.chartConstant ?? Infinity;
+                if (constA !== constB) return constA - constB;
                 if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
                 return a.targetScore - b.targetScore;
             });
             console.log(`[SIM_DEBUG_FINE_INIT] Floor Strategy (No HighConstantRule) - Sorted all for fine-tune: ${sortedCandidatesForFineTune.length}. Sample:`, sortedCandidatesForFineTune.slice(0,3).map(s=>({t:s.title, cnst:s.chartConstant, r:s.targetRating.toFixed(2)})));
         } else if (calculationStrategy === 'peak') {
             sortedCandidatesForFineTune = [...updatableSongs].sort((a, b) => {
-                if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating; // Higher rating first for peak
+                if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating; 
                 return b.targetScore - a.targetScore;
             });
             console.log(`[SIM_DEBUG_FINE_INIT] Peak Strategy - Sorted all for fine-tune by targetRating desc: ${sortedCandidatesForFineTune.length}`);
@@ -716,7 +708,7 @@ export function useChuniResultData({
         
         if (sortedCandidatesForFineTune.length > 0) {
              setCurrentPhase('performing_fine_tuning');
-        } else { // Should not happen if updatableSongs.length > 0
+        } else { 
             console.log("[SIM_DEBUG_FINE_INIT] Updatable songs exist, but candidate list for fine-tuning is empty. Moving to stuck/replacement.");
             setCurrentPhase('stuck_awaiting_replacement');
         }
@@ -763,7 +755,7 @@ export function useChuniResultData({
         setCurrentPhase('evaluating_fine_tuning_result');
       } else {
         console.log(`[SIM_DEBUG_FINE_PERFORM] No songs updated during this fine-tuning pass (${groupToTune.length} candidates). Moving to stuck/replacement.`);
-        setFineTuningCandidateSongs([]); // Clear candidates as this group is exhausted
+        setFineTuningCandidateSongs([]); 
         setCurrentPhase('stuck_awaiting_replacement');
       }
     } else if (currentPhase === 'performing_fine_tuning' && fineTuningCandidateSongs.length === 0 && simulatedB30Songs.length > 0 && !isLoadingSongs) {
@@ -810,54 +802,57 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'awaiting_external_data_for_replacement') {
       console.log("[SIM_DEBUG_REPLACE_AWAIT_DATA] Awaiting external data for replacement.");
-      if (allMusicData.length > 0 && userPlayHistory.length > 0 && songToReplace) {
+      if (allMusicData && allMusicData.length > 0 && userPlayHistory && userPlayHistory.length > 0 && songToReplace) {
          console.log("[SIM_DEBUG_REPLACE_AWAIT_DATA] External data (allMusic, userHistory) and songToReplace are present. Moving to identify candidates.");
         setCurrentPhase('identifying_candidates');
       } else if (!songToReplace) {
         console.error("[SIM_DEBUG_REPLACE_AWAIT_DATA] songToReplace is null. Error.");
         setCurrentPhase('error');
       } else {
-          console.log(`[SIM_DEBUG_REPLACE_AWAIT_DATA] Waiting. AllMusic: ${allMusicData.length}, UserHistory: ${userPlayHistory.length}, SongToReplace: ${!!songToReplace}`);
-          if (allMusicData.length === 0 || userPlayHistory.length === 0) {
-            console.warn("[SIM_DEBUG_REPLACE_AWAIT_DATA] Missing allMusicData or userPlayHistory. Cannot proceed with replacement. This might indicate an issue with initial data load or cache for these.");
-            // Potentially move to error or a specific "data missing for replacement" state if this persists.
-            // For now, it will just keep logging "Waiting".
+          console.log(`[SIM_DEBUG_REPLACE_AWAIT_DATA] Waiting. AllMusic: ${allMusicData?.length}, UserHistory: ${userPlayHistory?.length}, SongToReplace: ${!!songToReplace}`);
+          if (!allMusicData || allMusicData.length === 0 || !userPlayHistory || userPlayHistory.length === 0) {
+            console.warn("[SIM_DEBUG_REPLACE_AWAIT_DATA] Missing allMusicData or userPlayHistory. Cannot proceed with replacement. This might indicate an issue with initial data load or cache for these. Triggering error.");
+            setCurrentPhase('error'); 
           }
       }
     }
   }, [currentPhase, allMusicData, userPlayHistory, songToReplace]);
 
   useEffect(() => {
-    if (currentPhase === 'identifying_candidates' && songToReplace && allMusicData.length > 0) {
+    if (currentPhase === 'identifying_candidates' && songToReplace && allMusicData && allMusicData.length > 0) {
       console.log(`[SIM_DEBUG_REPLACE_IDENTIFY] Identifying replacement candidates for ${songToReplace.title} (tR: ${songToReplace.targetRating.toFixed(4)}). allMusicData count: ${allMusicData.length}`);
       const currentB30IdsAndDiffs = new Set(simulatedB30Songs.map(s => `${s.id}_${s.diff}`));
       
+      const newSongsTitlesLower = (NewSongsData.titles?.verse || []).map(t => t.trim().toLowerCase());
+
       const potentialCandidatesApi = allMusicData.filter(globalSong => {
         if (!globalSong.id || !globalSong.diff || !globalSong.title) return false;
         const songKey = `${globalSong.id}_${globalSong.diff.toUpperCase()}`;
         if (currentB30IdsAndDiffs.has(songKey)) return false; 
+
+        // Exclude songs from NewSongs.json
+        if (newSongsTitlesLower.includes(globalSong.title.trim().toLowerCase())) {
+          // console.log(`[SIM_DEBUG_REPLACE_IDENTIFY_FILTER_EXCLUDE_NEWSONG] Excluding new song: ${globalSong.title}`);
+          return false;
+        }
         
-        // Directly use globalSong's const and level for mapping, mapApiSongToAppSong will handle derivation
         const tempSongObjForConst = mapApiSongToAppSong(globalSong, 0, globalSong.const);
         if (!tempSongObjForConst.chartConstant) {
-            // console.log(`[SIM_DEBUG_REPLACE_IDENTIFY_FILTER] Excluding ${globalSong.title} (${globalSong.diff}) due to no derivable chartConstant. API const: ${globalSong.const}, level: ${globalSong.level}, is_unknown: ${globalSong.is_const_unknown}`);
             return false; 
         }
         
         const scoreForMaxRating = isScoreLimitReleased ? 1010000 : 1009000;
         const potentialMaxRating = calculateChunithmSongRating(scoreForMaxRating, tempSongObjForConst.chartConstant);
         const shouldInclude = potentialMaxRating > songToReplace.targetRating;
-        // if (shouldInclude) console.log(`[SIM_DEBUG_REPLACE_IDENTIFY_FILTER_INCLUDE] Including ${globalSong.title} (${globalSong.diff}), potentialMaxRating: ${potentialMaxRating.toFixed(4)} vs target ${songToReplace.targetRating.toFixed(4)}`);
-        // else console.log(`[SIM_DEBUG_REPLACE_IDENTIFY_FILTER_EXCLUDE_RATING] Excluding ${globalSong.title} (${globalSong.diff}), potentialMaxRating: ${potentialMaxRating.toFixed(4)} vs target ${songToReplace.targetRating.toFixed(4)}`);
         return shouldInclude; 
       });
       console.log(`[SIM_DEBUG_REPLACE_IDENTIFY] Found ${potentialCandidatesApi.length} potential candidates from allMusicData after initial filter. Sample:`, potentialCandidatesApi.slice(0,2).map(s=>({t:s.title, d:s.diff, c:s.const, l:s.level})));
 
       const mappedCandidates = potentialCandidatesApi.map(apiEntry => {
         const playedVersion = userPlayHistory.find(p => p.id === apiEntry.id && p.diff.toUpperCase() === apiEntry.diff.toUpperCase());
-        const songWithScore = playedVersion ? { ...apiEntry, score: playedVersion.score, rating: playedVersion.rating } : { ...apiEntry, score: 0, rating: 0 }; // Ensure score is 0 if not played
+        const songWithScore = playedVersion ? { ...apiEntry, score: playedVersion.score, rating: playedVersion.rating } : { ...apiEntry, score: 0, rating: 0 }; 
         return mapApiSongToAppSong(songWithScore, 0, apiEntry.const); 
-      }).filter(song => song.chartConstant !== null); // Ensure only songs with valid constant proceed
+      }).filter(song => song.chartConstant !== null); 
       console.log(`[SIM_DEBUG_REPLACE_IDENTIFY] Mapped ${mappedCandidates.length} candidates to AppSong format (with valid chartConstant). Sample:`, mappedCandidates.slice(0,2).map(s=>({t:s.title, cS:s.currentScore, cR:s.currentRating.toFixed(4), const:s.chartConstant })));
 
       setCandidateSongsForReplacement(mappedCandidates);
@@ -867,8 +862,8 @@ export function useChuniResultData({
         console.warn("[SIM_DEBUG_REPLACE_IDENTIFY] No replacement candidates found after mapping and filtering. Possibly stuck permanently or target too high.");
         setCurrentPhase('error'); 
       }
-    } else if (currentPhase === 'identifying_candidates' && (!songToReplace || allMusicData.length === 0)) {
-      console.error("[SIM_DEBUG_REPLACE_IDENTIFY] Error state: songToReplace is null or allMusicData is empty.");
+    } else if (currentPhase === 'identifying_candidates' && (!songToReplace || !allMusicData || allMusicData.length === 0)) {
+      console.error("[SIM_DEBUG_REPLACE_IDENTIFY] Error state: songToReplace is null or allMusicData is empty or undefined.");
       setCurrentPhase('error');
     }
   }, [currentPhase, songToReplace, allMusicData, userPlayHistory, simulatedB30Songs, isScoreLimitReleased]);
@@ -904,7 +899,6 @@ export function useChuniResultData({
       if (bestCandidateInfo.song) {
         const finalOptimalCandidate: Song = {
           ...bestCandidateInfo.song, 
-          // currentScore and currentRating are already correct from mapApiSongToAppSong (using userPlayHistory)
           targetScore: bestCandidateInfo.neededScore, 
           targetRating: bestCandidateInfo.resultingRating 
         };
@@ -968,5 +962,3 @@ export function useChuniResultData({
   };
 }
 
-
-    
