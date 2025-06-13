@@ -73,15 +73,13 @@ export function useChuniResultData({
   
   // States for Leap Phase candidates and processing
   const [sortedPrimaryLeapCandidates, setSortedPrimaryLeapCandidates] = useState<Song[]>([]);
-  const [sortedSecondaryLeapCandidates, setSortedSecondaryLeapCandidates] = useState<Song[]>([]);
-  const [songsWithLeapEfficiency, setSongsWithLeapEfficiency] = useState<Array<Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }>>([]);
+  const [sortedSecondaryLeapCandidates, setSortedSecondaryLeapCandidates] = useState<Song[]>([]); // Kept for 'peak' strategy, floor might not use.
   const [currentLeapProcessingGroup, setCurrentLeapProcessingGroup] = useState<'primary' | 'secondary' | null>(null);
 
   // States for Fine-Tuning Phase candidates and processing
-  const [sortedPrimaryFineTuneCandidates, setSortedPrimaryFineTuneCandidates] = useState<Song[]>([]);
-  const [sortedSecondaryFineTuneCandidates, setSortedSecondaryFineTuneCandidates] = useState<Song[]>([]);
-  const [fineTuningCandidateSongs, setFineTuningCandidateSongs] = useState<Song[]>([]); // Currently active list for fine-tuning
-  const [currentFineTuneProcessingGroup, setCurrentFineTuneProcessingGroup] = useState<'primary' | 'secondary' | null>(null);
+  const [fineTuningCandidateSongs, setFineTuningCandidateSongs] = useState<Song[]>([]); 
+  const [currentFineTuneProcessingGroup, setCurrentFineTuneProcessingGroup] = useState<'primary' | 'secondary' | null>(null); // Kept for 'peak', floor might not use.
+
 
   // States for B30 Replacement Phase
   const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
@@ -270,46 +268,37 @@ export function useChuniResultData({
     const currentStrat = calculationStrategy;
     const actualStrategyChanged = prevStrategy !== currentStrat;
 
-    console.log(`[SIM_STRATEGY_EFFECT] Running. Strategy: ${currentStrat}, Prev: ${prevStrategy}, ActualChange: ${actualStrategyChanged}, isLoading: ${isLoadingSongs}, OriginalB30Count: ${originalB30SongsData.length}`);
+    console.log(`[SIM_STRATEGY_EFFECT] Running. Strategy: ${currentStrat}, Prev: ${prevStrategy}, ActualChange: ${actualStrategyChanged}, isLoading: ${isLoadingSongs}, OriginalB30Count: ${originalB30SongsData.length}, currentPhase: ${currentPhase}`);
 
+    if (isLoadingSongs && !actualStrategyChanged) { // If loading AND strategy hasn't changed, defer
+        console.log("[SIM_STRATEGY_EFFECT] Data still loading and strategy unchanged. Deferring full processing.");
+        return;
+    }
+    
     if (actualStrategyChanged) {
         console.log(`[SIM_STRATEGY_EFFECT] Strategy changed from ${prevStrategy} to ${currentStrat}. Resetting simulation states.`);
         // Reset all intermediate simulation states
         setSortedPrimaryLeapCandidates([]);
         setSortedSecondaryLeapCandidates([]);
-        setSongsWithLeapEfficiency([]);
         setCurrentLeapProcessingGroup(null);
-        setSortedPrimaryFineTuneCandidates([]);
-        setSortedSecondaryFineTuneCandidates([]);
         setFineTuningCandidateSongs([]);
         setCurrentFineTuneProcessingGroup(null);
         setSongToReplace(null);
         setCandidateSongsForReplacement([]);
         setOptimalCandidateSong(null);
-        setCurrentPhase('idle'); // Ensure phase is reset before potentially starting a new sim
-    }
-
-    if (isLoadingSongs) {
-        console.log("[SIM_STRATEGY_EFFECT] Data still loading. Deferring full strategy processing.");
-        if (actualStrategyChanged) prevCalculationStrategyRef.current = currentStrat;
-        return;
-    }
-    
-    if (originalB30SongsData.length === 0) {
-        console.log("[SIM_STRATEGY_EFFECT] No original B30 data. Setting simulatedB30 to empty and phase to idle.");
-        setSimulatedB30Songs([]);
-        setCurrentPhase('idle');
-        if (actualStrategyChanged) prevCalculationStrategyRef.current = currentStrat;
-        return;
-    }
-
-    // Reset simulatedB30Songs to original state if strategy changed or if it's currently empty but shouldn't be
-    if (actualStrategyChanged || simulatedB30Songs.length === 0) {
-        console.log("[SIM_STRATEGY_EFFECT] Resetting simulatedB30Songs from originalB30SongsData due to strategy change or empty simB30.");
-        setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
+        
+        if (originalB30SongsData.length > 0) {
+          setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
+          console.log("[SIM_STRATEGY_EFFECT] SimulatedB30Songs reset from original due to strategy change.");
+        } else {
+          setSimulatedB30Songs([]); // Ensure it's empty if no original data
+          console.log("[SIM_STRATEGY_EFFECT] OriginalB30SongsData is empty, SimulatedB30Songs set to empty.");
+        }
+        setCurrentPhase('idle'); // Set to idle, next block will evaluate if simulation should start
     }
     
-    if (currentStrat) {
+    // This block handles starting/restarting simulation based on current strategy and data readiness
+    if (!isLoadingSongs && currentStrat) {
         const simCacheKey = getSimulationCacheKey(userNameForApi, currentRatingDisplay, targetRatingDisplay, currentStrat);
         const ratingDataCacheKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
         const ratingDataCacheItem = clientHasMounted ? localStorage.getItem(ratingDataCacheKey) : null;
@@ -338,29 +327,43 @@ export function useChuniResultData({
         }
         
         if (!cacheHit) {
-            console.log(`[SIM_STRATEGY_EFFECT] Strategy '${currentStrat}' selected, no valid cache. Starting/Continuing new simulation.`);
+            // Ensure simulatedB30 is fresh if we are about to start a new simulation
+            if (simulatedB30Songs.length === 0 && originalB30SongsData.length > 0) {
+                 setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
+                 console.log("[SIM_STRATEGY_EFFECT] SimulatedB30Songs was empty but original data exists. Resetting for new simulation.");
+            } else if (actualStrategyChanged && originalB30SongsData.length > 0){
+                 // This case should have been handled by the actualStrategyChanged block above, but double ensure.
+                 setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
+                 console.log("[SIM_STRATEGY_EFFECT] Double check: SimulatedB30Songs reset for new simulation after strategy change.");
+            }
+
+
+            console.log(`[SIM_STRATEGY_EFFECT] Strategy '${currentStrat}' selected, no valid cache. Starting/Continuing new simulation. CurrentPhase: ${currentPhase}`);
             const currentRatingNum = parseFloat(currentRatingDisplay || "0");
             const targetRatingNum = parseFloat(targetRatingDisplay || "0");
 
-            if (currentRatingNum < targetRatingNum) {
-                // If the phase is already past idle (e.g., from a previous run this session), don't reset to initializing_leap_phase unless strategy actually changed
-                // This 'if' condition specifically ensures that if a strategy is ALREADY active and we're just re-evaluating (e.g. after data load), we don't force-restart the phase.
-                // The actualStrategyChanged block above already handles resetting phase to idle IF the strategy itself changes.
-                if (currentPhase === 'idle' || actualStrategyChanged) {
-                    console.log(`[SIM_STRATEGY_EFFECT] Setting phase to initializing_leap_phase. CurrentPhase was: ${currentPhase}`);
+            if (currentRatingNum < targetRatingNum && originalB30SongsData.length > 0) {
+                // Only start simulation if target is higher and we have base data
+                // If phase is already past idle (e.g., from a previous run this session), don't reset to initializing_leap_phase unless strategy actually changed
+                if (currentPhase === 'idle' || actualStrategyChanged) { // If strategy changed, or was idle, start new sim
+                    console.log(`[SIM_STRATEGY_EFFECT] Setting phase to initializing_leap_phase. CurrentPhase was: ${currentPhase}, ActualChange: ${actualStrategyChanged}`);
                     setCurrentPhase('initializing_leap_phase');
                 } else {
-                    console.log(`[SIM_STRATEGY_EFFECT] Strategy active, phase is ${currentPhase}, not resetting phase.`);
+                    console.log(`[SIM_STRATEGY_EFFECT] Strategy active, phase is ${currentPhase}, not resetting phase from here.`);
                 }
             } else {
-                console.log(`[SIM_STRATEGY_EFFECT] Target not higher than current. Setting phase to idle.`);
+                console.log(`[SIM_STRATEGY_EFFECT] Target not higher than current, or no originalB30. Setting phase to idle.`);
                 setCurrentPhase('idle');
             }
         }
-    } else { 
-        console.log("[SIM_STRATEGY_EFFECT] Strategy deselected (null). Phase set to Idle.");
+    } else if (!currentStrat) { // No strategy selected
+        console.log("[SIM_STRATEGY_EFFECT] Strategy deselected (null). Phase set to Idle. Resetting simB30 from original.");
+        if (originalB30SongsData.length > 0) {
+             setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
+        } else {
+             setSimulatedB30Songs([]);
+        }
         setCurrentPhase('idle');
-        // simulatedB30Songs already reset to original if strategy changed to null
     }
 
     if (actualStrategyChanged) {
@@ -454,7 +457,8 @@ export function useChuniResultData({
   // --- LEAP PHASE LOGIC ---
   useEffect(() => {
     if (currentPhase === 'initializing_leap_phase' && !isLoadingSongs && simulatedB30Songs.length > 0 && calculationStrategy) {
-        console.log("[SIM_DEBUG_LEAP_INIT] Phase: Initializing Leap. Full B30:", simulatedB30Songs.map(s => ({t:s.title, id:s.id, d:s.diff, cS:s.currentScore, cR:s.currentRating.toFixed(4), tS:s.targetScore, tR:s.targetRating.toFixed(4), const: s.chartConstant })));
+        console.log(`[SIM_DEBUG_LEAP_INIT] Phase: Initializing Leap. Strategy: ${calculationStrategy}. Full B30 before sort:`, simulatedB30Songs.map(s => ({t:s.title.substring(0,10), id:s.id, d:s.diff, cS:s.currentScore, cR:s.currentRating.toFixed(4), tS:s.targetScore, tR:s.targetRating.toFixed(4), const: s.chartConstant })));
+        
         const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
         const updatableSongs = simulatedB30Songs.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
         console.log(`[SIM_DEBUG_LEAP_INIT] Updatable songs for Leap (targetScore < ${scoreCap}, valid const): ${updatableSongs.length}`);
@@ -464,56 +468,84 @@ export function useChuniResultData({
             setCurrentPhase('stuck_awaiting_replacement'); return;
         }
 
-        const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
-        let medianRating: number;
-        if (sortedUpdatableForMedian.length === 0) medianRating = 0;
-        else if (sortedUpdatableForMedian.length % 2 === 0) {
-            medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
-        } else {
-            medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
-        }
-        console.log(`[SIM_DEBUG_LEAP_INIT] Median targetRating of updatable songs: ${medianRating.toFixed(4)}`);
-
-        let primaryGroup: Song[] = [];
-        let secondaryGroup: Song[] = [];
-
         if (calculationStrategy === 'floor') {
-            primaryGroup = updatableSongs.filter(song => song.targetRating <= medianRating)
-                .sort((a, b) => {
-                    const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
-                    const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
-                    if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; // false (not high const) comes first
-                    if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                    return a.targetScore - b.targetScore;
-                });
-            secondaryGroup = updatableSongs.filter(song => song.targetRating > medianRating)
-                .sort((a, b) => { // Secondary for floor: still process lower ratings first
-                    const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
-                    const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
-                    if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
-                    if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                    return a.targetScore - b.targetScore;
-                });
-            console.log(`[SIM_DEBUG_LEAP_INIT] Floor Strategy - Primary (<=median, low-const first): ${primaryGroup.length}, Secondary (>median): ${secondaryGroup.length}`);
-        } else { // peak strategy
-            primaryGroup = updatableSongs.filter(song => song.targetRating > medianRating)
-                .sort((a,b) => b.targetRating - a.targetRating); // Higher ratings first for peak
-            secondaryGroup = updatableSongs.filter(song => song.targetRating <= medianRating)
+            // New "floor" strategy: Sort all updatable songs directly
+            // Diagnostic: Temporarily remove isSongHighConstantForFloor from sort
+            const sortedAllUpdatable = [...updatableSongs].sort((a, b) => {
+                // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
+
+                if ((a.chartConstant ?? Infinity) !== (b.chartConstant ?? Infinity)) return (a.chartConstant ?? Infinity) - (b.chartConstant ?? Infinity);
+                if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                return a.targetScore - b.targetScore;
+            });
+            setSortedPrimaryLeapCandidates(sortedAllUpdatable);
+            setSortedSecondaryLeapCandidates([]); 
+            setCurrentLeapProcessingGroup('primary'); 
+            console.log(`[SIM_DEBUG_LEAP_INIT] Floor Strategy (No HighConstantRule) - Sorted all updatable: ${sortedAllUpdatable.length}. Sample:`, sortedAllUpdatable.slice(0,3).map(s=>({t:s.title, cnst:s.chartConstant, r:s.targetRating.toFixed(2)})));
+            
+            // --- 기존 중간값 기반 로직 (비활성화) ---
+            if (false && updatableSongs.length > 0) { 
+                const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
+                let medianRating: number;
+                if (sortedUpdatableForMedian.length % 2 === 0) {
+                    medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
+                } else {
+                    medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
+                }
+                console.log(`[SIM_DEBUG_LEAP_INIT] (Old Logic - Inactive) Median targetRating of updatable songs: ${medianRating.toFixed(4)}`);
+                let primaryGroup = updatableSongs.filter(song => song.targetRating <= medianRating)
+                    .sort((a, b) => {
+                        const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                        const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                        if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; 
+                        if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                        return a.targetScore - b.targetScore;
+                    });
+                let secondaryGroup = updatableSongs.filter(song => song.targetRating > medianRating)
+                    .sort((a, b) => { 
+                        const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                        const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                        if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
+                        if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                        return a.targetScore - b.targetScore;
+                    });
+                setSortedPrimaryLeapCandidates(primaryGroup);
+                setSortedSecondaryLeapCandidates(secondaryGroup);
+                console.log(`[SIM_DEBUG_LEAP_INIT] (Old Logic - Inactive) Floor Strategy - Primary (<=median, low-const first): ${primaryGroup.length}, Secondary (>median): ${secondaryGroup.length}`);
+                 if (primaryGroup.length > 0) setCurrentLeapProcessingGroup('primary');
+                 else if (secondaryGroup.length > 0) setCurrentLeapProcessingGroup('secondary');
+                 else { setCurrentPhase('stuck_awaiting_replacement'); return; }
+            }
+            // --- ---
+        } else if (calculationStrategy === 'peak') {
+            // Peak strategy still uses median split for now
+            const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
+            let medianRating: number;
+            if (sortedUpdatableForMedian.length === 0) medianRating = 0;
+            else if (sortedUpdatableForMedian.length % 2 === 0) {
+                medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
+            } else {
+                medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
+            }
+            let primaryGroup = updatableSongs.filter(song => song.targetRating > medianRating)
+                .sort((a,b) => b.targetRating - a.targetRating); 
+            let secondaryGroup = updatableSongs.filter(song => song.targetRating <= medianRating)
                 .sort((a,b) => b.targetRating - a.targetRating);
+            setSortedPrimaryLeapCandidates(primaryGroup);
+            setSortedSecondaryLeapCandidates(secondaryGroup);
             console.log(`[SIM_DEBUG_LEAP_INIT] Peak Strategy - Primary (>median): ${primaryGroup.length}, Secondary (<=median): ${secondaryGroup.length}`);
+            if (primaryGroup.length > 0) setCurrentLeapProcessingGroup('primary');
+            else if (secondaryGroup.length > 0) setCurrentLeapProcessingGroup('secondary');
+            else { setCurrentPhase('stuck_awaiting_replacement'); return; }
         }
         
-        setSortedPrimaryLeapCandidates(primaryGroup);
-        setSortedSecondaryLeapCandidates(secondaryGroup);
-
-        if (primaryGroup.length > 0) {
-            setCurrentLeapProcessingGroup('primary');
+        if ((calculationStrategy === 'floor' && sortedPrimaryLeapCandidates.length > 0) || 
+            (calculationStrategy === 'peak' && (sortedPrimaryLeapCandidates.length > 0 || sortedSecondaryLeapCandidates.length > 0)) ) {
             setCurrentPhase('analyzing_leap_efficiency');
-        } else if (secondaryGroup.length > 0) {
-            setCurrentLeapProcessingGroup('secondary');
-            setCurrentPhase('analyzing_leap_efficiency');
-        } else {
-            console.log("[SIM_DEBUG_LEAP_INIT] Both primary and secondary leap groups are empty. Moving to stuck/replacement.");
+        } else if (updatableSongs.length > 0) { // Has updatable but no candidates (e.g. peak logic resulted in empty groups)
+            console.log("[SIM_DEBUG_LEAP_INIT] Updatable songs exist, but candidate groups are empty. Moving to stuck/replacement.");
             setCurrentPhase('stuck_awaiting_replacement');
         }
     }
@@ -533,61 +565,116 @@ export function useChuniResultData({
                 const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, song.chartConstant);
                 const ratingIncrease = potentialRatingAtNextGrade - currentSongRating;
                 const scoreIncrease = nextGradeScore - song.targetScore;
-                if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease; // Min rating increase check
+                if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease; 
                 scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
             }
             return { ...song, leapEfficiency, scoreToReachNextGrade, ratingAtNextGrade };
         }).filter(s => s.leapEfficiency !== undefined && s.leapEfficiency > 0);
       
-        console.log(`[SIM_DEBUG_LEAP_ANALYZE] Songs with >0 efficiency in ${currentLeapProcessingGroup} group: ${songsWithCalculatedEfficiency.length}`);
-        setSongsWithLeapEfficiency(songsWithCalculatedEfficiency);
+        // For 'floor' strategy, we only care about the first song from sortedPrimaryLeapCandidates for leaping.
+        // So, this songsWithLeapEfficiency state might not be directly used for 'floor' song selection in performing_leap_jump,
+        // but it's calculated for logging/debugging or if 'peak' strategy needs it.
+        // setSongsWithLeapEfficiency(songsWithCalculatedEfficiency); // This state might be less relevant now for floor
 
-        if (songsWithCalculatedEfficiency.length > 0) {
-            setCurrentPhase('performing_leap_jump');
-        } else {
-            if (currentLeapProcessingGroup === 'primary' && sortedSecondaryLeapCandidates.length > 0) {
-                console.log("[SIM_DEBUG_LEAP_ANALYZE] No efficient songs in primary, trying secondary leap group.");
-                setCurrentLeapProcessingGroup('secondary');
-                // Stays in 'analyzing_leap_efficiency' to re-trigger with new group
+        console.log(`[SIM_DEBUG_LEAP_ANALYZE] Songs with >0 efficiency in ${currentLeapProcessingGroup} group: ${songsWithCalculatedEfficiency.length}`);
+        
+        if (calculationStrategy === 'floor') {
+            // For floor, we directly try the first song from sortedPrimaryLeapCandidates. Efficiency check is done in performing_leap_jump.
+            if (sortedPrimaryLeapCandidates.length > 0) {
+                setCurrentPhase('performing_leap_jump');
             } else {
-                console.log("[SIM_DEBUG_LEAP_ANALYZE] No efficient songs in primary or secondary. Moving to fine-tuning init (or stuck if fine-tuning also fails).");
-                setCurrentPhase('initializing_fine_tuning_phase');
+                 console.log("[SIM_DEBUG_LEAP_ANALYZE] Floor strategy: sortedPrimaryLeapCandidates is empty. Moving to fine-tuning init.");
+                 setCurrentPhase('initializing_fine_tuning_phase');
+            }
+        } else if (calculationStrategy === 'peak') {
+            // Peak strategy uses the efficiency-filtered list
+            if (songsWithCalculatedEfficiency.length > 0) {
+                 // For peak, we'll pass songsWithCalculatedEfficiency to performing_leap_jump
+                 // Store it if needed, or pass directly. For now, let's assume performing_leap_jump will use it.
+                 // This state was `songsWithLeapEfficiency` but not explicitly set for floor if not used.
+                 // Let's refine this: performing_leap_jump for peak will get this list.
+                setCurrentPhase('performing_leap_jump');
+            } else {
+                if (currentLeapProcessingGroup === 'primary' && sortedSecondaryLeapCandidates.length > 0) {
+                    console.log("[SIM_DEBUG_LEAP_ANALYZE] Peak: No efficient songs in primary, trying secondary leap group.");
+                    setCurrentLeapProcessingGroup('secondary');
+                } else {
+                    console.log("[SIM_DEBUG_LEAP_ANALYZE] Peak: No efficient songs in primary or secondary. Moving to fine-tuning init.");
+                    setCurrentPhase('initializing_fine_tuning_phase');
+                }
             }
         }
     }
-  }, [currentPhase, currentLeapProcessingGroup, sortedPrimaryLeapCandidates, sortedSecondaryLeapCandidates]);
+  }, [currentPhase, currentLeapProcessingGroup, sortedPrimaryLeapCandidates, sortedSecondaryLeapCandidates, calculationStrategy]);
 
   useEffect(() => {
-    if (currentPhase === 'performing_leap_jump' && songsWithLeapEfficiency.length > 0 && simulatedB30Songs.length > 0 && calculationStrategy) {
-        console.log(`[SIM_DEBUG_LEAP_PERFORM] Phase: Performing Leap Jump from ${currentLeapProcessingGroup} group. Songs with efficiency: ${songsWithLeapEfficiency.length}`);
-
+    if (currentPhase === 'performing_leap_jump' && calculationStrategy && simulatedB30Songs.length > 0) {
+        
         let optimalLeapSong: (Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }) | null = null;
-        let sortedForLeap: Array<Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }> = [];
 
         if (calculationStrategy === 'floor') {
-            sortedForLeap = [...songsWithLeapEfficiency].sort((a, b) => {
-                const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
-                const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
-                if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
-                if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating; // Lowest rating first
-                return (b.leapEfficiency || 0) - (a.leapEfficiency || 0); // Highest efficiency for ties
-            });
-            optimalLeapSong = sortedForLeap[0];
-             console.log("[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Sorted for leap. Optimal:", optimalLeapSong ? {t:optimalLeapSong.title, tR:optimalLeapSong.targetRating.toFixed(4), eff:optimalLeapSong.leapEfficiency, hiC:isSongHighConstantForFloor(optimalLeapSong,simulatedAverageB30Rating)} : "None");
-        } else { // peak strategy
-            sortedForLeap = [...songsWithLeapEfficiency].sort((a, b) => (b.leapEfficiency || 0) - (a.leapEfficiency || 0)); // Highest efficiency first
-            optimalLeapSong = sortedForLeap[0];
-            console.log("[SIM_DEBUG_LEAP_PERFORM] Peak Strategy: Sorted for leap. Optimal:", optimalLeapSong ? {t:optimalLeapSong.title, eff:optimalLeapSong.leapEfficiency} : "None");
+            console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Attempting leap for top candidate. Candidates count: ${sortedPrimaryLeapCandidates.length}`);
+            if (sortedPrimaryLeapCandidates.length > 0) {
+                const songToAttemptLeap = sortedPrimaryLeapCandidates[0];
+                 const nextGradeScore = getNextGradeBoundaryScore(songToAttemptLeap.targetScore);
+                 let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
+
+                if (songToAttemptLeap.chartConstant && nextGradeScore && songToAttemptLeap.targetScore < nextGradeScore) {
+                    const currentSongRating = songToAttemptLeap.targetRating;
+                    const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, songToAttemptLeap.chartConstant);
+                    const ratingIncrease = potentialRatingAtNextGrade - currentSongRating;
+                    const scoreIncrease = nextGradeScore - songToAttemptLeap.targetScore;
+                    if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease;
+                    scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
+                }
+
+                if (leapEfficiency > 0 && scoreToReachNextGrade && ratingAtNextGrade) {
+                    optimalLeapSong = { ...songToAttemptLeap, leapEfficiency, scoreToReachNextGrade, ratingAtNextGrade };
+                    console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Valid leap found for ${optimalLeapSong.title}. Eff: ${leapEfficiency.toFixed(4)}`);
+                } else {
+                    console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: Leap not possible or not efficient for ${songToAttemptLeap.title}. Moving to fine-tuning init.`);
+                    setCurrentPhase('initializing_fine_tuning_phase');
+                    return; 
+                }
+            } else {
+                 console.log(`[SIM_DEBUG_LEAP_PERFORM] Floor Strategy: No candidates in sortedPrimaryLeapCandidates. Moving to fine-tuning init.`);
+                 setCurrentPhase('initializing_fine_tuning_phase');
+                 return;
+            }
+        } else if (calculationStrategy === 'peak') {
+            const candidatesToAnalyze = currentLeapProcessingGroup === 'primary' ? sortedPrimaryLeapCandidates : sortedSecondaryLeapCandidates;
+             const songsWithCalculatedEfficiency = candidatesToAnalyze.map(song => {
+                const nextGradeScore = getNextGradeBoundaryScore(song.targetScore);
+                let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
+                if (song.chartConstant && nextGradeScore && song.targetScore < nextGradeScore) {
+                    const currentSongRating = song.targetRating;
+                    const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, song.chartConstant);
+                    const ratingIncrease = potentialRatingAtNextGrade - currentSongRating;
+                    const scoreIncrease = nextGradeScore - song.targetScore;
+                    if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease;
+                    scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
+                }
+                return { ...song, leapEfficiency, scoreToReachNextGrade, ratingAtNextGrade };
+            }).filter(s => s.leapEfficiency !== undefined && s.leapEfficiency > 0);
+
+            console.log(`[SIM_DEBUG_LEAP_PERFORM] Peak Strategy: Performing Leap Jump from ${currentLeapProcessingGroup} group. Songs with efficiency: ${songsWithCalculatedEfficiency.length}`);
+            if (songsWithCalculatedEfficiency.length > 0) {
+                const sortedForLeap = [...songsWithCalculatedEfficiency].sort((a, b) => (b.leapEfficiency || 0) - (a.leapEfficiency || 0));
+                optimalLeapSong = sortedForLeap[0];
+                console.log("[SIM_DEBUG_LEAP_PERFORM] Peak Strategy: Sorted for leap. Optimal:", optimalLeapSong ? {t:optimalLeapSong.title, eff:optimalLeapSong.leapEfficiency} : "None");
+            } else {
+                 optimalLeapSong = null; // No efficient songs
+            }
         }
         
         if (!optimalLeapSong || typeof optimalLeapSong.scoreToReachNextGrade !== 'number' || typeof optimalLeapSong.ratingAtNextGrade !== 'number') {
-            console.log(`[SIM_DEBUG_LEAP_PERFORM] No valid optimal leap song in ${currentLeapProcessingGroup} group.`);
-            if (currentLeapProcessingGroup === 'primary' && sortedSecondaryLeapCandidates.length > 0) {
-                console.log("[SIM_DEBUG_LEAP_PERFORM] Switching to secondary leap group for analysis.");
+            console.log(`[SIM_DEBUG_LEAP_PERFORM] No valid optimal leap song in ${currentLeapProcessingGroup} group for ${calculationStrategy}.`);
+            if (calculationStrategy === 'peak' && currentLeapProcessingGroup === 'primary' && sortedSecondaryLeapCandidates.length > 0) {
+                console.log("[SIM_DEBUG_LEAP_PERFORM] Peak: Switching to secondary leap group for analysis.");
                 setCurrentLeapProcessingGroup('secondary');
-                setCurrentPhase('analyzing_leap_efficiency'); // Re-analyze with secondary group
+                setCurrentPhase('analyzing_leap_efficiency'); 
             } else {
-                console.log("[SIM_DEBUG_LEAP_PERFORM] No more leap groups. Moving to fine-tuning init.");
+                console.log("[SIM_DEBUG_LEAP_PERFORM] No more leap groups or options. Moving to fine-tuning init.");
                 setCurrentPhase('initializing_fine_tuning_phase');
             }
             return;
@@ -605,11 +692,10 @@ export function useChuniResultData({
             return song;
         });
         setSimulatedB30Songs(newSimulatedB30); 
-        setSongsWithLeapEfficiency([]); // Clear for next analysis pass
-        // Do not clear currentLeapProcessingGroup yet, evaluating_leap_result might loop back
+        // Do not clear currentLeapProcessingGroup yet, evaluating_leap_result might loop back for 'peak'
         setCurrentPhase('evaluating_leap_result');
     }
-  }, [currentPhase, songsWithLeapEfficiency, simulatedB30Songs, calculationStrategy, currentLeapProcessingGroup, sortedSecondaryLeapCandidates, simulatedAverageB30Rating]);
+  }, [currentPhase, calculationStrategy, simulatedB30Songs, sortedPrimaryLeapCandidates, sortedSecondaryLeapCandidates, currentLeapProcessingGroup ]);
   
   useEffect(() => {
     if (currentPhase === 'evaluating_leap_result' && simulatedAverageB30Rating !== null && targetRatingDisplay && phaseTransitionPoint !== null) {
@@ -624,7 +710,7 @@ export function useChuniResultData({
         setCurrentPhase('transitioning_to_fine_tuning');
       } else {
         console.log("[SIM_DEBUG_LEAP_EVAL] Continuing Leap Phase (re-initializing).");
-        setCurrentPhase('initializing_leap_phase'); // This will re-evaluate primary/secondary groups
+        setCurrentPhase('initializing_leap_phase'); // This will re-evaluate primary/secondary groups or the single floor group
       }
     }
   }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay, phaseTransitionPoint]);
@@ -638,7 +724,7 @@ export function useChuniResultData({
 
   useEffect(() => {
     if (currentPhase === 'initializing_fine_tuning_phase' && !isLoadingSongs && simulatedB30Songs.length > 0 && calculationStrategy) {
-        console.log("[SIM_DEBUG_FINE_INIT] Phase: Initializing Fine-Tuning.");
+        console.log(`[SIM_DEBUG_FINE_INIT] Phase: Initializing Fine-Tuning. Strategy: ${calculationStrategy}`);
         const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
         const updatableSongs = simulatedB30Songs.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
         console.log(`[SIM_DEBUG_FINE_INIT] Updatable songs for Fine-Tuning: ${updatableSongs.length}`);
@@ -648,61 +734,82 @@ export function useChuniResultData({
             setCurrentPhase('stuck_awaiting_replacement'); return;
         }
         
-        const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
-        let medianRating;
-        if (sortedUpdatableForMedian.length === 0) medianRating = 0;
-        else if (sortedUpdatableForMedian.length % 2 === 0) medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
-        else medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
-        console.log(`[SIM_DEBUG_FINE_INIT] Median targetRating for fine-tuning groups: ${medianRating.toFixed(4)}`);
-
-        let primaryList: Song[] = [];
-        let secondaryList: Song[] = [];
-
         if (calculationStrategy === 'floor') {
-            primaryList = updatableSongs.filter(s => s.targetRating <= medianRating)
-                .sort((a, b) => {
-                    const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
-                    const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
-                    if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
-                    if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                    return a.targetScore - b.targetScore;
-                });
-            secondaryList = updatableSongs.filter(s => s.targetRating > medianRating)
-                .sort((a,b) => { // Secondary for floor: still lower ratings first
-                    const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
-                    const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
-                    if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
-                    if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                    return a.targetScore - b.targetScore;
-                });
-             console.log(`[SIM_DEBUG_FINE_INIT] Floor - Primary (<=median, low-const first): ${primaryList.length}, Secondary (>median): ${secondaryList.length}`);
-        } else { // peak
-            primaryList = updatableSongs.filter(s => s.targetRating > medianRating)
-                .sort((a,b) => { // Higher ratings first
+            // New "floor" strategy: Sort all updatable songs directly
+            // Diagnostic: Temporarily remove isSongHighConstantForFloor from sort
+            const sortedAllUpdatableForFineTune = [...updatableSongs].sort((a, b) => {
+                // const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                // const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
+
+                if ((a.chartConstant ?? Infinity) !== (b.chartConstant ?? Infinity)) return (a.chartConstant ?? Infinity) - (b.chartConstant ?? Infinity);
+                if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                return a.targetScore - b.targetScore;
+            });
+            setFineTuningCandidateSongs(sortedAllUpdatableForFineTune);
+            setCurrentFineTuneProcessingGroup('primary'); // Only one group
+            console.log(`[SIM_DEBUG_FINE_INIT] Floor Strategy (No HighConstantRule) - Sorted all for fine-tune: ${sortedAllUpdatableForFineTune.length}. Sample:`, sortedAllUpdatableForFineTune.slice(0,3).map(s=>({t:s.title, cnst:s.chartConstant, r:s.targetRating.toFixed(2)})));
+            
+            // --- 기존 중간값 기반 로직 (비활성화) ---
+             if (false && updatableSongs.length > 0) {
+                const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
+                let medianRating;
+                if (sortedUpdatableForMedian.length % 2 === 0) medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
+                else medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
+                console.log(`[SIM_DEBUG_FINE_INIT] (Old Logic - Inactive) Median targetRating for fine-tuning groups: ${medianRating.toFixed(4)}`);
+                let primaryList = updatableSongs.filter(s => s.targetRating <= medianRating)
+                    .sort((a, b) => {
+                        const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                        const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                        if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
+                        if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                        return a.targetScore - b.targetScore;
+                    });
+                let secondaryList = updatableSongs.filter(s => s.targetRating > medianRating)
+                    .sort((a,b) => { 
+                        const aIsHighConst = isSongHighConstantForFloor(a, simulatedAverageB30Rating);
+                        const bIsHighConst = isSongHighConstantForFloor(b, simulatedAverageB30Rating);
+                        if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1;
+                        if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
+                        return a.targetScore - b.targetScore;
+                    });
+                 setFineTuningCandidateSongs(primaryList); // Start with primary
+                 // setSortedSecondaryFineTuneCandidates(secondaryList); // Need this state if using secondary
+                 setCurrentFineTuneProcessingGroup('primary');
+                 console.log(`[SIM_DEBUG_FINE_INIT] (Old Logic - Inactive) Floor - Primary (<=median, low-const first): ${primaryList.length}, Secondary (>median): ${secondaryList.length}`);
+                 // if (primaryList.length === 0 && secondaryList.length > 0) { setCurrentFineTuneProcessingGroup('secondary'); setFineTuningCandidateSongs(secondaryList); }
+                 // else if (primaryList.length === 0 && secondaryList.length === 0) { setCurrentPhase('stuck_awaiting_replacement'); return; }
+             }
+            // --- ---
+        } else if (calculationStrategy === 'peak') {
+            // Peak strategy still uses median split
+            const sortedUpdatableForMedian = [...updatableSongs].sort((a, b) => a.targetRating - b.targetRating);
+            let medianRating;
+            if (sortedUpdatableForMedian.length === 0) medianRating = 0;
+            else if (sortedUpdatableForMedian.length % 2 === 0) medianRating = (sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating + sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating) / 2;
+            else medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
+            let primaryList = updatableSongs.filter(s => s.targetRating > medianRating)
+                .sort((a,b) => { 
                     if (a.targetRating !== b.targetRating) return b.targetRating - a.targetRating;
                     return b.targetScore - b.targetScore;
                 });
-            secondaryList = updatableSongs.filter(s => s.targetRating <= medianRating)
-                .sort((a,b) => { // Secondary for peak: also higher ratings first from this group
+            let secondaryList = updatableSongs.filter(s => s.targetRating <= medianRating)
+                .sort((a,b) => { 
                     if (a.targetRating !== b.targetRating) return b.targetRating - a.targetRating;
                     return b.targetScore - b.targetScore;
                 });
+            setFineTuningCandidateSongs(primaryList); // Start with primary
+            // setSortedSecondaryFineTuneCandidates(secondaryList); // Need this state
+            setCurrentFineTuneProcessingGroup('primary');
             console.log(`[SIM_DEBUG_FINE_INIT] Peak - Primary (>median): ${primaryList.length}, Secondary (<=median): ${secondaryList.length}`);
+            // if (primaryList.length === 0 && secondaryList.length > 0) { setCurrentFineTuneProcessingGroup('secondary'); setFineTuningCandidateSongs(secondaryList); }
+            // else if (primaryList.length === 0 && secondaryList.length === 0) { setCurrentPhase('stuck_awaiting_replacement'); return; }
         }
 
-        setSortedPrimaryFineTuneCandidates(primaryList);
-        setSortedSecondaryFineTuneCandidates(secondaryList);
-
-        if (primaryList.length > 0) {
-            setFineTuningCandidateSongs(primaryList);
-            setCurrentFineTuneProcessingGroup('primary');
-            setCurrentPhase('performing_fine_tuning');
-        } else if (secondaryList.length > 0) {
-            setFineTuningCandidateSongs(secondaryList);
-            setCurrentFineTuneProcessingGroup('secondary');
-            setCurrentPhase('performing_fine_tuning');
-        } else {
-            console.log("[SIM_DEBUG_FINE_INIT] No candidates for fine-tuning in primary or secondary. Moving to stuck/replacement.");
+        if (fineTuningCandidateSongs.length > 0 || (calculationStrategy === 'peak' /*&& sortedSecondaryFineTuneCandidates.length > 0*/)) {
+             setCurrentPhase('performing_fine_tuning');
+        } else if (updatableSongs.length > 0) {
+            console.log("[SIM_DEBUG_FINE_INIT] Updatable songs exist, but candidate groups for fine-tuning are empty. Moving to stuck/replacement.");
             setCurrentPhase('stuck_awaiting_replacement');
         }
     }
@@ -710,12 +817,16 @@ export function useChuniResultData({
 
   useEffect(() => {
     if (currentPhase === 'performing_fine_tuning' && calculationStrategy && simulatedB30Songs.length > 0 && fineTuningCandidateSongs.length > 0) {
-      console.log(`[SIM_DEBUG_FINE_PERFORM] Phase: Performing Fine-Tuning on ${currentFineTuneProcessingGroup} group. Candidates: ${fineTuningCandidateSongs.length}`);
+      console.log(`[SIM_DEBUG_FINE_PERFORM] Phase: Performing Fine-Tuning on ${currentFineTuneProcessingGroup} group. Candidates: ${fineTuningCandidateSongs.length}. Sample:`, fineTuningCandidateSongs.slice(0,3).map(s=>({t:s.title, tR:s.targetRating.toFixed(2), tS:s.targetScore})));
       let newSimulatedB30Songs = [...simulatedB30Songs];
       const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
       let songWasUpdatedThisPass = false;
 
-      for (const candidateSong of fineTuningCandidateSongs) {
+      // For floor, fineTuningCandidateSongs is already sorted appropriately.
+      // For peak, it's also sorted (descending rating).
+      const groupToTune = fineTuningCandidateSongs; // This is the correctly sorted list based on strategy
+
+      for (const candidateSong of groupToTune) {
         const songIndexInSimulated = newSimulatedB30Songs.findIndex(s => s.id === candidateSong.id && s.diff === candidateSong.diff);
         if (songIndexInSimulated === -1) { 
           console.warn(`[SIM_DEBUG_FINE_PERFORM] Candidate ${candidateSong.title} (${candidateSong.diff}) not found in simulatedB30. Skipping.`);
@@ -745,29 +856,35 @@ export function useChuniResultData({
         setSimulatedB30Songs(newSimulatedB30Songs);
         setCurrentPhase('evaluating_fine_tuning_result');
       } else {
-        console.log(`[SIM_DEBUG_FINE_PERFORM] No songs updated in ${currentFineTuneProcessingGroup} group during this pass.`);
-        if (currentFineTuneProcessingGroup === 'primary' && sortedSecondaryFineTuneCandidates.length > 0) {
-          console.log("[SIM_DEBUG_FINE_PERFORM] Switching to secondary fine-tuning group.");
-          setFineTuningCandidateSongs(sortedSecondaryFineTuneCandidates);
-          setCurrentFineTuneProcessingGroup('secondary');
-          // Stays in 'performing_fine_tuning' to re-trigger with new candidate list
+        console.log(`[SIM_DEBUG_FINE_PERFORM] No songs updated in ${currentFineTuneProcessingGroup} group (${groupToTune.length} candidates) during this pass.`);
+        // For 'floor', if no update, means entire list exhausted.
+        // For 'peak', if it was primary, try secondary.
+        if (calculationStrategy === 'peak' && currentFineTuneProcessingGroup === 'primary' /*&& sortedSecondaryFineTuneCandidates.length > 0*/) {
+          // This secondary group logic for peak needs to be re-enabled if peak strategy is fully fleshed out with median split.
+          // For now, assume if primary fails for peak, it also moves to stuck.
+          console.log("[SIM_DEBUG_FINE_PERFORM] Peak: Primary group exhausted or no updates. (Secondary group logic for peak is WIP). Moving to stuck.");
+          setCurrentPhase('stuck_awaiting_replacement');
         } else {
           console.log("[SIM_DEBUG_FINE_PERFORM] No more fine-tuning groups or no updates. Moving to stuck/replacement.");
           setCurrentPhase('stuck_awaiting_replacement');
         }
       }
     } else if (currentPhase === 'performing_fine_tuning' && fineTuningCandidateSongs.length === 0 && simulatedB30Songs.length > 0 && !isLoadingSongs) {
-      console.log(`[SIM_DEBUG_FINE_PERFORM] Candidate list is empty for ${currentFineTuneProcessingGroup} group. Checking if expansion is possible.`);
-       if (currentFineTuneProcessingGroup === 'primary' && sortedSecondaryFineTuneCandidates.length > 0) {
-          console.log("[SIM_DEBUG_FINE_PERFORM] Switching to secondary fine-tuning group as primary was empty/exhausted.");
-          setFineTuningCandidateSongs(sortedSecondaryFineTuneCandidates);
-          setCurrentFineTuneProcessingGroup('secondary');
+      console.log(`[SIM_DEBUG_FINE_PERFORM] Candidate list is empty for ${currentFineTuneProcessingGroup} group. Checking if expansion is possible (Peak strategy only).`);
+       if (calculationStrategy === 'peak' && currentFineTuneProcessingGroup === 'primary' /*&& sortedSecondaryFineTuneCandidates.length > 0*/) {
+          // console.log("[SIM_DEBUG_FINE_PERFORM] Peak: Switching to secondary fine-tuning group as primary was empty/exhausted.");
+          // setFineTuningCandidateSongs(sortedSecondaryFineTuneCandidates);
+          // setCurrentFineTuneProcessingGroup('secondary');
+          // This secondary logic path for Peak is currently not fully active due to simplification.
+          // If peak primary group is empty, it will fall through to stuck.
+          console.log("[SIM_DEBUG_FINE_PERFORM] Peak: Primary fine-tuning candidate list empty. Moving to stuck (Secondary group logic WIP).");
+          setCurrentPhase('stuck_awaiting_replacement');
       } else {
         console.log("[SIM_DEBUG_FINE_PERFORM] No candidates or already tried secondary. Moving to stuck/replacement.");
         setCurrentPhase('stuck_awaiting_replacement');
       }
     }
-  }, [currentPhase, calculationStrategy, simulatedB30Songs, fineTuningCandidateSongs, isScoreLimitReleased, isLoadingSongs, currentFineTuneProcessingGroup, sortedSecondaryFineTuneCandidates]);
+  }, [currentPhase, calculationStrategy, simulatedB30Songs, fineTuningCandidateSongs, isScoreLimitReleased, isLoadingSongs, currentFineTuneProcessingGroup, /*sortedSecondaryFineTuneCandidates*/]);
 
   useEffect(() => {
     if (currentPhase === 'evaluating_fine_tuning_result' && simulatedAverageB30Rating !== null && targetRatingDisplay) {
@@ -778,29 +895,20 @@ export function useChuniResultData({
         console.log("[SIM_DEBUG_FINE_EVAL] Target Reached during Fine-Tuning.");
         setCurrentPhase('target_reached');
       } else {
-        const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
-        const canStillFineTunePrimary = sortedPrimaryFineTuneCandidates.some(s => s.targetScore < scoreCap && simulatedB30Songs.find(simS => simS.id === s.id && simS.diff === s.diff)?.targetScore < scoreCap);
-        const canStillFineTuneSecondary = sortedSecondaryFineTuneCandidates.some(s => s.targetScore < scoreCap && simulatedB30Songs.find(simS => simS.id === s.id && simS.diff === s.diff)?.targetScore < scoreCap);
-
-        if ( (currentFineTuneProcessingGroup === 'primary' && canStillFineTunePrimary) ||
-             (currentFineTuneProcessingGroup === 'secondary' && canStillFineTuneSecondary) ) {
-          console.log(`[SIM_DEBUG_FINE_EVAL] Can still fine-tune within ${currentFineTuneProcessingGroup} group. Re-performing fine-tuning.`);
-           // Reset fineTuningCandidateSongs to the current group's full sorted list to re-iterate
-          if(currentFineTuneProcessingGroup === 'primary') setFineTuningCandidateSongs(sortedPrimaryFineTuneCandidates);
-          else if(currentFineTuneProcessingGroup === 'secondary') setFineTuningCandidateSongs(sortedSecondaryFineTuneCandidates);
-          setCurrentPhase('performing_fine_tuning');
-        } else if (currentFineTuneProcessingGroup === 'primary' && sortedSecondaryFineTuneCandidates.length > 0 && canStillFineTuneSecondary) {
-           console.log("[SIM_DEBUG_FINE_EVAL] Primary group exhausted for fine-tuning, switching to secondary.");
-           setFineTuningCandidateSongs(sortedSecondaryFineTuneCandidates);
-           setCurrentFineTuneProcessingGroup('secondary');
-           setCurrentPhase('performing_fine_tuning');
-        } else {
-          console.log("[SIM_DEBUG_FINE_EVAL] Cannot fine-tune further (all songs in current/both groups at cap or no improvement). Moving to stuck/replacement.");
-          setCurrentPhase('stuck_awaiting_replacement');
+        // For floor, if one pass of fine-tuning didn't reach target, and didn't get stuck, re-init fine-tuning to try again on the sorted list.
+        // For peak, logic might differ if secondary groups were used.
+        if (calculationStrategy === 'floor') {
+            console.log(`[SIM_DEBUG_FINE_EVAL] Floor: Target not reached. Re-initializing fine-tuning phase to iterate again.`);
+            setCurrentPhase('initializing_fine_tuning_phase');
+        } else if (calculationStrategy === 'peak') {
+            // Placeholder for peak strategy: if primary group exhausted, try secondary or stuck.
+            // Current simplified peak: if one pass of primary fails, it will likely go to stuck.
+            console.log(`[SIM_DEBUG_FINE_EVAL] Peak: Target not reached. (Secondary group expansion for peak is WIP). Re-initializing fine-tuning.`);
+             setCurrentPhase('initializing_fine_tuning_phase'); // Or could go to stuck if primary fine tune list is exhausted
         }
       }
     }
-  }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay, simulatedB30Songs, isScoreLimitReleased, currentFineTuneProcessingGroup, sortedPrimaryFineTuneCandidates, sortedSecondaryFineTuneCandidates]);
+  }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay, calculationStrategy]);
 
 
   // --- B30 REPLACEMENT PHASE LOGIC ---
@@ -850,7 +958,6 @@ export function useChuniResultData({
         const tempSongObjForConst = mapApiSongToAppSong(globalSong, 0, globalSong.const);
         if (!tempSongObjForConst.chartConstant) return false; 
         
-        // Potential max rating assuming SSS+ (1009000) or 1010000 if limit released
         const scoreForMaxRating = isScoreLimitReleased ? 1010000 : 1009000;
         const potentialMaxRating = calculateChunithmSongRating(scoreForMaxRating, tempSongObjForConst.chartConstant);
         return potentialMaxRating > songToReplace.targetRating; 
@@ -860,7 +967,6 @@ export function useChuniResultData({
       const mappedCandidates = potentialCandidatesApi.map(apiEntry => {
         const playedVersion = userPlayHistory.find(p => p.id === apiEntry.id && p.diff.toUpperCase() === apiEntry.diff.toUpperCase());
         const songWithScore = playedVersion ? { ...apiEntry, score: playedVersion.score, rating: playedVersion.rating } : { ...apiEntry, score: 0, rating: 0 };
-        // Pass original const from global music, not from user play history if it exists
         return mapApiSongToAppSong(songWithScore, 0, apiEntry.const); 
       });
       console.log(`[SIM_DEBUG_REPLACE_IDENTIFY] Mapped ${mappedCandidates.length} candidates to AppSong format. Sample:`, mappedCandidates.slice(0,2).map(s=>({t:s.title, cS:s.currentScore, cR:s.currentRating.toFixed(4), const:s.chartConstant })));
@@ -899,7 +1005,7 @@ export function useChuniResultData({
         const minScoreInfo = findMinScoreForTargetRating(candidate, targetRatingForCandidate, isScoreLimitReleased);
 
         if (minScoreInfo.possible) {
-          const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : minScoreInfo.score; // Lower effort is better
+          const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : minScoreInfo.score; 
           if (effort < bestCandidateInfo.effort || (effort === bestCandidateInfo.effort && minScoreInfo.rating > bestCandidateInfo.resultingRating)) {
             bestCandidateInfo = { song: candidate, effort, neededScore: minScoreInfo.score, resultingRating: parseFloat(minScoreInfo.rating.toFixed(4)) };
           }
@@ -909,7 +1015,6 @@ export function useChuniResultData({
       if (bestCandidateInfo.song) {
         const finalOptimalCandidate: Song = {
           ...bestCandidateInfo.song, 
-          // Set currentScore/Rating based on its original state, targetScore/Rating to what's needed for replacement
           currentScore: bestCandidateInfo.song.currentScore,
           currentRating: bestCandidateInfo.song.currentRating,
           targetScore: bestCandidateInfo.neededScore, 
@@ -936,13 +1041,8 @@ export function useChuniResultData({
     if (currentPhase === 'replacing_song' && optimalCandidateSong && songToReplace) {
       console.log(`[SIM_DEBUG_REPLACE_PERFORM] Replacing ${songToReplace.title} (tR: ${songToReplace.targetRating.toFixed(4)}) with ${optimalCandidateSong.title} (new tS: ${optimalCandidateSong.targetScore}, new tR: ${optimalCandidateSong.targetRating.toFixed(4)}).`);
       
-      // The optimalCandidateSong already has its targetScore and targetRating set to the desired values for replacement.
-      // Its currentScore/currentRating reflect its state *before* this specific improvement for replacement.
-      // So, when adding to B30, its targetScore/Rating *become* its effective score/rating for the B30 average.
       const newB30EntryForOptimalCandidate: Song = {
         ...optimalCandidateSong,
-        // currentScore and currentRating remain as they were for the candidate originally.
-        // targetScore and targetRating are what it needs to achieve for replacement.
       };
       
       const updatedB30 = simulatedB30Songs.filter(s => !(s.id === songToReplace.id && s.diff === songToReplace.diff));
