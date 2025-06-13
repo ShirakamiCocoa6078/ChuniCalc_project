@@ -72,14 +72,13 @@ export function useChuniResultData({
   const [simulatedB30Songs, setSimulatedB30Songs] = useState<Song[]>([]);
   const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
 
-  // const [_updatableForLeapPhase, _setUpdatableForLeapPhase] = useState<Song[]>([]); 
   const [leapTargetGroup, setLeapTargetGroup] = useState<Song[]>([]);
   const [songsWithLeapEfficiency, setSongsWithLeapEfficiency] = useState<Array<Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }>>([]);
-
-  // const [_updatableForFineTuning, _setUpdatableForFineTuning] = useState<Song[]>([]); 
+  
   const [fineTuningTargetGroup, setFineTuningTargetGroup] = useState<Song[]>([]);
-  const [fineTuningGroupA, setFineTuningGroupA] = useState<Song[]>([]);
-  const [fineTuningGroupB, setFineTuningGroupB] = useState<Song[]>([]);
+  // const [fineTuningGroupA, setFineTuningGroupA] = useState<Song[]>([]); // No longer needed for 'average'
+  // const [fineTuningGroupB, setFineTuningGroupB] = useState<Song[]>([]); // No longer needed for 'average'
+
 
   const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
   const [userPlayHistory, setUserPlayHistory] = useState<ShowallApiSongEntry[]>([]);
@@ -121,7 +120,6 @@ export function useChuniResultData({
         setCurrentPhase('idle');
         setSimulatedB30Songs([...originalB30SongsData]); 
       } else if (calculationStrategy && currentPhase === 'idle' && originalB30SongsData.length > 0) {
-         // If strategy is selected and we were idle, re-init with current data
         setSimulatedB30Songs([...originalB30SongsData]);
       }
 
@@ -250,7 +248,7 @@ export function useChuniResultData({
         console.log(`[NEW20_PROCESS] Filtered played new songs (score >= 800k): ${playedNewSongsApi.length}`);
 
         const sortedNewSongs = sortSongsByRatingDesc(playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
-        setNew20SongsData(sortedNewSongs.slice(0, NEW_20_COUNT));
+        setNew20SongsData(sortedNewSongs.slice(0, NEW_20_COUNT)); // Only take top 20
         console.log(`[NEW20_PROCESS] Final New20 songs processed (top ${NEW_20_COUNT}): ${new20SongsData.length}`);
         if(new20SongsData.length === 0 && newSongDefinitions.length > 0 && currentUserShowall.length > 0) {
             console.warn("[NEW20_PROCESS_WARN] No New20 songs after filtering by play history, despite having definitions and play history. Check score >= 800k filter or matching logic.");
@@ -313,32 +311,29 @@ export function useChuniResultData({
 
   useEffect(() => {
     if (currentPhase === 'initializing_leap_phase' && !isLoadingSongs && simulatedB30Songs.length > 0 && calculationStrategy) {
-      const updatable = simulatedB30Songs.filter(song => song.currentScore < 1009000);
-      // _setUpdatableForLeapPhase(updatable); // This state isn't directly used for logic flow, but might be for UI later
+      const updatable = simulatedB30Songs.filter(song => song.targetScore < 1009000); // Use targetScore for leap phase init
 
       if (updatable.length === 0) {
         setCurrentPhase('stuck_awaiting_replacement'); return;
       }
 
       let determinedLeapTargetGroup: Song[] = [];
-      const sortedUpdatableForMedian = [...updatable].sort((a, b) => a.currentRating - b.currentRating);
+      const sortedUpdatableForMedian = [...updatable].sort((a, b) => a.targetRating - b.targetRating); // Use targetRating
       let medianRating: number;
 
       if (sortedUpdatableForMedian.length === 0) { medianRating = 0; }
       else if (sortedUpdatableForMedian.length % 2 === 0) {
-        const mid1 = sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].currentRating;
-        const mid2 = sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].currentRating;
+        const mid1 = sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2 - 1].targetRating;
+        const mid2 = sortedUpdatableForMedian[sortedUpdatableForMedian.length / 2].targetRating;
         medianRating = (mid1 + mid2) / 2;
       } else {
-        medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].currentRating;
+        medianRating = sortedUpdatableForMedian[Math.floor(sortedUpdatableForMedian.length / 2)].targetRating;
       }
 
-      if (calculationStrategy === 'average') {
-        determinedLeapTargetGroup = [...updatable];
-      } else if (calculationStrategy === 'floor') {
-        determinedLeapTargetGroup = updatable.filter(song => song.currentRating <= medianRating);
+      if (calculationStrategy === 'floor') {
+        determinedLeapTargetGroup = updatable.filter(song => song.targetRating <= medianRating);
       } else if (calculationStrategy === 'peak') {
-        determinedLeapTargetGroup = updatable.filter(song => song.currentRating > medianRating);
+        determinedLeapTargetGroup = updatable.filter(song => song.targetRating > medianRating);
       }
 
       setLeapTargetGroup(determinedLeapTargetGroup);
@@ -353,14 +348,14 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'analyzing_leap_efficiency' && leapTargetGroup.length > 0) {
       const songsWithCalculatedEfficiency = leapTargetGroup.map(song => {
-        const nextGradeScore = getNextGradeBoundaryScore(song.currentScore);
+        const nextGradeScore = getNextGradeBoundaryScore(song.targetScore); // Use targetScore
         let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
 
-        if (song.chartConstant && nextGradeScore && song.currentScore < nextGradeScore) {
-          const currentSongRating = song.currentRating;
+        if (song.chartConstant && nextGradeScore && song.targetScore < nextGradeScore) {
+          const currentSongRating = song.targetRating; // Use targetRating
           const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, song.chartConstant);
           const ratingIncrease = potentialRatingAtNextGrade - currentSongRating;
-          const scoreIncrease = nextGradeScore - song.currentScore;
+          const scoreIncrease = nextGradeScore - song.targetScore;
           if (scoreIncrease > 0 && ratingIncrease > 0) leapEfficiency = ratingIncrease / scoreIncrease;
           scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
         }
@@ -427,7 +422,6 @@ export function useChuniResultData({
     if (currentPhase === 'initializing_fine_tuning_phase' && simulatedB30Songs.length > 0 && calculationStrategy) {
       const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
       const updatableSongs = simulatedB30Songs.filter(song => song.targetScore < scoreCap);
-      // _setUpdatableForFineTuning(updatableSongs);
 
       if (updatableSongs.length === 0) {
         setCurrentPhase('stuck_awaiting_replacement'); return;
@@ -443,32 +437,26 @@ export function useChuniResultData({
       }
 
       let proceedToPerformingFineTuning = false;
-      setFineTuningGroupA([]); setFineTuningGroupB([]); setFineTuningTargetGroup([]);
+      setFineTuningTargetGroup([]);
 
-      if (calculationStrategy === 'average') {
-        const groupA = updatableSongs.filter(s => s.targetRating <= medianRating);
-        const groupB = updatableSongs.filter(s => s.targetRating > medianRating);
-        setFineTuningGroupA(groupA);
-        setFineTuningGroupB(groupB);
-        if (groupA.length > 0 || groupB.length > 0) proceedToPerformingFineTuning = true;
-      } else if (calculationStrategy === 'floor' || calculationStrategy === 'peak') {
-        let primaryGroup: Song[] = [];
-        if (calculationStrategy === 'floor') primaryGroup = updatableSongs.filter(s => s.targetRating <= medianRating);
-        else primaryGroup = updatableSongs.filter(s => s.targetRating > medianRating);
+      let primaryGroup: Song[] = [];
+      if (calculationStrategy === 'floor') primaryGroup = updatableSongs.filter(s => s.targetRating <= medianRating);
+      else if (calculationStrategy === 'peak') primaryGroup = updatableSongs.filter(s => s.targetRating > medianRating);
+      
+      if (primaryGroup.length > 0) {
+        setFineTuningTargetGroup(primaryGroup); proceedToPerformingFineTuning = true;
+      } else {
+        // Fallback: if primary group is empty, try the other group
+        let expansionGroup: Song[] = [];
+        if (calculationStrategy === 'floor') expansionGroup = updatableSongs.filter(s => s.targetRating > medianRating);
+        else if (calculationStrategy === 'peak') expansionGroup = updatableSongs.filter(s => s.targetRating <= medianRating);
         
-        if (primaryGroup.length > 0) {
-          setFineTuningTargetGroup(primaryGroup); proceedToPerformingFineTuning = true;
-        } else {
-          let expansionGroup: Song[] = [];
-          if (calculationStrategy === 'floor') expansionGroup = updatableSongs.filter(s => s.targetRating > medianRating);
-          else expansionGroup = updatableSongs.filter(s => s.targetRating <= medianRating);
-          
-          if (expansionGroup.length > 0) {
-            console.log(`[FineTuning_Init] Primary group for ${calculationStrategy} empty. Expanding to other group (${expansionGroup.length} songs).`);
-            setFineTuningTargetGroup(expansionGroup); proceedToPerformingFineTuning = true;
-          }
+        if (expansionGroup.length > 0) {
+          console.log(`[FineTuning_Init] Primary group for ${calculationStrategy} empty. Expanding to other group (${expansionGroup.length} songs).`);
+          setFineTuningTargetGroup(expansionGroup); proceedToPerformingFineTuning = true;
         }
       }
+      
 
       if (proceedToPerformingFineTuning) setCurrentPhase('performing_fine_tuning');
       else {
@@ -480,12 +468,9 @@ export function useChuniResultData({
   useEffect(() => {
     if (currentPhase === 'performing_fine_tuning') {
       let newSimulatedB30Songs = [...simulatedB30Songs];
-      // let madeChangeInFineTuning = false; // Not strictly needed if phase always moves to eval
       const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
 
-      const songsToActuallyTune: Song[] = [];
-      if (calculationStrategy === 'average') songsToActuallyTune.push(...fineTuningGroupA, ...fineTuningGroupB);
-      else if (calculationStrategy === 'floor' || calculationStrategy === 'peak') songsToActuallyTune.push(...fineTuningTargetGroup);
+      const songsToActuallyTune: Song[] = [...fineTuningTargetGroup];
       
       songsToActuallyTune.forEach(songFromGroup => {
         const songIndexInSimulated = newSimulatedB30Songs.findIndex(s => s.id === songFromGroup.id && s.diff === songFromGroup.diff);
@@ -504,7 +489,6 @@ export function useChuniResultData({
               targetRating: minScoreInfo.rating,
             };
             newSimulatedB30Songs[songIndexInSimulated] = updatedSong;
-            // madeChangeInFineTuning = true; // Not strictly needed
           }
         }
       });
@@ -512,7 +496,7 @@ export function useChuniResultData({
       setSimulatedB30Songs(sortSongsByRatingDesc(newSimulatedB30Songs));
       setCurrentPhase('evaluating_fine_tuning_result');
     }
-  }, [currentPhase, calculationStrategy, fineTuningGroupA, fineTuningGroupB, fineTuningTargetGroup, isScoreLimitReleased, simulatedB30Songs]);
+  }, [currentPhase, calculationStrategy, fineTuningTargetGroup, isScoreLimitReleased, simulatedB30Songs]);
 
   useEffect(() => {
     if (currentPhase === 'evaluating_fine_tuning_result' && simulatedAverageB30Rating !== null && targetRatingDisplay) {
@@ -520,10 +504,17 @@ export function useChuniResultData({
       if (simulatedAverageB30Rating >= targetRatingNum) {
         setCurrentPhase('target_reached');
       } else {
-        setCurrentPhase('initializing_fine_tuning_phase');
+        // If not reached, decide if we can still fine-tune or need to replace
+        const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
+        const canStillFineTune = simulatedB30Songs.some(s => s.targetScore < scoreCap);
+        if (canStillFineTune) {
+          setCurrentPhase('initializing_fine_tuning_phase');
+        } else {
+          setCurrentPhase('stuck_awaiting_replacement');
+        }
       }
     }
-  }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay]);
+  }, [currentPhase, simulatedAverageB30Rating, targetRatingDisplay, simulatedB30Songs, isScoreLimitReleased]);
 
   useEffect(() => {
     if (currentPhase === 'stuck_awaiting_replacement' && simulatedB30Songs.length > 0) {
@@ -606,6 +597,7 @@ export function useChuniResultData({
       if (bestCandidateInfo.song) {
         const finalOptimalCandidate: Song = {
           ...bestCandidateInfo.song, 
+          // Keep currentScore/currentRating as they are from play history (or 0 if unplayed)
           targetScore: bestCandidateInfo.neededScore, 
           targetRating: bestCandidateInfo.resultingRating 
         };
@@ -625,10 +617,14 @@ export function useChuniResultData({
 
   useEffect(() => {
     if (currentPhase === 'replacing_song' && optimalCandidateSong && songToReplace) {
+      // The optimalCandidateSong already has its targetScore and targetRating set
+      // to what's needed to replace songToReplace.
+      // Its currentScore/currentRating are its original values (or 0 if unplayed).
+      // When it enters B30, it should reflect the state *after* achieving the target.
       const newB30EntryForOptimalCandidate: Song = {
         ...optimalCandidateSong,
-        currentScore: optimalCandidateSong.targetScore, 
-        currentRating: optimalCandidateSong.targetRating,
+        currentScore: optimalCandidateSong.targetScore, // Now current = target
+        currentRating: optimalCandidateSong.targetRating, // Now current = target
       };
       
       const updatedB30 = simulatedB30Songs.filter(s => !(s.id === songToReplace.id && s.diff === songToReplace.diff));

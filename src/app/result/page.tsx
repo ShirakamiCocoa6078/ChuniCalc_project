@@ -276,19 +276,13 @@ function ResultContent() {
               onValueChange={(value) => {
                 if (value === "none") {
                   setCalculationStrategy(null);
-                  setCurrentPhase('idle'); // Reset phase if strategy is deselected
+                  // setCurrentPhase('idle'); // Phase reset is handled in the hook
                 } else {
                   setCalculationStrategy(value as CalculationStrategy);
                 }
               }}
-              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2" // Adjusted for 3 items
             >
-              <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
-                <RadioGroupItem value="average" id="r-average" />
-                <Label htmlFor="r-average" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <BarChartHorizontalBig className="w-4 h-4 mr-1 sm:mr-2" /> {getTranslation(locale, 'resultPageStrategyAverage')}
-                </Label>
-              </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="floor" id="r-floor" />
                 <Label htmlFor="r-floor" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
@@ -430,3 +424,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+

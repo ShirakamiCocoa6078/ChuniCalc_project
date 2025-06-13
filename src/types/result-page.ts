@@ -1,7 +1,7 @@
 
 // src/types/result-page.ts
 
-import type { Song as SongCardSongType } from "@/components/SongCard"; // Keep if SongCard defines it and it's identical
+// import type { Song as SongCardSongType } from "@/components/SongCard"; // Keep if SongCard defines it and it's identical
 
 export type ProfileData = {
     player_name: string;
@@ -38,7 +38,7 @@ export type ShowallApiSongEntry = {
   is_const_unknown?: boolean; // Important for const fallback
 };
 
-export type CalculationStrategy = "average" | "peak" | "floor";
+export type CalculationStrategy = "peak" | "floor";
 
 // Re-defining Song type here if it's more central to result page logic
 // or ensure SongCardSongType is sufficient and imported correctly.
@@ -79,3 +79,4 @@ export type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
     // other fields from rating_data.json if needed
 };
+
