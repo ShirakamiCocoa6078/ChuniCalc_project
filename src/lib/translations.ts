@@ -20,6 +20,7 @@ export const translations = {
     // AdvancedSettings
     advancedSettingsTitle: "고급 설정 및 데이터 관리",
     advancedSettingsDescription: "로컬 API 키 설정, 캐시 데이터 관리, 개발자 모드 등 고급 기능을 사용합니다.",
+    developerModeTurnOnPrompt: "모든 고급 기능을 보려면 개발자 모드를 활성화하세요.",
     localApiKeyLabel: "로컬 API 키 설정",
     localApiKeyPlaceholder: "개인 Chunirec API 토큰 입력",
     saveApiKeyButton: "로컬 API 키 저장/업데이트",
@@ -36,7 +37,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.4",
+    appVersion: "ChuniCalc v1.0.6",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -52,6 +53,8 @@ export const translations = {
     toastErrorAccessDeniedDesc: (nickname: string, code?: number) => code ? `사용자 '${nickname}'의 데이터에 접근할 권한이 없습니다. (오류 코드: ${code})` : "비공개 사용자이거나 친구가 아니어서 접근할 수 없습니다.",
     toastErrorApiRequestFailed: "API 요청 실패",
     toastErrorApiRequestFailedDesc: (status: number, message?: string) => `API 요청 실패 (상태: ${status})${message ? `: ${message}` : ''}`,
+    toastErrorApiLogicalError: "API 로직 오류",
+    toastErrorApiLogicalErrorDesc: (message: string) => `API에서 오류를 반환했습니다: ${message}`,
     toastSuccessRatingFetched: "레이팅 조회 성공!",
     toastSuccessRatingFetchedDesc: (playerName: string, rating: string) => `'${playerName}'님의 현재 레이팅: ${rating}`,
     toastErrorInvalidRatingData: "데이터 오류",
@@ -100,13 +103,11 @@ export const translations = {
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
     resultPageStrategyTitle: "계산 전략 선택",
-    resultPageStrategyB30Focus: "Best 30 집중", // Updated
-    resultPageStrategyN20Focus: "New 20 집중",  // Updated
-    resultPageStrategyCombinedFloor: "통합 (저점 우선)", // Updated
-    resultPageStrategyCombinedPeak: "통합 (고점 우선)",  // Updated
+    resultPageStrategyB30Focus: "Best 30 집중 최적화",
+    resultPageStrategyN20Focus: "New 20 집중 최적화",
+    resultPageStrategyCombinedFloor: "전체 최적화 (저점)",
+    resultPageStrategyCombinedPeak: "전체 최적화 (고점)",
     resultPageStrategyNone: "선택 안함",
-    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 집중 모드에서 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅을 조정하거나 다른 전략을 사용해보세요.`, // Updated
-    reachableRatingN20OnlyMessage: (rating: string) => `New 20 집중 모드에서 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅을 조정하거나 다른 전략을 사용해보세요.`,   // Updated
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
@@ -129,17 +130,17 @@ export const translations = {
     resultPageToastCacheLoadSuccessTitle: "데이터 로드 완료 (캐시)",
     resultPageHeaderCurrent: "현재:",
     resultPageHeaderTarget: "목표:",
-    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30만으로 갱신 시, 도달 가능한 최대 레이팅은 ${reachableRating} 입니다. 목표 레이팅을 확인해주세요.`,
-    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20만으로 갱신 시, 도달 가능한 최대 레이팅은 ${reachableRating} 입니다. 목표 레이팅을 확인해주세요.`,
     resultPageNoCombinedData: "Best 30 및 New 20 곡 데이터가 모두 없습니다.",
     resultPageErrorInvalidRatingsInput: "잘못된 레이팅 입력값입니다. 현재 또는 목표 레이팅을 확인해주세요.",
     resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
     resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
+    reachableRatingB30Message: (rating: string) => `Best 30 곡들의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. 현재 N20을 고정한 상태에서 B30 곡들을 최대로 갱신했을 때 도달 가능한 레이팅은 약 ${rating} 입니다.`,
+    reachableRatingN20Message: (rating: string) => `New 20 곡들의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. 현재 B30을 고정한 상태에서 N20 곡들을 최대로 갱신했을 때 도달 가능한 레이팅은 약 ${rating} 입니다.`,
   },
   JP: {
     homePageTitle: "ChuniCalc",
-    languageToggleKR: "KR (한국어)",
+    languageToggleKR: "KR (韓国語)",
     languageToggleJP: "JP (日本語)",
     formTitle: "ChuniCalc",
     formDescription: "チュウニズム成長シミュレーター。",
@@ -153,8 +154,9 @@ export const translations = {
     targetRatingPlaceholder: "例: 16.00",
     targetRatingHelp: "目標レーティングを入力してください。(最大 17.50)",
     calculateButton: "計算および結果表示",
-    advancedSettingsTitle: "個人設定",
+    advancedSettingsTitle: "高度な設定とデータ管理",
     advancedSettingsDescription: "ローカルAPIキーの設定、キャッシュデータ管理、開発者モードなど高度な機能を使用します。",
+    developerModeTurnOnPrompt: "全ての高度な機能を表示するには、開発者モードを有効にしてください。",
     localApiKeyLabel: "ローカルAPIキー設定",
     localApiKeyPlaceholder: "個人用 Chunirec API トークン入力",
     saveApiKeyButton: "ローカルAPIキー保存/更新",
@@ -171,7 +173,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.4",
+    appVersion: "ChuniCalc v1.0.6",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     toastErrorApiKeyNotSet: "API設定エラー",
@@ -186,6 +188,8 @@ export const translations = {
     toastErrorAccessDeniedDesc: (nickname: string, code?: number) => code ? `ユーザー「${nickname}」のデータへのアクセス権がありません。(エラーコード: ${code})` : "非公開ユーザーかフレンドではないためアクセスできません。",
     toastErrorApiRequestFailed: "APIリクエスト失敗",
     toastErrorApiRequestFailedDesc: (status: number, message?: string) => `APIリクエスト失敗 (ステータス: ${status})${message ? `: ${message}` : ''}`,
+    toastErrorApiLogicalError: "APIロジックエラー",
+    toastErrorApiLogicalErrorDesc: (message: string) => `APIからエラーが返されました: ${message}`,
     toastSuccessRatingFetched: "レーティング読み込み成功！",
     toastSuccessRatingFetchedDesc: (playerName: string, rating: string) => `「${playerName}」さんの現在レーティング: ${rating}`,
     toastErrorInvalidRatingData: "データエラー",
@@ -234,13 +238,11 @@ export const translations = {
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
     resultPageStrategyTitle: "計算戦略選択",
-    resultPageStrategyB30Focus: "Best 30 集中", // Updated
-    resultPageStrategyN20Focus: "New 20 集中",  // Updated
-    resultPageStrategyCombinedFloor: "統合 (低点優先)", // Updated
-    resultPageStrategyCombinedPeak: "統合 (高点優先)",  // Updated
+    resultPageStrategyB30Focus: "Best 30 集中最適化",
+    resultPageStrategyN20Focus: "New 20 集中最適化",
+    resultPageStrategyCombinedFloor: "全体最適化 (低点)",
+    resultPageStrategyCombinedPeak: "全体最適化 (高点)",
     resultPageStrategyNone: "選択なし",
-    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 集中モードで到達可能な最大レーティングは約 ${rating} です。目標レーティングを調整するか、他の戦略を試してください。`, // Updated
-    reachableRatingN20OnlyMessage: (rating: string) => `New 20 集中モードで到達可能な最大レーティングは約 ${rating} です。目標レーティングを調整するか、他の戦略を試してください。`,   // Updated
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
@@ -263,13 +265,13 @@ export const translations = {
     resultPageToastCacheLoadSuccessTitle: "データロード完了 (キャッシュ)",
     resultPageHeaderCurrent: "現在:",
     resultPageHeaderTarget: "目標:",
-    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30のみの更新では、到達可能な最大レーティングは ${reachableRating} です。目標レーティングを確認してください。`,
-    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20のみの更新では、到達可能な最大レーティングは ${reachableRating} です。目標レーティングを確認してください。`,
     resultPageNoCombinedData: "Best 30 および New 20 曲データが両方ともありません。",
     resultPageErrorInvalidRatingsInput: "無効なレーティング入力値です。現在または目標レーティングを確認してください。",
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
+    reachableRatingB30Message: (rating: string) => `Best 30 曲の更新だけでは目標レーティングに到達できません。現在のNew 20を固定した状態で、Best 30 曲を最大まで更新した場合に到達可能なレーティングは約 ${rating} です。`,
+    reachableRatingN20Message: (rating: string) => `New 20 曲の更新だけでは目標レーティングに到達できません。現在のBest 30を固定した状態で、New 20 曲を最大まで更新した場合に到達可能なレーティングは約 ${rating} です。`,
   }
 };
 

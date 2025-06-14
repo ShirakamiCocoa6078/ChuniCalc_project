@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, ChangeEvent, FormEvent, useEffect } from "react";
@@ -10,12 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Gauge, Target, User, Search, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { getApiToken } from "@/lib/get-api-token";
+// import { getApiToken } from "@/lib/get-api-token"; // No longer needed
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { useLanguage } from "@/contexts/LanguageContext"; 
 import { getTranslation } from "@/lib/translations"; 
 
-// Define ProfileData type, assuming structure from API
 type ProfileData = {
   player_name: string;
   rating?: number | string;
@@ -35,21 +33,13 @@ export default function ChuniCalcForm() {
 
   useEffect(() => {
     setIsClient(true);
-    const token = getApiToken();
-    if (!token) {
-      console.error("Chunirec API Token is not configured. Please set it in Advanced Settings or environment variables.");
-      toast({
-        title: getTranslation(locale, 'toastErrorApiKeyNotSet'),
-        description: getTranslation(locale, 'toastErrorApiKeyNotSetDesc'),
-        variant: "destructive",
-      });
-    }
-  }, [toast, locale]);
+    // API token check is no longer relevant here as it's server-side
+  }, []);
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
-    setCurrentRatingStr(""); // Clear current rating when nickname changes
-    setTargetRatingStr(""); // Clear target rating
+    setCurrentRatingStr(""); 
+    setTargetRatingStr(""); 
   };
 
   const handleFetchRating = async () => {
@@ -61,28 +51,18 @@ export default function ChuniCalcForm() {
       });
       return;
     }
-    const apiToken = getApiToken();
-    if (!apiToken) {
-      toast({
-        title: getTranslation(locale, 'toastErrorApiKeyMissing'),
-        description: getTranslation(locale, 'toastErrorApiKeyMissingDesc'),
-        variant: "destructive",
-      });
-      return;
-    }
-
+    
     setIsFetchingRating(true);
     setCurrentRatingStr("");
     setTargetRatingStr("");
 
-
     try {
       const response = await fetch(
-        `https://api.chunirec.net/2.0/records/profile.json?user_name=${encodeURIComponent(nickname)}&region=jp2&token=${apiToken}`
+        `/api/chunirecApiProxy?proxyEndpoint=records/profile.json&user_name=${encodeURIComponent(nickname)}&region=jp2`
       );
 
       const data: ProfileData & { error?: { message?: string; code?: number } } = await response.json();
-      console.log("Chunirec profile.json API Response:", data);
+      console.log("Chunirec profile.json API Response (via Proxy):", data);
 
       if (response.status === 404) {
         toast({
@@ -93,7 +73,7 @@ export default function ChuniCalcForm() {
         setIsFetchingRating(false);
         return;
       }
-      if (response.status === 403) {
+      if (response.status === 403 && data.error?.code === 40301) { // Check for specific "private user" code
         toast({
           title: getTranslation(locale, 'toastErrorAccessDenied'),
           description: getTranslation(locale, 'toastErrorAccessDeniedDesc', nickname, data.error?.code),
@@ -103,8 +83,19 @@ export default function ChuniCalcForm() {
         return;
       }
       if (!response.ok) {
-        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, data.error?.message));
+        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, data.error?.message || response.statusText));
       }
+      
+      if (data.error) { // Handle cases where API returns 200 OK but with an error payload
+         toast({
+          title: getTranslation(locale, 'toastErrorApiLogicalError'),
+          description: getTranslation(locale, 'toastErrorApiLogicalErrorDesc', data.error.message || "Unknown error from API."),
+          variant: "destructive",
+        });
+        setIsFetchingRating(false);
+        return;
+      }
+
 
       setCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${nickname}`, data);
 
@@ -120,7 +111,7 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        const newTargetRating = Math.min(ratingValue + 0.01, 17.50);
+        const newTargetRating = Math.min(ratingValue + 0.01, 17.50); // Max rating is 17.50
         setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
           title: getTranslation(locale, 'toastSuccessRatingFetched'),
@@ -136,7 +127,7 @@ export default function ChuniCalcForm() {
         });
       }
     } catch (error) {
-      console.error("Error fetching rating:", error);
+      console.error("Error fetching rating via proxy:", error);
       setCurrentRatingStr("");
       setTargetRatingStr("");
       toast({
@@ -248,7 +239,7 @@ export default function ChuniCalcForm() {
                 className="text-lg"
                 aria-describedby="nicknameHelp"
               />
-              <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating || !getApiToken()}>
+              <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating}>
                 {isFetchingRating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
                 <span className="ml-2">{getTranslation(locale, 'fetchRatingButton')}</span>
               </Button>
@@ -265,7 +256,7 @@ export default function ChuniCalcForm() {
               type="number"
               step="0.01"
               min="0"
-              max="17.49" // Updated max value
+              max="17.49" 
               placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
               value={currentRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
@@ -301,5 +292,3 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
-
-    
