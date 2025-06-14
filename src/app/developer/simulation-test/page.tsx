@@ -1,0 +1,309 @@
+
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Loader2, Play, Brain } from "lucide-react";
+import { getApiToken } from "@/lib/get-api-token";
+import { getCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_DATA_KEY, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { mapApiSongToAppSong, sortSongsByRatingDesc } from "@/lib/rating-utils";
+import { runFullSimulation } from "@/lib/simulation-logic";
+import type {
+  Song,
+  CalculationStrategy,
+  SimulationInput,
+  SimulationOutput,
+  ProfileData,
+  RatingApiResponse,
+  ShowallApiSongEntry,
+  RatingApiSongEntry,
+  UserShowallApiResponse
+} from "@/types/result-page";
+import NewSongsData from '@/data/NewSongs.json';
+
+const BEST_COUNT = 30;
+const NEW_20_COUNT = 20;
+
+// Helper function (duplicated from useChuniResultData for now, ideally move to a shared util)
+const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
+    const flattenedEntries: ShowallApiSongEntry[] = [];
+    if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
+        const meta = rawEntry.meta;
+        const difficulties = rawEntry.data;
+        for (const diffKey in difficulties) {
+            if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
+                const diffData = difficulties[diffKey];
+                if (diffData && meta.id && meta.title) {
+                    flattenedEntries.push({
+                        id: String(meta.id),
+                        title: String(meta.title),
+                        genre: String(meta.genre || "N/A"),
+                        release: String(meta.release || ""),
+                        diff: diffKey.toUpperCase(),
+                        level: String(diffData.level || "N/A"),
+                        const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
+                        is_const_unknown: diffData.is_const_unknown === true,
+                    });
+                }
+            }
+        }
+    } else if (rawEntry && rawEntry.id && rawEntry.title && rawEntry.diff) {
+        flattenedEntries.push(rawEntry as ShowallApiSongEntry);
+    }
+    return flattenedEntries;
+};
+
+
+export default function SimulationTestPage() {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<SimulationOutput | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [nickname, setNickname] = useState("cocoa");
+  const [currentRatingStr, setCurrentRatingStr] = useState("17.28");
+  const [targetRatingStr, setTargetRatingStr] = useState("17.29");
+  const [strategy, setStrategy] = useState<CalculationStrategy>("floor");
+
+  const [logDisplay, setLogDisplay] = useState<string>("");
+
+  const handleRunSimulation = async () => {
+    setIsLoading(true);
+    setSimulationResult(null);
+    setError(null);
+    setLogDisplay("Starting simulation...\n");
+
+    const currentRatingNum = parseFloat(currentRatingStr);
+    const targetRatingNum = parseFloat(targetRatingStr);
+
+    if (isNaN(currentRatingNum) || isNaN(targetRatingNum) || !nickname.trim() || !strategy) {
+      setError("Please fill in all fields correctly.");
+      setIsLoading(false);
+      return;
+    }
+    
+    const API_TOKEN = getApiToken();
+    if (!API_TOKEN) {
+      setError("API Token not found. Please set it in Advanced Settings or environment variables.");
+      setIsLoading(false);
+      return;
+    }
+
+    appendLog("Fetching initial data...");
+
+    try {
+      // Fetch all necessary data
+      const profileData = await fetchApi<ProfileData>(`profile.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
+      const ratingData = await fetchApi<RatingApiResponse>(`rating_data.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
+      let globalMusicRaw = getCachedData<any[]>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+      if (!globalMusicRaw) {
+        const apiGlobalMusic = await fetchApi<any[] | {records: any[]}>(`music/showall.json?region=jp2`, API_TOKEN);
+        globalMusicRaw = Array.isArray(apiGlobalMusic) ? apiGlobalMusic : apiGlobalMusic?.records || [];
+        // No setCachedData here, as this test page shouldn't interfere with main app's cache management
+      }
+      const userShowallData = await fetchApi<UserShowallApiResponse>(`showall.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN, "records");
+
+
+      appendLog(`Profile: ${profileData?.player_name}, Rating Data entries: ${ratingData?.best?.entries?.length || 0}`);
+      appendLog(`Global Music Raw entries: ${globalMusicRaw?.length || 0}`);
+      appendLog(`User Showall entries: ${userShowallData?.records?.length || 0}`);
+
+
+      // Process data
+      const initialB30ApiEntries = ratingData?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && e.id && e.diff && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && e.title) || [];
+      const originalB30Songs = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
+      appendLog(`Processed Original B30 Songs: ${originalB30Songs.length}`);
+
+
+      const allMusicDataFlattened = globalMusicRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
+      appendLog(`Flattened Global Music Data: ${allMusicDataFlattened.length}`);
+
+      const userPlayHistoryRecords = userShowallData?.records || [];
+      
+      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
+
+      const newSongDefinitions = allMusicDataFlattened.filter(globalSong =>
+        globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase())
+      );
+
+      const userPlayedMap = new Map<string, ShowallApiSongEntry>();
+      userPlayHistoryRecords.forEach(usrSong => {
+        if (usrSong.id && usrSong.diff) userPlayedMap.set(`${usrSong.id}_${usrSong.diff.toUpperCase()}`, usrSong);
+      });
+
+      const playedNewSongsApi = newSongDefinitions.reduce((acc, newSongDef) => {
+        const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
+        if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
+          acc.push({ ...newSongDef, score: userPlayRecord.score, is_played: true });
+        }
+        return acc;
+      }, [] as ShowallApiSongEntry[]);
+
+      const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
+      const allPlayedNewSongsPool = sortSongsByRatingDesc(mappedPlayedNewSongs);
+      const originalNew20Songs = allPlayedNewSongsPool.slice(0, NEW_20_COUNT);
+      appendLog(`Processed Original New20 Songs: ${originalNew20Songs.length} (from pool of ${allPlayedNewSongsPool.length})`);
+
+
+      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10;
+      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95;
+
+      const simulationInput: SimulationInput = {
+        originalB30Songs,
+        originalNew20Songs,
+        allPlayedNewSongsPool,
+        allMusicData: allMusicDataFlattened,
+        userPlayHistory: userPlayHistoryRecords,
+        currentRating: currentRatingNum,
+        targetRating: targetRatingNum,
+        calculationStrategy: strategy,
+        isScoreLimitReleased,
+        phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
+      };
+
+      appendLog("Running simulation function...");
+      const result = runFullSimulation(simulationInput);
+      setSimulationResult(result);
+      appendLog("Simulation complete. Result received.");
+      appendLog("\n--- Simulation Internal Log ---");
+      result.simulationLog.forEach(logEntry => appendLog(logEntry));
+
+
+    } catch (e: any) {
+      setError(`Simulation failed: ${e.message || String(e)}`);
+      appendLog(`Error: ${e.message || String(e)}`);
+      console.error("Simulation Test Page Error:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const appendLog = (message: string) => {
+    setLogDisplay(prev => prev + message + "\n");
+  };
+
+  async function fetchApi<T>(endpointPath: string, token: string, recordsField?: "records"): Promise<T | null> {
+    const baseUrl = "https://api.chunirec.net/2.0/records/"; // Assuming most are records
+    const musicBaseUrl = "https://api.chunirec.net/2.0/music/";
+    
+    let url = endpointPath.startsWith("music/") ? `${musicBaseUrl}${endpointPath.substring(6)}&token=${token}` : `${baseUrl}${endpointPath}&token=${token}`;
+    if (endpointPath.startsWith("profile.json") || endpointPath.startsWith("rating_data.json") || endpointPath.startsWith("showall.json")) {
+         // Already includes query params like user_name
+    } else {
+        url = `${endpointPath.includes("music/") ? musicBaseUrl : baseUrl}${endpointPath}&token=${token}`;
+    }
+
+
+    appendLog(`Fetching: ${url.replace(token, "REDACTED_TOKEN")}`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: "Response not JSON" }}));
+      throw new Error(`API fetch failed for ${endpointPath} (status: ${response.status}): ${errorData.error?.message || response.statusText}`);
+    }
+    const data = await response.json();
+    return recordsField ? data[recordsField] : data;
+  }
+
+
+  return (
+    <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <header className="mb-8 flex items-center justify-between">
+          <h1 className="text-3xl font-bold font-headline flex items-center">
+            <Brain className="mr-3 h-8 w-8 text-primary" />
+            Simulation Logic Test
+          </h1>
+          <Button asChild variant="outline">
+            <Link href="/developer/api-test"><ArrowLeft className="mr-2 h-4 w-4" />Back to API Test</Link>
+          </Button>
+        </header>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Simulation Parameters</CardTitle>
+            <CardDescription>Set the inputs for the simulation logic.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="nickname">Nickname</Label>
+                <Input id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="e.g., cocoa" />
+              </div>
+              <div>
+                <Label htmlFor="currentRating">Current Rating</Label>
+                <Input id="currentRating" type="number" value={currentRatingStr} onChange={(e) => setCurrentRatingStr(e.target.value)} placeholder="e.g., 17.00" />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="targetRating">Target Rating</Label>
+              <Input id="targetRating" type="number" value={targetRatingStr} onChange={(e) => setTargetRatingStr(e.target.value)} placeholder="e.g., 17.10" />
+            </div>
+            <div>
+              <Label>Calculation Strategy</Label>
+              <RadioGroup value={strategy} onValueChange={(v) => setStrategy(v as CalculationStrategy)} className="flex space-x-4 mt-1">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="floor" id="strat-floor" />
+                  <Label htmlFor="strat-floor">Floor</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="peak" id="strat-peak" />
+                  <Label htmlFor="strat-peak">Peak</Label>
+                </div>
+              </RadioGroup>
+            </div>
+            <Button onClick={handleRunSimulation} disabled={isLoading} className="w-full">
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+              Run Simulation
+            </Button>
+          </CardContent>
+        </Card>
+
+        {error && (
+          <Card className="mb-6 border-destructive">
+            <CardHeader>
+              <CardTitle className="text-destructive">Error</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="text-sm text-destructive whitespace-pre-wrap">{error}</pre>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Simulation Output & Log</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Label htmlFor="logOutput">Execution Log:</Label>
+            <Textarea
+              id="logOutput"
+              readOnly
+              value={logDisplay}
+              className="h-64 font-mono text-xs mt-1 mb-4"
+              placeholder="Simulation logs will appear here..."
+            />
+            {simulationResult && (
+              <>
+                <Label htmlFor="simulationJsonResult">Full Result (JSON):</Label>
+                <Textarea
+                  id="simulationJsonResult"
+                  readOnly
+                  value={JSON.stringify(simulationResult, null, 2)}
+                  className="h-96 font-mono text-xs mt-1"
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </main>
+  );
+}

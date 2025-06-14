@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert } from "lucide-react";
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain } from "lucide-react"; // Added Brain
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
@@ -19,7 +19,7 @@ type GlobalMusicApiResponse = { records?: any[] };
 type UserShowallApiResponse = { records?: any[] };
 
 const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
-const ADMIN_PANEL_VISIBLE_KEY = `${LOCAL_STORAGE_PREFIX}isAdminPanelVisible`; // For persisting toggle state
+const ADMIN_PANEL_VISIBLE_KEY = `${LOCAL_STORAGE_PREFIX}isAdminPanelVisible`;
 
 export default function AdvancedSettings() {
   const [localApiToken, setLocalApiToken] = useState("");
@@ -48,15 +48,15 @@ export default function AdvancedSettings() {
     if (typeof window !== 'undefined') {
       if (localApiToken.trim() === "") {
         localStorage.removeItem('chuniCalcData_userApiToken');
-        toast({ 
-            title: getTranslation(locale, 'toastSuccessLocalApiKeyRemoved'), 
-            description: getTranslation(locale, 'toastSuccessLocalApiKeyRemovedDesc') 
+        toast({
+            title: getTranslation(locale, 'toastSuccessLocalApiKeyRemoved'),
+            description: getTranslation(locale, 'toastSuccessLocalApiKeyRemovedDesc')
         });
       } else {
         localStorage.setItem('chuniCalcData_userApiToken', localApiToken.trim());
-        toast({ 
-            title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'), 
-            description: getTranslation(locale, 'toastSuccessLocalApiKeySavedDesc') 
+        toast({
+            title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'),
+            description: getTranslation(locale, 'toastSuccessLocalApiKeySavedDesc')
         });
       }
     }
@@ -69,23 +69,27 @@ export default function AdvancedSettings() {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
-          // Keep developer mode and admin panel visibility settings
-          if (key !== DEVELOPER_MODE_KEY && key !== ADMIN_PANEL_VISIBLE_KEY) { 
+          if (key !== DEVELOPER_MODE_KEY && key !== ADMIN_PANEL_VISIBLE_KEY) {
             keysToRemove.push(key);
           }
         }
       }
+      // Also clear the non-prefixed API token key
+      if (localStorage.getItem('chuniCalcData_userApiToken')) {
+          keysToRemove.push('chuniCalcData_userApiToken');
+      }
+
       keysToRemove.forEach(key => {
         localStorage.removeItem(key);
         clearedCount++;
       });
 
-       const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
-       setLocalApiToken(storedToken || "");
-      
-      toast({ 
-          title: getTranslation(locale, 'toastSuccessLocalDataCleared'), 
-          description: getTranslation(locale, 'toastSuccessLocalDataClearedDesc', clearedCount) 
+      const storedToken = localStorage.getItem('chuniCalcData_userApiToken'); // Re-check after potential removal
+      setLocalApiToken(storedToken || "");
+
+      toast({
+          title: getTranslation(locale, 'toastSuccessLocalDataCleared'),
+          description: getTranslation(locale, 'toastSuccessLocalDataClearedDesc', clearedCount)
       });
     }
   };
@@ -93,59 +97,60 @@ export default function AdvancedSettings() {
   const handleCacheGlobalMusic = async () => {
     const apiToken = getApiToken();
     if (!apiToken) {
-      toast({ 
-          title: getTranslation(locale, 'toastErrorApiKeyMissing'), 
-          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')), // Using existing key for desc
-          variant: "destructive" 
+      toast({
+          title: getTranslation(locale, 'toastErrorApiKeyMissing'),
+          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')),
+          variant: "destructive"
       });
       return;
     }
-    toast({ 
-        title: getTranslation(locale, 'toastInfoCachingStarted'), 
-        description: getTranslation(locale, 'toastInfoCachingStartedDesc', getTranslation(locale, 'cacheGlobalMusicButton')) 
+    toast({
+        title: getTranslation(locale, 'toastInfoCachingStarted'),
+        description: getTranslation(locale, 'toastInfoCachingStartedDesc', getTranslation(locale, 'cacheGlobalMusicButton'))
     });
     try {
-      const response = await fetch(`https://api.chunirec.net/2.0/music/showall.json?token=${apiToken}`);
+      const response = await fetch(`https://api.chunirec.net/2.0/music/showall.json?region=jp2&token=${apiToken}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message));
       }
       const data = await response.json();
+      // Assuming the pure simulation will fetch its own, so this might be redundant for main app if sim logic is fully externalized
       setCachedData<GlobalMusicApiResponse>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, data);
-      toast({ 
-          title: getTranslation(locale, 'toastSuccessGlobalMusicCached'), 
-          description: getTranslation(locale, 'toastSuccessGlobalMusicCachedDesc') 
+      toast({
+          title: getTranslation(locale, 'toastSuccessGlobalMusicCached'),
+          description: getTranslation(locale, 'toastSuccessGlobalMusicCachedDesc')
       });
     } catch (error) {
       console.error("Error caching global music data:", error);
-      toast({ 
-          title: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed'), 
-          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailedDesc', error instanceof Error ? error.message : undefined), 
-          variant: "destructive" 
+      toast({
+          title: getTranslation(locale, 'toastErrorGlobalMusicCacheFailed'),
+          description: getTranslation(locale, 'toastErrorGlobalMusicCacheFailedDesc', error instanceof Error ? error.message : undefined),
+          variant: "destructive"
       });
     }
   };
 
   const handleCacheUserRecords = async () => {
     if (!cacheNickname.trim()) {
-      toast({ 
-          title: getTranslation(locale, 'toastErrorNicknameNeeded'), 
-          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorNicknameNeededDesc')), // Using existing key for desc
-          variant: "destructive" 
+      toast({
+          title: getTranslation(locale, 'toastErrorNicknameNeeded'),
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorNicknameNeededDesc')),
+          variant: "destructive"
       });
       return;
     }
     const apiToken = getApiToken();
     if (!apiToken) {
-      toast({ 
-          title: getTranslation(locale, 'toastErrorApiKeyMissing'), 
-          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')), // Using existing key for desc
-          variant: "destructive" 
+      toast({
+          title: getTranslation(locale, 'toastErrorApiKeyMissing'),
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorApiKeyMissingDesc')),
+          variant: "destructive"
       });
       return;
     }
-    toast({ 
-        title: getTranslation(locale, 'toastInfoCachingStarted'), 
+    toast({
+        title: getTranslation(locale, 'toastInfoCachingStarted'),
         description: getTranslation(locale, 'toastInfoCachingStartedDesc', `${cacheNickname.trim()}'s records`)
     });
     try {
@@ -156,16 +161,16 @@ export default function AdvancedSettings() {
       }
       const data = await response.json();
       setCachedData<UserShowallApiResponse>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data);
-      toast({ 
-          title: getTranslation(locale, 'toastSuccessUserRecordsCached'), 
-          description: getTranslation(locale, 'toastSuccessUserRecordsCachedDesc', cacheNickname.trim()) 
+      toast({
+          title: getTranslation(locale, 'toastSuccessUserRecordsCached'),
+          description: getTranslation(locale, 'toastSuccessUserRecordsCachedDesc', cacheNickname.trim())
       });
     } catch (error) {
       console.error("Error caching user records:", error);
-      toast({ 
-          title: getTranslation(locale, 'toastErrorUserRecordsCacheFailed'), 
-          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailedDesc', error instanceof Error ? error.message : undefined), 
-          variant: "destructive" 
+      toast({
+          title: getTranslation(locale, 'toastErrorUserRecordsCacheFailed'),
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailedDesc', error instanceof Error ? error.message : undefined),
+          variant: "destructive"
       });
     }
   };
@@ -216,7 +221,7 @@ export default function AdvancedSettings() {
             {getTranslation(locale, 'localApiKeyHelp')}
           </p>
         </div>
-        
+
         {isAdminPanelVisible && clientHasMounted && (
           <>
             <hr/>
@@ -232,11 +237,18 @@ export default function AdvancedSettings() {
               </Label>
             </div>
             {isDeveloperMode && (
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/developer/api-test">
-                  <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
-                </Link>
-              </Button>
+              <div className="space-y-2">
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/developer/api-test">
+                    <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/developer/simulation-test">
+                    <Brain className="mr-2 h-4 w-4"/> Go to Simulation Logic Test Page
+                  </Link>
+                </Button>
+              </div>
             )}
 
             <hr/>
@@ -262,7 +274,7 @@ export default function AdvancedSettings() {
                     </Button>
                 </div>
             </div>
-            
+
             <hr/>
             <div>
               <Button onClick={handleClearAllLocalData} variant="destructive" className="w-full">
@@ -274,9 +286,9 @@ export default function AdvancedSettings() {
             </div>
           </>
         )}
-        
+
         <hr/>
-        
+
         <div className="text-sm">
             <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
             <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="mailto:your-email@example.com" className="text-primary hover:underline">your-email@example.com</a></p>
@@ -287,12 +299,10 @@ export default function AdvancedSettings() {
       </CardContent>
       <CardFooter>
         <Button onClick={toggleAdminPanel} variant="outline" className="w-full">
-            <ShieldAlert className="mr-2 h-4 w-4" /> 
+            <ShieldAlert className="mr-2 h-4 w-4" />
             {isAdminPanelVisible ? getTranslation(locale, 'adminPanelToggleHide') : getTranslation(locale, 'adminPanelToggleShow')}
         </Button>
       </CardFooter>
     </Card>
   );
 }
-
-    

@@ -5,16 +5,27 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
-import { getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS, SIMULATION_CACHE_EXPIRY_MS, type CachedData } from "@/lib/cache";
+import { getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
 import { getTranslation, type Locale } from '@/lib/translations';
-import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateChunithmSongRating, getNextGradeBoundaryScore, findMinScoreForTargetRating } from '@/lib/rating-utils';
-import type { Song, ProfileData, RatingApiResponse, GlobalMusicApiResponse, UserShowallApiResponse, ShowallApiSongEntry, RatingApiSongEntry, CalculationStrategy, SimulationPhase, CachedSimulationResult } from "@/types/result-page";
+import { mapApiSongToAppSong, sortSongsByRatingDesc } from '@/lib/rating-utils';
+import { runFullSimulation } from '@/lib/simulation-logic'; // Import the new pure function
+import type {
+  Song,
+  ProfileData,
+  RatingApiResponse,
+  ShowallApiSongEntry,
+  RatingApiSongEntry,
+  CalculationStrategy,
+  SimulationPhase,
+  UserShowallApiResponse,
+  SimulationInput,
+  SimulationOutput
+} from "@/types/result-page";
 
 const BEST_COUNT = 30;
-const NEW_20_COUNT = 20; // Max items for the New 20 list
+const NEW_20_COUNT = 20;
 
-// Helper function to flatten raw global music entries
 const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
     const flattenedEntries: ShowallApiSongEntry[] = [];
     if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
@@ -23,7 +34,7 @@ const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
         for (const diffKey in difficulties) {
             if (Object.prototype.hasOwnProperty.call(difficulties, diffKey)) {
                 const diffData = difficulties[diffKey];
-                if (diffData && meta.id && meta.title) { 
+                if (diffData && meta.id && meta.title) {
                     flattenedEntries.push({
                         id: String(meta.id),
                         title: String(meta.title),
@@ -33,48 +44,15 @@ const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
                         level: String(diffData.level || "N/A"),
                         const: (typeof diffData.const === 'number' || diffData.const === null) ? diffData.const : parseFloat(String(diffData.const)),
                         is_const_unknown: diffData.is_const_unknown === true,
-                        score: undefined,
-                        rating: undefined,
-                        is_played: undefined,
                     });
                 }
             }
         }
     } else if (rawEntry && rawEntry.id && rawEntry.title && rawEntry.diff) {
-        // This case handles already flat entries if they are accidentally passed
         flattenedEntries.push(rawEntry as ShowallApiSongEntry);
     }
     return flattenedEntries;
 };
-
-// Helper for "저점" (floor) strategy's high constant song rule
-const isSongHighConstantForFloor = (song: Song, currentOverallAverageRatingForList: number | null): boolean => {
-  if (!song.chartConstant || currentOverallAverageRatingForList === null) return false;
-  // 현재 B30 평균 레이팅 - 1.8. 이 값보다 상수가 높은 곡은 우선순위가 밀림.
-  // 예: 평균 17.00 -> 15.2. 15.3 이상 곡은 후순위.
-  // 예: 평균 16.50 -> 14.7. 14.8 이상 곡은 후순위.
-  const thresholdBase = currentOverallAverageRatingForList - 1.8;
-  // 소수점 첫째 자리로 "버림" 또는 "내림" (floor)
-  const threshold = Math.floor(thresholdBase * 10) / 10;
-  // console.log(`[isSongHighConstantForFloor] Song: ${song.title}, Const: ${song.chartConstant}, AvgRating: ${currentOverallAverageRatingForList.toFixed(4)}, ThresholdBase: ${thresholdBase.toFixed(4)}, Threshold: ${threshold.toFixed(1)} -> HighConst: ${song.chartConstant > threshold}`);
-  return song.chartConstant > threshold;
-};
-
-
-const getSimulationCacheKey = (
-  listType: 'b30' | 'n20',
-  userName: string | null,
-  currentRating: string | null,
-  targetRating: string | null,
-  strategy: CalculationStrategy | null
-): string | null => {
-  if (!userName || !currentRating || !targetRating || !strategy) return null;
-  const normCurrent = parseFloat(currentRating).toFixed(2);
-  const normTarget = parseFloat(targetRating).toFixed(2);
-  const prefix = listType === 'n20' ? `${LOCAL_STORAGE_PREFIX}simulation_new20_` : `${LOCAL_STORAGE_PREFIX}simulation_`;
-  return `${prefix}${userName}_${normCurrent}_${normTarget}_${strategy}`;
-};
-
 
 interface UseChuniResultDataProps {
   userNameForApi: string | null;
@@ -99,88 +77,49 @@ export function useChuniResultData({
 
   const [apiPlayerName, setApiPlayerName] = useState<string | null>(null);
 
-  // Best 30 States
+  // Store initial fetched data
   const [originalB30SongsData, setOriginalB30SongsData] = useState<Song[]>([]);
-  const [simulatedB30Songs, setSimulatedB30Songs] = useState<Song[]>([]);
-  const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
-  const [sortedPrimaryLeapCandidatesB30, setSortedPrimaryLeapCandidatesB30] = useState<Song[]>([]);
-  // const [sortedSecondaryLeapCandidatesB30, setSortedSecondaryLeapCandidatesB30] = useState<Song[]>([]); // Removed as floor strategy simplified
-  const [fineTuningCandidateSongsB30, setFineTuningCandidateSongsB30] = useState<Song[]>([]); 
-  const [songToReplaceB30, setSongToReplaceB30] = useState<Song | null>(null);
-  const [candidateSongsForReplacementB30, setCandidateSongsForReplacementB30] = useState<Song[]>([]);
-  const [optimalCandidateSongB30, setOptimalCandidateSongB30] = useState<Song | null>(null);
-
-  // New 20 States
   const [originalNew20SongsData, setOriginalNew20SongsData] = useState<Song[]>([]);
-  const [simulatedNew20Songs, setSimulatedNew20Songs] = useState<Song[]>([]);
-  const [simulatedAverageNew20Rating, setSimulatedAverageNew20Rating] = useState<number | null>(null);
   const [allPlayedNewSongsPool, setAllPlayedNewSongsPool] = useState<Song[]>([]);
-  const [sortedPrimaryLeapCandidatesN20, setSortedPrimaryLeapCandidatesN20] = useState<Song[]>([]);
-  // const [sortedSecondaryLeapCandidatesN20, setSortedSecondaryLeapCandidatesN20] = useState<Song[]>([]); // Potentially for N20 peak
-  const [fineTuningCandidateSongsN20, setFineTuningCandidateSongsN20] = useState<Song[]>([]); 
-  const [songToReplaceN20, setSongToReplaceN20] = useState<Song | null>(null);
-  const [candidateSongsForReplacementN20, setCandidateSongsForReplacementN20] = useState<Song[]>([]);
-  const [optimalCandidateSongN20, setOptimalCandidateSongN20] = useState<Song | null>(null);
-
-  // Combined songs state
-  const [combinedTopSongs, setCombinedTopSongs] = useState<Song[]>([]);
-
-  // General Simulation States
-  const [isLoadingSongs, setIsLoadingSongs] = useState(true);
-  const [errorLoadingSongs, setErrorLoadingSongs] = useState<string | null>(null);
-  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
-  const [isScoreLimitReleased, setIsScoreLimitReleased] = useState(false);
-  const [phaseTransitionPoint, setPhaseTransitionPoint] = useState<number | null>(null);
-  const [currentPhase, setCurrentPhase] = useState<SimulationPhase>('idle');
-  const [simulationTargetList, setSimulationTargetList] = useState<'b30' | 'n20' | 'idle'>('idle');
-  
   const [allMusicData, setAllMusicData] = useState<ShowallApiSongEntry[]>([]);
   const [userPlayHistory, setUserPlayHistory] = useState<ShowallApiSongEntry[]>([]);
 
+  // Store final simulation results for display
+  const [simulatedB30Songs, setSimulatedB30Songs] = useState<Song[]>([]);
+  const [simulatedNew20Songs, setSimulatedNew20Songs] = useState<Song[]>([]);
+  const [simulatedAverageB30Rating, setSimulatedAverageB30Rating] = useState<number | null>(null);
+  const [simulatedAverageNew20Rating, setSimulatedAverageNew20Rating] = useState<number | null>(null);
+  const [finalOverallSimulatedRating, setFinalOverallSimulatedRating] = useState<number | null>(null);
+  const [simulationLog, setSimulationLog] = useState<string[]>([]);
+
+  // General States
+  const [isLoadingInitialData, setIsLoadingInitialData] = useState(true); // For initial API fetches
+  const [isSimulating, setIsSimulating] = useState(false); // For when the pure function is running
+  const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null);
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<SimulationPhase>('idle'); // Simplified phase for UI
 
   const prevCalculationStrategyRef = useRef<CalculationStrategy | null>(null);
 
-
+  // Effect 1: Fetch all initial data needed for simulation
   useEffect(() => {
-    if (clientHasMounted && currentRatingDisplay && targetRatingDisplay) {
-      const currentRatingNum = parseFloat(currentRatingDisplay);
-      const targetRatingNum = parseFloat(targetRatingDisplay);
-
-      if (!isNaN(currentRatingNum) && isFinite(currentRatingNum) && !isNaN(targetRatingNum) && isFinite(targetRatingNum)) {
-        // 점수 상한 해제 조건: 목표 레이팅 - 현재 레이팅의 차이가 0.2 이상일 때 (즉, 50 곱하면 10 이상)
-        const limitReleaseCondition = (targetRatingNum - currentRatingNum) * 50 > 10;
-        setIsScoreLimitReleased(limitReleaseCondition);
-        // console.log(`[ScoreLimitRelease] Target: ${targetRatingNum}, Current: ${currentRatingNum}, Diff*50: ${(targetRatingNum - currentRatingNum)*50}, Released: ${limitReleaseCondition}`);
-
-        // 미세 조정 페이즈 전환점: 목표치까지 남은 레이팅의 95% 지점
-        // 예: 현재 16.00, 목표 16.50 -> 차이 0.50. 0.50 * 0.95 = 0.475. 전환점: 16.00 + 0.475 = 16.475
-        const transitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95;
-        setPhaseTransitionPoint(parseFloat(transitionPoint.toFixed(4)));
-        // console.log(`[PhaseTransitionPoint] Set to: ${transitionPoint.toFixed(4)}`);
-      } else {
-        setIsScoreLimitReleased(false);
-        setPhaseTransitionPoint(null);
-      }
-    }
-  }, [clientHasMounted, currentRatingDisplay, targetRatingDisplay]);
-
-  useEffect(() => {
-    const fetchAndProcessData = async () => {
-      console.log("[DATA_FETCH] Starting fetchAndProcessData...");
+    const fetchAndProcessInitialData = async () => {
+      console.log("[DATA_FETCH_HOOK] Starting fetchAndProcessInitialData...");
       const defaultPlayerName = getTranslation(locale, 'resultPageDefaultPlayerName');
       const API_TOKEN = getApiToken();
 
-      if (!API_TOKEN) { setErrorLoadingSongs(getTranslation(locale, 'resultPageErrorApiTokenNotSetResult')); setIsLoadingSongs(false); return; }
-      if (!userNameForApi || userNameForApi === defaultPlayerName) { setErrorLoadingSongs(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult')); setApiPlayerName(defaultPlayerName); setIsLoadingSongs(false); return; }
+      if (!API_TOKEN) { setErrorLoadingData(getTranslation(locale, 'resultPageErrorApiTokenNotSetResult')); setIsLoadingInitialData(false); return; }
+      if (!userNameForApi || userNameForApi === defaultPlayerName) { setErrorLoadingData(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult')); setApiPlayerName(defaultPlayerName); setIsLoadingInitialData(false); return; }
 
-      setIsLoadingSongs(true); setErrorLoadingSongs(null); setApiPlayerName(userNameForApi);
+      setIsLoadingInitialData(true); setErrorLoadingData(null); setApiPlayerName(userNameForApi);
+      // Clear previous original data
       setOriginalB30SongsData([]); setOriginalNew20SongsData([]);
+      setAllPlayedNewSongsPool([]); setAllMusicData([]); setUserPlayHistory([]);
+      // Clear previous simulation results
       setSimulatedB30Songs([]); setSimulatedNew20Songs([]);
-      setCombinedTopSongs([]);
-      setAllPlayedNewSongsPool([]);
-      setAllMusicData([]); 
-      setUserPlayHistory([]); 
-
+      setSimulatedAverageB30Rating(null); setSimulatedAverageNew20Rating(null);
+      setFinalOverallSimulatedRating(null); setSimulationLog([]);
+      setCurrentPhase('idle');
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
@@ -196,39 +135,23 @@ export function useChuniResultData({
 
       let profileData = getCachedData<ProfileData>(profileKey);
       let ratingData = getCachedData<RatingApiResponse>(ratingDataKey, USER_DATA_CACHE_EXPIRY_MS);
-      let globalMusicCacheRaw = getCachedData<any[]>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // Could be raw or flat
+      let globalMusicCacheRaw = getCachedData<any[]>(globalMusicKey, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       let userShowallCache = getCachedData<UserShowallApiResponse>(userShowallKey, USER_DATA_CACHE_EXPIRY_MS);
 
       if (profileData) setApiPlayerName(profileData.player_name || userNameForApi);
 
-      let flattenedGlobalMusicRecords: ShowallApiSongEntry[] = [];
+      let tempFlattenedGlobalMusic: ShowallApiSongEntry[] = [];
       if (globalMusicCacheRaw) {
-          console.log(`[DATA_FETCH] Global music cache found. Count: ${globalMusicCacheRaw.length}.`);
-          // Check if the first entry looks raw (has meta/data) or flat (has id/title directly)
-          if (globalMusicCacheRaw.length > 0 && globalMusicCacheRaw[0]?.meta && globalMusicCacheRaw[0]?.data) {
-              console.log("[DATA_FETCH] Global music cache seems raw (nested meta/data). Flattening...");
-              flattenedGlobalMusicRecords = globalMusicCacheRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
-          } else {
-              console.log("[DATA_FETCH] Global music cache seems already flat or is not nested.");
-              flattenedGlobalMusicRecords = globalMusicCacheRaw as ShowallApiSongEntry[]; // Assume it's already flat
-          }
-          setAllMusicData(flattenedGlobalMusicRecords); 
+        tempFlattenedGlobalMusic = globalMusicCacheRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
+        setAllMusicData(tempFlattenedGlobalMusic);
       }
 
       let tempUserShowallRecords: ShowallApiSongEntry[] = userShowallCache?.records || [];
       if (tempUserShowallRecords.length > 0) {
-        setUserPlayHistory(tempUserShowallRecords); 
-      }
-
-      console.log(`[DATA_FETCH] Cache status - Profile: ${!!profileData}, Rating: ${!!ratingData}, GlobalMusic (after potential flattening): ${flattenedGlobalMusicRecords.length}, UserShowall: ${tempUserShowallRecords.length}`);
-
-      let initialB30ApiEntries: RatingApiSongEntry[] = [];
-      if (ratingData?.best?.entries) {
-        initialB30ApiEntries = ratingData.best.entries.filter((e: any): e is RatingApiSongEntry => e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && typeof e.title === 'string' && e.title.trim() !== '') || [];
+        setUserPlayHistory(tempUserShowallRecords);
       }
 
       if (!profileData || !ratingData || !globalMusicCacheRaw || !userShowallCache) {
-        console.log("[DATA_FETCH] Cache miss for one or more items. Fetching from API.");
         const apiRequestsMap = new Map<string, Promise<any>>();
         if (!profileData) apiRequestsMap.set('profile', fetch(`https://api.chunirec.net/2.0/records/profile.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({ type: 'profile', data, ok: res.ok, status: res.status })).catch(() => ({ type: 'profile', error: 'JSON_PARSE_ERROR', ok: false, status: res.status }))));
         if (!ratingData) apiRequestsMap.set('rating', fetch(`https://api.chunirec.net/2.0/records/rating_data.json?region=jp2&user_name=${encodeURIComponent(userNameForApi)}&token=${API_TOKEN}`).then(res => res.json().then(data => ({ type: 'rating', data, ok: res.ok, status: res.status })).catch(() => ({ type: 'rating', error: 'JSON_PARSE_ERROR', ok: false, status: res.status }))));
@@ -242,25 +165,17 @@ export function useChuniResultData({
             for (const res of responses) {
               if (!res.ok) { const errorMsg = `${res.type} data API failed (status: ${res.status}): ${res.data?.error?.message || res.error || 'Unknown API error'}`; if (!criticalError) criticalError = errorMsg; console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue; }
               if (res.type === 'profile' && !profileData) { setApiPlayerName(res.data.player_name || userNameForApi); setCachedData<ProfileData>(profileKey, res.data); profileData = res.data; }
-              if (res.type === 'rating' && !ratingData) {
-                initialB30ApiEntries = res.data.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && e.id && typeof e.id === 'string' && e.id.trim() !== '' && e.diff && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && e.title && typeof e.title === 'string' && e.title.trim() !== '') || [];
-                setCachedData<RatingApiResponse>(ratingDataKey, res.data);
-                ratingData = res.data;
-              }
+              if (res.type === 'rating' && !ratingData) { setCachedData<RatingApiResponse>(ratingDataKey, res.data); ratingData = res.data; }
               if (res.type === 'globalMusic' && !globalMusicCacheRaw) {
-                const fetchedGlobalMusicRaw = Array.isArray(res.data) ? res.data : (res.data?.records || []);
-                const justFetchedFlattenedGlobal = fetchedGlobalMusicRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
-                console.log(`[DATA_FETCH_API] Fetched and flattened global music: ${justFetchedFlattenedGlobal.length} entries.`);
-                setAllMusicData(justFetchedFlattenedGlobal); // Set state
-                setCachedData<ShowallApiSongEntry[]>(globalMusicKey, justFetchedFlattenedGlobal, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // Cache flattened
-                flattenedGlobalMusicRecords = justFetchedFlattenedGlobal; 
+                const fetchedGlobalMusicApi = Array.isArray(res.data) ? res.data : (res.data?.records || []);
+                tempFlattenedGlobalMusic = fetchedGlobalMusicApi.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
+                setAllMusicData(tempFlattenedGlobalMusic);
+                setCachedData<ShowallApiSongEntry[]>(globalMusicKey, tempFlattenedGlobalMusic, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
               }
               if (res.type === 'userShowall' && !userShowallCache) {
-                const fetchedUserShowallRecords = Array.isArray(res.data) ? res.data : (res.data?.records || []);
-                setUserPlayHistory(fetchedUserShowallRecords); // Set state
-                setCachedData<UserShowallApiResponse>(userShowallKey, { records: fetchedUserShowallRecords });
-                userShowallCache = { records: fetchedUserShowallRecords };
-                tempUserShowallRecords = fetchedUserShowallRecords; // Ensure temp variable is also updated
+                tempUserShowallRecords = Array.isArray(res.data) ? res.data : (res.data?.records || []);
+                setUserPlayHistory(tempUserShowallRecords);
+                setCachedData<UserShowallApiResponse>(userShowallKey, { records: tempUserShowallRecords });
               }
             }
             if (criticalError) throw new Error(criticalError);
@@ -270,249 +185,184 @@ export function useChuniResultData({
           } catch (error) {
             let detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', "Unknown error");
             if (error instanceof Error) detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error.message);
-            setErrorLoadingSongs(detailedErrorMessage); console.error("[DATA_FETCH_API_CATCH_ERROR]", error);
+            setErrorLoadingData(detailedErrorMessage);
             if (!apiPlayerName && userNameForApi !== defaultPlayerName) setApiPlayerName(userNameForApi);
           }
         }
       } else {
-        console.log("[DATA_FETCH] All data loaded from cache.");
-        // Ensure states are set even if all data is from cache
-        if (flattenedGlobalMusicRecords.length > 0 && allMusicData.length === 0) { // Check if state is actually empty
-            setAllMusicData(flattenedGlobalMusicRecords);
-        }
-        if (tempUserShowallRecords.length > 0 && userPlayHistory.length === 0) { // Check if state is actually empty
-            setUserPlayHistory(tempUserShowallRecords);
-        }
-        toast({ title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') });
+         console.log("[DATA_FETCH_HOOK] All initial data loaded from cache.");
+         toast({ title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') });
       }
 
-      const mappedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
-      setOriginalB30SongsData(mappedOriginalB30);
-      setSimulatedB30Songs(mappedOriginalB30.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
-      console.log(`[DATA_FETCH] Original B30 songs mapped: ${mappedOriginalB30.length}`);
+      // --- Process fetched data into original song lists ---
+      const initialB30ApiEntries = ratingData?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && typeof e.title === 'string' && e.title.trim() !== '') || [];
+      const processedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
+      setOriginalB30SongsData(processedOriginalB30);
+      console.log(`[DATA_FETCH_HOOK] Original B30 songs mapped: ${processedOriginalB30.length}`);
 
-      // Process New20 songs
-      const currentAllMusic = allMusicData.length > 0 ? allMusicData : flattenedGlobalMusicRecords;
-      const currentUserHistory = userPlayHistory.length > 0 ? userPlayHistory : tempUserShowallRecords;
+      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
+      const newSongDefinitions = tempFlattenedGlobalMusic.filter(globalSong =>
+        globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase())
+      );
+      const userPlayedMap = new Map<string, ShowallApiSongEntry>();
+      tempUserShowallRecords.forEach(usrSong => {
+        if (usrSong.id && usrSong.diff) userPlayedMap.set(`${usrSong.id}_${usrSong.diff.toUpperCase()}`, usrSong);
+      });
+      const playedNewSongsApi = newSongDefinitions.reduce((acc, newSongDef) => {
+        const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
+        if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
+          acc.push({ ...newSongDef, score: userPlayRecord.score, is_played: true });
+        }
+        return acc;
+      }, [] as ShowallApiSongEntry[]);
+      const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
+      setAllPlayedNewSongsPool(sortSongsByRatingDesc(mappedPlayedNewSongs));
+      const processedOriginalNew20 = sortSongsByRatingDesc(mappedPlayedNewSongs).slice(0, NEW_20_COUNT);
+      setOriginalNew20SongsData(processedOriginalNew20);
+      console.log(`[DATA_FETCH_HOOK] Original N20 songs processed: ${processedOriginalNew20.length} (from pool of ${mappedPlayedNewSongs.length})`);
 
-      if (currentAllMusic.length > 0 && currentUserHistory.length > 0) {
-        console.log("[NEW20_PROCESS] Starting New20 processing.");
-        const newSongTitlesRaw = NewSongsData.titles?.verse || [];
-        const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
-
-        const newSongDefinitions = currentAllMusic.filter(globalSong =>
-          globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase())
-        );
-
-        const userPlayedMap = new Map<string, ShowallApiSongEntry>();
-        currentUserHistory.forEach(usrSong => {
-          if (usrSong.id && usrSong.diff) userPlayedMap.set(`${usrSong.id}_${usrSong.diff.toUpperCase()}`, usrSong);
-        });
-
-        const playedNewSongsApi = newSongDefinitions.reduce((acc, newSongDef) => {
-          const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
-          if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
-            acc.push({ ...newSongDef, score: userPlayRecord.score, is_played: true });
-          }
-          return acc;
-        }, [] as ShowallApiSongEntry[]);
-
-        const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
-        setAllPlayedNewSongsPool(mappedPlayedNewSongs); // This is the full pool of played new songs
-
-        const sortedNewSongsFull = sortSongsByRatingDesc(mappedPlayedNewSongs);
-        const finalNew20 = sortedNewSongsFull.slice(0, NEW_20_COUNT);
-        setOriginalNew20SongsData(finalNew20);
-        setSimulatedNew20Songs(finalNew20.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
-        console.log(`[NEW20_PROCESS] Final New20 songs processed (top ${NEW_20_COUNT}): ${finalNew20.length}`);
-      } else {
-        setOriginalNew20SongsData([]);
-        setSimulatedNew20Songs([]);
-        setAllPlayedNewSongsPool([]);
-        console.log("[NEW20_PROCESS] Skipped New20 processing due to missing global music or user showall data.");
-        if(currentAllMusic.length === 0) console.log("[NEW20_PROCESS] currentAllMusic was empty.");
-        if(currentUserHistory.length === 0) console.log("[NEW20_PROCESS] currentUserHistory was empty.");
-      }
-      setIsLoadingSongs(false);
-      console.log("[DATA_FETCH] fetchAndProcessData finished.");
+      setIsLoadingInitialData(false);
+      console.log("[DATA_FETCH_HOOK] fetchAndProcessInitialData finished.");
     };
 
-    if (clientHasMounted) fetchAndProcessData();
+    if (clientHasMounted) fetchAndProcessInitialData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userNameForApi, refreshNonce, clientHasMounted, locale]); // Removed calculationStrategy from here, as it's handled separately
+  }, [userNameForApi, refreshNonce, clientHasMounted, locale]);
 
+
+  // Effect 2: Run simulation when strategy or relevant inputs change
   useEffect(() => {
-    const prevStrategy = prevCalculationStrategyRef.current;
-    const currentStrat = calculationStrategy;
-    const actualStrategyChanged = prevStrategy !== currentStrat;
-
-    console.log(`[SIM_STRATEGY_EFFECT] Running. Strategy: ${currentStrat}, Prev: ${prevStrategy}, ActualChange: ${actualStrategyChanged}, isLoading: ${isLoadingSongs}, OriginalB30Count: ${originalB30SongsData.length}, OriginalN20Count: ${originalNew20SongsData.length}, currentPhase: ${currentPhase}`);
-
-    if (isLoadingSongs && !actualStrategyChanged) {
-        console.log("[SIM_STRATEGY_EFFECT] Data still loading and strategy unchanged. Deferring full processing.");
+    const runSimulationAsync = async () => {
+      if (isLoadingInitialData || !calculationStrategy || !currentRatingDisplay || !targetRatingDisplay || originalB30SongsData.length === 0) {
+        // Don't run simulation if data is still loading, no strategy, or no B30 base data
+        if (calculationStrategy) { // If strategy is set but other conditions fail
+             console.log("[SIM_RUN_EFFECT] Conditions not met for simulation. Strategy:", calculationStrategy, "isLoadingInitial:", isLoadingInitialData, "B30 count:", originalB30SongsData.length);
+             // Reset simulation display states if strategy is present but sim can't run
+             setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
+             setSimulatedNew20Songs(originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
+             setSimulatedAverageB30Rating(originalB30SongsData.length > 0 ? originalB30SongsData.reduce((sum, s) => sum + s.currentRating, 0) / Math.min(originalB30SongsData.length, BEST_COUNT) : null);
+             setSimulatedAverageNew20Rating(originalNew20SongsData.length > 0 ? originalNew20SongsData.reduce((sum, s) => sum + s.currentRating, 0) / Math.min(originalNew20SongsData.length, NEW_20_COUNT) : null);
+             setFinalOverallSimulatedRating(parseFloat(currentRatingDisplay || "0"));
+             setSimulationLog(["Simulation not run: Initial data missing or strategy not ready."]);
+             setCurrentPhase('idle');
+        }
         return;
-    }
+      }
 
-    if (actualStrategyChanged) {
-        console.log(`[SIM_STRATEGY_EFFECT] Strategy changed from ${prevStrategy} to ${currentStrat}. Resetting simulation states.`);
-        // Reset B30
-        setSortedPrimaryLeapCandidatesB30([]);
-        setFineTuningCandidateSongsB30([]);
-        setSongToReplaceB30(null);
-        setCandidateSongsForReplacementB30([]);
-        setOptimalCandidateSongB30(null);
-        if (originalB30SongsData.length > 0) {
-          setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-          console.log("[SIM_STRATEGY_EFFECT] SimulatedB30Songs reset from original B30 data due to strategy change.");
-        } else {
-          setSimulatedB30Songs([]);
-          console.log("[SIM_STRATEGY_EFFECT] OriginalB30SongsData empty, SimulatedB30Songs set to empty due to strategy change.");
-        }
-
-        // Reset N20
-        setSortedPrimaryLeapCandidatesN20([]);
-        setFineTuningCandidateSongsN20([]);
-        setSongToReplaceN20(null);
-        setCandidateSongsForReplacementN20([]);
-        setOptimalCandidateSongN20(null);
-        if (originalNew20SongsData.length > 0) {
-            setSimulatedNew20Songs(originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-            console.log("[SIM_STRATEGY_EFFECT] SimulatedNew20Songs reset from original N20 data due to strategy change.");
-        } else {
-            setSimulatedNew20Songs([]);
-            console.log("[SIM_STRATEGY_EFFECT] OriginalNew20SongsData empty, SimulatedNew20Songs set to empty due to strategy change.");
-        }
-        setCurrentPhase('idle');
-        setSimulationTargetList('idle'); 
-    }
-
-    if (!isLoadingSongs && currentStrat) {
-        const currentRatingNum = parseFloat(currentRatingDisplay || "0");
-        const targetRatingNum = parseFloat(targetRatingDisplay || "0");
-        // const ratingDataCacheKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-        // const ratingDataCacheItem = clientHasMounted ? localStorage.getItem(ratingDataCacheKey) : null;
-        // let currentSourceDataTimestamp = 0;
-        // if (ratingDataCacheItem) { try { currentSourceDataTimestamp = (JSON.parse(ratingDataCacheItem) as CachedData<any>).timestamp; } catch (e) { console.warn("[SIM_CACHE] Failed to parse rating_data timestamp for cache validation.", e); } }
-
-        // let b30CacheHit = false;
-        // let n20CacheHit = false;
-        let cachedSimB30: CachedSimulationResult | null = null;
-        let cachedSimN20: CachedSimulationResult | null = null;
-
-        // const simCacheKeyB30 = getSimulationCacheKey('b30', userNameForApi, currentRatingDisplay, targetRatingDisplay, currentStrat);
-        // if (simCacheKeyB30 && currentSourceDataTimestamp > 0 && clientHasMounted) {
-        //     cachedSimB30 = getCachedData<CachedSimulationResult>(simCacheKeyB30, SIMULATION_CACHE_EXPIRY_MS);
-        //     if (cachedSimB30 && cachedSimB30.sourceDataTimestamp === currentSourceDataTimestamp) {
-        //         if (cachedSimB30.finalPhase === 'error') {
-        //             console.log(`[SIM_CACHE] B30: Error state cache found for strategy ${currentStrat}. Ignoring and forcing re-simulation.`);
-        //             b30CacheHit = false; 
-        //         } else {
-        //             console.log(`[SIM_CACHE] B30: Valid simulation cache found. Loading from cache.`);
-        //             setSimulatedB30Songs(cachedSimB30.simulatedB30Songs);
-        //             setSimulatedAverageB30Rating(cachedSimB30.simulatedAverageB30Rating);
-        //             b30CacheHit = true;
-        //         }
-        //     }
-        // }
-
-        // const simCacheKeyN20 = getSimulationCacheKey('n20', userNameForApi, currentRatingDisplay, targetRatingDisplay, currentStrat);
-        // if (simCacheKeyN20 && currentSourceDataTimestamp > 0 && clientHasMounted) {
-        //     cachedSimN20 = getCachedData<CachedSimulationResult>(simCacheKeyN20, SIMULATION_CACHE_EXPIRY_MS);
-        //      if (cachedSimN20 && cachedSimN20.sourceDataTimestamp === currentSourceDataTimestamp) {
-        //          if (cachedSimN20.finalPhase === 'error') {
-        //             console.log(`[SIM_CACHE] N20: Error state cache found for strategy ${currentStrat}. Ignoring and forcing re-simulation.`);
-        //             n20CacheHit = false; 
-        //          } else {
-        //             console.log(`[SIM_CACHE] N20: Valid simulation cache found. Loading from cache.`);
-        //             setSimulatedNew20Songs(cachedSimN20.simulatedB30Songs); 
-        //             setSimulatedAverageNew20Rating(cachedSimN20.simulatedAverageB30Rating);
-        //             n20CacheHit = true;
-        //          }
-        //      }
-        // }
-
-        // if (b30CacheHit && n20CacheHit && cachedSimB30 && cachedSimN20) {
-        //     console.log("[SIM_CACHE] Both B30 and N20 loaded from cache. Setting phase based on combined target or cached N20 phase.");
-        //     const finalCachedPhase = cachedSimN20.finalPhase; // Assuming N20 is the final part of a full cached sim
-
-        //     const overallCachedRating =
-        //         (cachedSimB30.simulatedAverageB30Rating !== null && cachedSimN20.simulatedAverageB30Rating !== null && originalB30SongsData.length >= BEST_COUNT && originalNew20SongsData.length > 0)
-        //         ? ((cachedSimB30.simulatedAverageB30Rating * BEST_COUNT) + (cachedSimN20.simulatedAverageB30Rating * Math.min(originalNew20SongsData.length, NEW_20_COUNT))) / (BEST_COUNT + Math.min(originalNew20SongsData.length, NEW_20_COUNT))
-        //         : (cachedSimB30.simulatedAverageB30Rating !== null && originalB30SongsData.length >= BEST_COUNT)
-        //             ? cachedSimB30.simulatedAverageB30Rating
-        //             : parseFloat(currentRatingDisplay || "0");
-
-        //     if (overallCachedRating >= targetRatingNum) {
-        //         setCurrentPhase('target_reached');
-        //     } else {
-        //          setCurrentPhase(finalCachedPhase); 
-        //     }
-        //     setSimulationTargetList('idle'); 
-        //     // if (!lastRefreshed?.includes(new Date(currentSourceDataTimestamp).toLocaleString(locale))) {
-        //     //   setLastRefreshed(getTranslation(locale, 'resultPageSyncStatus', new Date(currentSourceDataTimestamp).toLocaleString(locale)) + " (Sim Cache B30 & N20)");
-        //     // }
-        // } else { 
-            // Cache miss or incomplete cache, start new simulation
-            if (simulatedB30Songs.length === 0 && originalB30SongsData.length > 0) {
-                 setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-            }
-            if (simulatedNew20Songs.length === 0 && originalNew20SongsData.length > 0) {
-                 setSimulatedNew20Songs(originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-            }
-
-            console.log(`[SIM_STRATEGY_EFFECT] Strategy '${currentStrat}' active. Cache miss or disabled. Starting new simulation cycle.`);
-            if (currentRatingNum < targetRatingNum && (originalB30SongsData.length > 0 || originalNew20SongsData.length > 0)) {
-                if (currentPhase === 'idle' || actualStrategyChanged) {
-                    const startTarget = /*b30CacheHit ? 'n20' :*/ 'b30'; // Start with B30 if no complete cache
-                    console.log(`[SIM_STRATEGY_EFFECT] Setting target to ${startTarget} and phase to initializing_leap_phase.`);
-                    setSimulationTargetList(startTarget);
-                    setCurrentPhase('initializing_leap_phase');
-                }
+      // Reset simulation states if strategy has actually changed
+      if (prevCalculationStrategyRef.current !== calculationStrategy) {
+        console.log(`[SIM_RUN_EFFECT] Strategy changed from ${prevCalculationStrategyRef.current} to ${calculationStrategy}. Resetting display states.`);
+        setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
+        setSimulatedNew20Songs(originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })));
+        // Recalculate initial averages based on *current* ratings of original songs
+        const initialB30Avg = originalB30SongsData.length > 0 ? parseFloat((originalB30SongsData.slice(0, BEST_COUNT).reduce((sum, s) => sum + s.currentRating, 0) / Math.min(originalB30SongsData.length, BEST_COUNT)).toFixed(4)) : null;
+        const initialN20Avg = originalNew20SongsData.length > 0 ? parseFloat((originalNew20SongsData.slice(0, NEW_20_COUNT).reduce((sum, s) => sum + s.currentRating, 0) / Math.min(originalNew20SongsData.length, NEW_20_COUNT)).toFixed(4)) : null;
+        setSimulatedAverageB30Rating(initialB30Avg);
+        setSimulatedAverageNew20Rating(initialN20Avg);
+        
+        let overallInitial = 0;
+        if(initialB30Avg !== null) {
+            if(initialN20Avg !== null && originalNew20SongsData.length > 0 && originalB30SongsData.length >= BEST_COUNT) {
+                overallInitial = parseFloat((((initialB30Avg * BEST_COUNT) + (initialN20Avg * Math.min(originalNew20SongsData.length, NEW_20_COUNT))) / (BEST_COUNT + Math.min(originalNew20SongsData.length, NEW_20_COUNT))).toFixed(4));
             } else {
-                setCurrentPhase('idle');
-                setSimulationTargetList('idle');
+                overallInitial = initialB30Avg;
             }
-        // }
+        }
+        setFinalOverallSimulatedRating(overallInitial);
+        setCurrentPhase('simulating'); // Indicate simulation is about to start
+        prevCalculationStrategyRef.current = calculationStrategy;
+      }
 
-    } else if (!currentStrat) {
-        console.log("[SIM_STRATEGY_EFFECT] Strategy deselected (null). Phase set to Idle. Resetting sim lists from original.");
-        if (originalB30SongsData.length > 0) {
-             setSimulatedB30Songs(originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-        } else { setSimulatedB30Songs([]); }
-        if (originalNew20SongsData.length > 0) {
-             setSimulatedNew20Songs(originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating})));
-        } else { setSimulatedNew20Songs([]); }
-        setCurrentPhase('idle');
-        setSimulationTargetList('idle');
-    }
 
-    if (actualStrategyChanged) {
-        prevCalculationStrategyRef.current = currentStrat;
-    }
+      setIsSimulating(true);
+      setCurrentPhase('simulating');
+      setSimulationLog(["Preparing simulation input..."]);
+
+      const currentRatingNum = parseFloat(currentRatingDisplay);
+      const targetRatingNum = parseFloat(targetRatingDisplay);
+      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10;
+      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95;
+
+      const simulationInput: SimulationInput = {
+        originalB30Songs: JSON.parse(JSON.stringify(originalB30SongsData)), // Deep copy
+        originalNew20Songs: JSON.parse(JSON.stringify(originalNew20SongsData)), // Deep copy
+        allPlayedNewSongsPool: JSON.parse(JSON.stringify(allPlayedNewSongsPool)),
+        allMusicData: JSON.parse(JSON.stringify(allMusicData)),
+        userPlayHistory: JSON.parse(JSON.stringify(userPlayHistory)),
+        currentRating: currentRatingNum,
+        targetRating: targetRatingNum,
+        calculationStrategy: calculationStrategy,
+        isScoreLimitReleased,
+        phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
+      };
+      
+      console.log("[SIM_RUN_EFFECT] Calling runFullSimulation with input:", simulationInput);
+      setSimulationLog(prev => [...prev, "Calling runFullSimulation..."]);
+
+      // Offload the heavy computation to a non-blocking task if possible, or directly call.
+      // For simplicity here, direct call. For web workers, it'd be more complex.
+      try {
+        const result: SimulationOutput = runFullSimulation(simulationInput);
+        console.log("[SIM_RUN_EFFECT] SimulationOutput received:", result);
+        setSimulationLog(prev => [...prev, ...result.simulationLog, `Simulation Ended. Final Phase: ${result.finalPhase}`]);
+
+        setSimulatedB30Songs(result.simulatedB30Songs);
+        setSimulatedNew20Songs(result.simulatedNew20Songs);
+        setSimulatedAverageB30Rating(result.finalAverageB30Rating);
+        setSimulatedAverageNew20Rating(result.finalAverageNew20Rating);
+        setFinalOverallSimulatedRating(result.finalOverallRating);
+        setCurrentPhase(result.finalPhase);
+        if (result.error) {
+          setErrorLoadingData(`Simulation logic error: ${result.error}`);
+        }
+
+      } catch (e: any) {
+          console.error("[SIM_RUN_EFFECT] Error during runFullSimulation call:", e);
+          setErrorLoadingData(`Critical error in simulation: ${e.message}`);
+          setCurrentPhase('error_simulation_logic');
+          setSimulationLog(prev => [...prev, `Critical error: ${e.message}`]);
+      } finally {
+          setIsSimulating(false);
+      }
+    };
+
+    runSimulationAsync();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calculationStrategy, isLoadingSongs, originalB30SongsData, originalNew20SongsData, userNameForApi, currentRatingDisplay, targetRatingDisplay, clientHasMounted, locale, refreshNonce]);
+  }, [
+    calculationStrategy,
+    isLoadingInitialData, // Re-run if data finishes loading AND strategy is set
+    originalB30SongsData, // And other original data lists if they are fetched independently
+    originalNew20SongsData,
+    allPlayedNewSongsPool,
+    allMusicData,
+    userPlayHistory,
+    currentRatingDisplay, // Target rating changes should also re-trigger
+    targetRatingDisplay
+  ]);
 
 
+  // Effect 3: Update combined song list for UI
+  const [combinedTopSongs, setCombinedTopSongs] = useState<Song[]>([]);
   useEffect(() => {
-    if (isLoadingSongs) {
+    if (isLoadingInitialData && !isSimulating) { // If initial data is loading OR simulation is running, don't update combined yet.
       setCombinedTopSongs([]);
       return;
     }
-  
-    const baseB30 = simulatedB30Songs.length > 0 ? simulatedB30Songs : (originalB30SongsData.length > 0 ? originalB30SongsData.map(s => ({...s, targetScore:s.currentScore, targetRating:s.currentRating})) : []);
-    const baseN20 = simulatedNew20Songs.length > 0 ? simulatedNew20Songs : (originalNew20SongsData.length > 0 ? originalNew20SongsData.map(s => ({...s, targetScore:s.currentScore, targetRating:s.currentRating})) : []);
-  
+
+    const baseB30 = simulatedB30Songs.length > 0 ? simulatedB30Songs : originalB30SongsData;
+    const baseN20 = simulatedNew20Songs.length > 0 ? simulatedNew20Songs : originalNew20SongsData;
+
     if (baseB30.length > 0 || baseN20.length > 0) {
       const songMap = new Map<string, Song>();
-  
-      // Use targetRating if in simulation, otherwise currentRating
-      const songsToCombineB30 = baseB30.map(s => ({ ...s, currentRating: (calculationStrategy ? s.targetRating : s.currentRating) }));
+
+      const songsToCombineB30 = baseB30.map(s => ({ ...s, currentRating: s.targetRating })); // Use targetRating from simulation
       songsToCombineB30.forEach(song => songMap.set(`${song.id}_${song.diff}`, { ...song }));
-  
-      const songsToCombineN20 = baseN20.map(s => ({ ...s, currentRating: (calculationStrategy ? s.targetRating : s.currentRating) }));
+
+      const songsToCombineN20 = baseN20.map(s => ({ ...s, currentRating: s.targetRating })); // Use targetRating from simulation
       songsToCombineN20.forEach(song => {
         const key = `${song.id}_${song.diff}`;
-        const new20EffectiveRating = (calculationStrategy ? song.targetRating : song.currentRating);
+        const new20EffectiveRating = s.targetRating;
         if (!songMap.has(key) || (songMap.has(key) && new20EffectiveRating > songMap.get(key)!.currentRating)) {
           songMap.set(key, { ...song, currentRating: new20EffectiveRating });
         }
@@ -521,578 +371,23 @@ export function useChuniResultData({
     } else {
       setCombinedTopSongs([]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simulatedB30Songs, simulatedNew20Songs, originalB30SongsData, originalNew20SongsData, isLoadingSongs, calculationStrategy]); // Added calculationStrategy
-  
-
-  // Calculate simulatedAverageB30Rating
-  useEffect(() => {
-    const songsToAvg = simulatedB30Songs.length > 0 ? simulatedB30Songs : originalB30SongsData;
-    if (songsToAvg.length > 0) {
-      const topSongsForAvg = sortSongsByRatingDesc([...songsToAvg].map(s => ({...s, currentRating: s.targetRating}))).slice(0, BEST_COUNT);
-      const newAverage = topSongsForAvg.length > 0 ? topSongsForAvg.reduce((sum, s) => sum + s.targetRating, 0) / topSongsForAvg.length : 0;
-      const newAverageFixed = parseFloat(newAverage.toFixed(4));
-      setSimulatedAverageB30Rating(newAverageFixed);
-      console.log(`[SIM_AVG_RATING_UPDATE - B30] Calculated new average B30 rating: ${newAverageFixed.toFixed(4)} from ${topSongsForAvg.length} songs. Top song tR: ${topSongsForAvg[0]?.targetRating.toFixed(4) || 'N/A'}`);
-    } else {
-      setSimulatedAverageB30Rating(null);
-    }
-  }, [simulatedB30Songs, originalB30SongsData]);
-
-  // Calculate simulatedAverageNew20Rating
-  useEffect(() => {
-    const songsToAvgN20 = simulatedNew20Songs.length > 0 ? simulatedNew20Songs : originalNew20SongsData;
-    if (songsToAvgN20.length > 0) {
-        const topSongsForN20Avg = sortSongsByRatingDesc([...songsToAvgN20].map(s => ({...s, currentRating: s.targetRating}))).slice(0, NEW_20_COUNT);
-        const newN20Average = topSongsForN20Avg.length > 0 ? topSongsForN20Avg.reduce((sum, s) => sum + s.targetRating, 0) / topSongsForN20Avg.length : 0;
-        const newN20AverageFixed = parseFloat(newN20Average.toFixed(4));
-        setSimulatedAverageNew20Rating(newN20AverageFixed);
-        console.log(`[SIM_AVG_RATING_UPDATE - N20] Calculated new average N20 rating: ${newN20AverageFixed.toFixed(4)} from ${topSongsForN20Avg.length} songs. Top song tR: ${topSongsForN20Avg[0]?.targetRating.toFixed(4) || 'N/A'}`);
-    } else {
-        setSimulatedAverageNew20Rating(null);
-    }
-  }, [simulatedNew20Songs, originalNew20SongsData]);
-
-
-  // Save B30 simulation to cache
-  useEffect(() => {
-    // if (!isLoadingSongs && calculationStrategy && userNameForApi && currentRatingDisplay && targetRatingDisplay &&
-    //     (currentPhase === 'target_reached' || currentPhase === 'stuck_awaiting_replacement' || currentPhase === 'error' ||
-    //      (currentPhase === 'idle' && simulatedAverageB30Rating !== null && parseFloat(currentRatingDisplay || "0") >= parseFloat(targetRatingDisplay || "0"))
-    //     ) &&
-    //     simulatedB30Songs.length > 0 && simulationTargetList !== 'n20' ) {
-
-    //   const ratingDataCacheKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-    //   const ratingDataCacheItem = clientHasMounted ? localStorage.getItem(ratingDataCacheKey) : null;
-    //   let sourceDataTimestamp = 0;
-    //   if (ratingDataCacheItem) { try { sourceDataTimestamp = (JSON.parse(ratingDataCacheItem) as CachedData<any>).timestamp; } catch (e) { console.warn("[SIM_CACHE_SAVE_B30] Could not parse rating_data timestamp for saving.", e); } }
-
-    //   if (sourceDataTimestamp === 0 && originalB30SongsData.length > 0) {
-    //     console.warn("[SIM_CACHE_SAVE_B30] sourceDataTimestamp is 0. Skipping B30 simulation cache save."); return;
-    //   }
-
-    //   const simCacheKeyB30 = getSimulationCacheKey('b30', userNameForApi, currentRatingDisplay, targetRatingDisplay, calculationStrategy);
-    //   if (simCacheKeyB30) {
-    //     const resultToCache: CachedSimulationResult = {
-    //       timestamp: Date.now(), sourceDataTimestamp,
-    //       simulatedB30Songs: simulatedB30Songs,
-    //       simulatedAverageB30Rating: simulatedAverageB30Rating,
-    //       finalPhase: currentPhase,
-    //     };
-    //     console.log(`[SIM_CACHE_SAVE] Saving B30 simulation result to cache for key ${simCacheKeyB30}. Phase: ${currentPhase}, SourceTS: ${sourceDataTimestamp}`);
-    //     setCachedData<CachedSimulationResult>(simCacheKeyB30, resultToCache, SIMULATION_CACHE_EXPIRY_MS);
-    //   }
-    // }
-  }, [currentPhase, calculationStrategy, simulatedB30Songs, simulatedAverageB30Rating, isLoadingSongs, userNameForApi, currentRatingDisplay, targetRatingDisplay, clientHasMounted, originalB30SongsData.length, simulationTargetList]);
-
-  // Save N20 simulation to cache
-  useEffect(() => {
-    // if (!isLoadingSongs && calculationStrategy && userNameForApi && currentRatingDisplay && targetRatingDisplay &&
-    //     (currentPhase === 'target_reached' || currentPhase === 'stuck_awaiting_replacement' || currentPhase === 'error' ||
-    //      (currentPhase === 'idle' && simulatedAverageB30Rating !== null && parseFloat(currentRatingDisplay || "0") >= parseFloat(targetRatingDisplay || "0")) 
-    //     ) &&
-    //     simulatedNew20Songs.length > 0 && simulationTargetList !== 'b30' ) {
-
-    //   const ratingDataCacheKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
-    //   const ratingDataCacheItem = clientHasMounted ? localStorage.getItem(ratingDataCacheKey) : null;
-    //   let sourceDataTimestamp = 0;
-    //   if (ratingDataCacheItem) { try { sourceDataTimestamp = (JSON.parse(ratingDataCacheItem) as CachedData<any>).timestamp; } catch (e) { console.warn("[SIM_CACHE_SAVE_N20] Could not parse rating_data timestamp for saving.", e); } }
-
-    //   if (sourceDataTimestamp === 0 && originalNew20SongsData.length > 0) {
-    //      console.warn("[SIM_CACHE_SAVE_N20] sourceDataTimestamp is 0. Skipping N20 simulation cache save."); return;
-    //   }
-
-    //   const simCacheKeyN20 = getSimulationCacheKey('n20', userNameForApi, currentRatingDisplay, targetRatingDisplay, calculationStrategy);
-    //   if (simCacheKeyN20) {
-    //     const resultToCache: CachedSimulationResult = {
-    //       timestamp: Date.now(), sourceDataTimestamp,
-    //       simulatedB30Songs: simulatedNew20Songs, // N20 songs are stored in the 'simulatedB30Songs' field of N20 cache item
-    //       simulatedAverageB30Rating: simulatedAverageNew20Rating, // N20 average is stored in 'simulatedAverageB30Rating' field of N20 cache item
-    //       finalPhase: currentPhase,
-    //     };
-    //     console.log(`[SIM_CACHE_SAVE] Saving N20 simulation result to cache for key ${simCacheKeyN20}. Phase: ${currentPhase}, SourceTS: ${sourceDataTimestamp}`);
-    //     setCachedData<CachedSimulationResult>(simCacheKeyN20, resultToCache, SIMULATION_CACHE_EXPIRY_MS);
-    //   }
-    // }
-  }, [currentPhase, calculationStrategy, simulatedNew20Songs, simulatedAverageNew20Rating, isLoadingSongs, userNameForApi, currentRatingDisplay, targetRatingDisplay, clientHasMounted, originalNew20SongsData.length, simulationTargetList, simulatedAverageB30Rating]); // Added simulatedAverageB30Rating dependency for N20 cache condition
-
-
-  // --- MAIN SIMULATION PHASE CONTROLLER ---
-  useEffect(() => {
-    if (isLoadingSongs || !calculationStrategy || currentPhase === 'target_reached' || currentPhase === 'error' || simulationTargetList === 'idle') {
-        if(currentPhase === 'target_reached') console.log("[SIM_MAIN_LOOP] Target reached. Simulation idle.");
-        if(currentPhase === 'error') console.log(`[SIM_MAIN_LOOP] Error state for list ${simulationTargetList}. Simulation idle.`);
-        return;
-    }
-    console.log(`[SIM_MAIN_LOOP] Current Phase: ${currentPhase}, Target List: ${simulationTargetList}`);
-
-    const targetRatingNum = parseFloat(targetRatingDisplay || "0");
-    const currentOverallSimRating =
-        (simulatedAverageB30Rating !== null && simulatedAverageNew20Rating !== null && originalB30SongsData.length >= BEST_COUNT && originalNew20SongsData.length > 0)
-        ? ((simulatedAverageB30Rating * BEST_COUNT) + (simulatedAverageNew20Rating * Math.min(originalNew20SongsData.length, NEW_20_COUNT))) / (BEST_COUNT + Math.min(originalNew20SongsData.length, NEW_20_COUNT))
-        : (simulatedAverageB30Rating !== null && originalB30SongsData.length >= BEST_COUNT)
-            ? simulatedAverageB30Rating
-            : parseFloat(currentRatingDisplay || "0");
-
-    if (currentOverallSimRating >= targetRatingNum) {
-        console.log(`[SIM_MAIN_LOOP] Overall target ${targetRatingNum.toFixed(4)} reached with current sim rating ${currentOverallSimRating.toFixed(4)}. Setting phase to target_reached.`);
-        setCurrentPhase('target_reached');
-        setSimulationTargetList('idle');
-        return;
-    }
-
-    const isB30Target = simulationTargetList === 'b30';
-    const activeSimulatedList = isB30Target ? simulatedB30Songs : simulatedNew20Songs;
-    const activeOriginalList = isB30Target ? originalB30SongsData : originalNew20SongsData;
-    const setActiveSimulatedList = isB30Target ? setSimulatedB30Songs : setSimulatedNew20Songs;
-    const activeSortedPrimaryLeapCandidates = isB30Target ? sortedPrimaryLeapCandidatesB30 : sortedPrimaryLeapCandidatesN20;
-    const setActiveSortedPrimaryLeapCandidates = isB30Target ? setSortedPrimaryLeapCandidatesB30 : setSortedPrimaryLeapCandidatesN20;
-    const activeFineTuningCandidateSongs = isB30Target ? fineTuningCandidateSongsB30 : fineTuningCandidateSongsN20;
-    const setActiveFineTuningCandidateSongs = isB30Target ? setFineTuningCandidateSongsB30 : setFineTuningCandidateSongsN20;
-    const activeSongToReplace = isB30Target ? songToReplaceB30 : songToReplaceN20;
-    const setActiveSongToReplace = isB30Target ? setSongToReplaceB30 : setSongToReplaceN20;
-    const activeCandidateSongsForReplacement = isB30Target ? candidateSongsForReplacementB30 : candidateSongsForReplacementN20;
-    const setActiveCandidateSongsForReplacement = isB30Target ? setCandidateSongsForReplacementB30 : setCandidateSongsForReplacementN20;
-    const activeOptimalCandidateSong = isB30Target ? optimalCandidateSongB30 : optimalCandidateSongN20;
-    const setActiveOptimalCandidateSong = isB30Target ? setOptimalCandidateSongB30 : setOptimalCandidateSongN20;
-    const activeAverageRating = isB30Target ? simulatedAverageB30Rating : simulatedAverageNew20Rating;
-    const listName = isB30Target ? "B30" : "N20";
-
-
-    // --- LEAP PHASE LOGIC ---
-    if (currentPhase === 'initializing_leap_phase') {
-        console.log(`[SIM_DEBUG_LEAP_INIT - ${listName}] Phase: Initializing Leap. Strategy: ${calculationStrategy}. Full list before sort:`, activeSimulatedList.length);
-        const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
-        const updatableSongs = activeSimulatedList.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
-
-        if (updatableSongs.length === 0) {
-            console.log(`[SIM_DEBUG_LEAP_INIT - ${listName}] No updatable songs with valid const. Moving to fine-tuning init for ${listName}.`);
-            setCurrentPhase('initializing_fine_tuning_phase'); return;
-        }
-
-        let sortedCandidates: Song[] = [];
-        if (calculationStrategy === 'floor') {
-            // "저점" 전략: (isSongHighConstantForFloor 규칙은 현재 비활성화됨) 상수 낮은 순 -> 레이팅 낮은 순 -> 점수 낮은 순.
-            sortedCandidates = [...updatableSongs].sort((a, b) => {
-                // const aIsHighConst = isSongHighConstantForFloor(a, activeAverageRating); // Currently disabled rule
-                // const bIsHighConst = isSongHighConstantForFloor(b, activeAverageRating);
-                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; 
-
-                const constA = a.chartConstant ?? Infinity; const constB = b.chartConstant ?? Infinity;
-                if (constA !== constB) return constA - constB;
-                if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                return a.targetScore - b.targetScore;
-            });
-            console.log(`[SIM_DEBUG_LEAP_INIT - ${listName}] Floor Strategy (No HighConstantRule) - Sorted all updatable: ${sortedCandidates.length}. Top: ${sortedCandidates[0]?.title} (Const: ${sortedCandidates[0]?.chartConstant}, tR: ${sortedCandidates[0]?.targetRating.toFixed(4)})`);
-        } else if (calculationStrategy === 'peak') {
-             // "고점" 전략: 레이팅 높은 순 -> 점수 높은 순 (갱신 가능 곡 대상)
-            sortedCandidates = [...updatableSongs].sort((a, b) => {
-                if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating;
-                return b.targetScore - a.targetScore;
-            });
-             console.log(`[SIM_DEBUG_LEAP_INIT - ${listName}] Peak Strategy - Sorted all updatable: ${sortedCandidates.length}. Top: ${sortedCandidates[0]?.title} (tR: ${sortedCandidates[0]?.targetRating.toFixed(4)})`);
-        }
-        setActiveSortedPrimaryLeapCandidates(sortedCandidates);
-        if (sortedCandidates.length > 0 ) setCurrentPhase('analyzing_leap_efficiency');
-        else { console.log(`[SIM_DEBUG_LEAP_INIT - ${listName}] No candidates after sort. Moving to fine-tuning init.`); setCurrentPhase('initializing_fine_tuning_phase'); }
-    }
-
-    if (currentPhase === 'analyzing_leap_efficiency') {
-        console.log(`[SIM_DEBUG_LEAP_ANALYZE - ${listName}] Phase: Analyzing Leap Efficiency. Candidates: ${activeSortedPrimaryLeapCandidates.length}`);
-        if (activeSortedPrimaryLeapCandidates.length === 0) {
-             console.log(`[SIM_DEBUG_LEAP_ANALYZE - ${listName}] No candidates to analyze. Moving to fine-tuning init.`);
-             setCurrentPhase('initializing_fine_tuning_phase'); return;
-        }
-        setCurrentPhase('performing_leap_jump');
-    }
-
-    if (currentPhase === 'performing_leap_jump') {
-        let optimalLeapSong: (Song & { leapEfficiency?: number; scoreToReachNextGrade?: number; ratingAtNextGrade?: number }) | null = null;
-
-        if (calculationStrategy === 'floor') {
-            const songToAttemptLeap = activeSortedPrimaryLeapCandidates[0]; 
-            if (songToAttemptLeap) {
-                const nextGradeScore = getNextGradeBoundaryScore(songToAttemptLeap.targetScore);
-                let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
-                if (songToAttemptLeap.chartConstant && nextGradeScore && songToAttemptLeap.targetScore < nextGradeScore) {
-                    const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, songToAttemptLeap.chartConstant);
-                    const ratingIncrease = potentialRatingAtNextGrade - songToAttemptLeap.targetRating;
-                    const scoreIncrease = nextGradeScore - songToAttemptLeap.targetScore;
-                    if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease; // Ensure meaningful increase
-                    scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
-                }
-                if (leapEfficiency > 0 && scoreToReachNextGrade && ratingAtNextGrade) { // Ensure leap is possible and efficient
-                    optimalLeapSong = { ...songToAttemptLeap, leapEfficiency, scoreToReachNextGrade, ratingAtNextGrade };
-                    console.log(`[SIM_DEBUG_LEAP_PERFORM - ${listName}] Floor Strategy: Attempting leap for ${optimalLeapSong.title}. Efficiency: ${leapEfficiency.toFixed(6)}`);
-                } else {
-                    console.log(`[SIM_DEBUG_LEAP_PERFORM - ${listName}] Floor Strategy: Leap not possible/efficient for ${songToAttemptLeap.title}. Moving to fine-tuning init.`);
-                    setCurrentPhase('initializing_fine_tuning_phase'); return;
-                }
-            } else {
-                console.log(`[SIM_DEBUG_LEAP_PERFORM - ${listName}] Floor Strategy: No candidates in sorted list. Moving to fine-tuning init.`);
-                setCurrentPhase('initializing_fine_tuning_phase'); return;
-            }
-        } else if (calculationStrategy === 'peak') {
-            const songsWithCalculatedEfficiency = activeSortedPrimaryLeapCandidates.map(song => {
-                const nextGradeScore = getNextGradeBoundaryScore(song.targetScore);
-                let leapEfficiency = 0; let scoreToReachNextGrade: number | undefined = undefined; let ratingAtNextGrade: number | undefined = undefined;
-                if (song.chartConstant && nextGradeScore && song.targetScore < nextGradeScore) {
-                    const currentSongRating = song.targetRating;
-                    const potentialRatingAtNextGrade = calculateChunithmSongRating(nextGradeScore, song.chartConstant);
-                    const ratingIncrease = potentialRatingAtNextGrade - currentSongRating;
-                    const scoreIncrease = nextGradeScore - song.targetScore;
-                    if (scoreIncrease > 0 && ratingIncrease > 0.00005) leapEfficiency = ratingIncrease / scoreIncrease;
-                    scoreToReachNextGrade = nextGradeScore; ratingAtNextGrade = potentialRatingAtNextGrade;
-                }
-                return { ...song, leapEfficiency, scoreToReachNextGrade, ratingAtNextGrade };
-            }).filter(s => s.leapEfficiency !== undefined && s.leapEfficiency > 0);
-            if (songsWithCalculatedEfficiency.length > 0) {
-                optimalLeapSong = [...songsWithCalculatedEfficiency].sort((a, b) => (b.leapEfficiency || 0) - (a.leapEfficiency || 0))[0];
-                console.log(`[SIM_DEBUG_LEAP_PERFORM - ${listName}] Peak Strategy: Attempting leap for ${optimalLeapSong.title}. Efficiency: ${optimalLeapSong.leapEfficiency?.toFixed(6)}`);
-            }
-        }
-
-        if (!optimalLeapSong || typeof optimalLeapSong.scoreToReachNextGrade !== 'number' || typeof optimalLeapSong.ratingAtNextGrade !== 'number') {
-            console.log(`[SIM_DEBUG_LEAP_PERFORM - ${listName}] No optimal leap song found or invalid data. Moving to fine-tuning init.`);
-            setCurrentPhase('initializing_fine_tuning_phase'); return;
-        }
-
-        const newSimulatedList = activeSimulatedList.map(song =>
-            (song.id === optimalLeapSong!.id && song.diff === optimalLeapSong!.diff)
-            ? { ...song, targetScore: optimalLeapSong!.scoreToReachNextGrade!, targetRating: parseFloat(optimalLeapSong!.ratingAtNextGrade!.toFixed(4)) }
-            : song
-        );
-        setActiveSimulatedList(newSimulatedList);
-        setCurrentPhase('evaluating_leap_result');
-    }
-
-    if (currentPhase === 'evaluating_leap_result') {
-      if (activeAverageRating === null || phaseTransitionPoint === null) { setCurrentPhase('error'); setSimulationTargetList('idle'); console.error(`[SIM_DEBUG_LEAP_EVAL - ${listName}] Error: activeAverageRating or phaseTransitionPoint is null.`); return; }
-      console.log(`[SIM_DEBUG_LEAP_EVAL - ${listName}] Avg Rating: ${activeAverageRating.toFixed(4)}, Target Overall: ${targetRatingNum.toFixed(4)}, Transition Pt: ${phaseTransitionPoint.toFixed(4)}`);
-
-      if (currentOverallSimRating >= targetRatingNum) { setCurrentPhase('target_reached'); setSimulationTargetList('idle'); return; }
-
-      // For B30: if avg B30 >= transition point, switch B30 to fine-tuning.
-      // For N20: there's no separate transition point for N20 within its own loop usually, it just tries to max out.
-      //          However, if B30 switched to N20 because B30 was stuck, N20 might also consider a transition or directly go to stuck.
-      //          For now, N20 will loop leap or move to its own fine-tuning.
-      if (isB30Target && activeAverageRating >= phaseTransitionPoint) {
-        console.log(`[SIM_DEBUG_LEAP_EVAL - B30] Avg B30 rating ${activeAverageRating.toFixed(4)} >= transition point ${phaseTransitionPoint.toFixed(4)}. Transitioning B30 to fine-tuning.`);
-        setCurrentPhase('transitioning_to_fine_tuning'); // This phase will correctly target B30
-      } else { 
-        console.log(`[SIM_DEBUG_LEAP_EVAL - ${listName}] Looping leap phase for ${listName}.`);
-        setCurrentPhase('initializing_leap_phase'); // Will re-init for the current targetList
-      }
-    }
-
-    // --- FINE-TUNING PHASE LOGIC ---
-    if (currentPhase === 'transitioning_to_fine_tuning') {
-      console.log(`[SIM_DEBUG_FINE_TRANSITION - ${listName}] Transitioning to fine-tuning for ${listName}.`);
-      setCurrentPhase('initializing_fine_tuning_phase');
-    }
-
-    if (currentPhase === 'initializing_fine_tuning_phase') {
-        console.log(`[SIM_DEBUG_FINE_INIT - ${listName}] Phase: Initializing Fine-Tuning. Strategy: ${calculationStrategy}`);
-        const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
-        const updatableSongs = activeSimulatedList.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
-
-        if (updatableSongs.length === 0) {
-            console.log(`[SIM_DEBUG_FINE_INIT - ${listName}] No updatable songs. Moving to stuck/replacement for ${listName}.`);
-            setCurrentPhase('stuck_awaiting_replacement'); return;
-        }
-
-        let sortedCandidates: Song[] = [];
-        if (calculationStrategy === 'floor') {
-            // "저점" 전략: (isSongHighConstantForFloor 규칙은 현재 비활성화됨) 상수 낮은 순 -> 레이팅 낮은 순 -> 점수 낮은 순.
-            sortedCandidates = [...updatableSongs].sort((a, b) => {
-                // const aIsHighConst = isSongHighConstantForFloor(a, activeAverageRating); // Currently disabled rule
-                // const bIsHighConst = isSongHighConstantForFloor(b, activeAverageRating);
-                // if (aIsHighConst !== bIsHighConst) return aIsHighConst ? 1 : -1; 
-
-                const constA = a.chartConstant ?? Infinity; const constB = b.chartConstant ?? Infinity;
-                if (constA !== constB) return constA - constB;
-                if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating;
-                return a.targetScore - b.targetScore;
-            });
-            console.log(`[SIM_DEBUG_FINE_INIT - ${listName}] Floor Strategy (No HighConstantRule) - Sorted for fine-tuning: ${sortedCandidates.length}. Top: ${sortedCandidates[0]?.title} (Const: ${sortedCandidates[0]?.chartConstant}, tR: ${sortedCandidates[0]?.targetRating.toFixed(4)})`);
-        } else if (calculationStrategy === 'peak') {
-            // "고점" 전략: 레이팅 높은 순 -> 점수 높은 순
-            sortedCandidates = [...updatableSongs].sort((a, b) => {
-                if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating;
-                return b.targetScore - a.targetScore;
-            });
-            console.log(`[SIM_DEBUG_FINE_INIT - ${listName}] Peak Strategy - Sorted for fine-tuning: ${sortedCandidates.length}. Top: ${sortedCandidates[0]?.title} (tR: ${sortedCandidates[0]?.targetRating.toFixed(4)})`);
-        }
-        setActiveFineTuningCandidateSongs(sortedCandidates);
-        if (sortedCandidates.length > 0) setCurrentPhase('performing_fine_tuning');
-        else { console.log(`[SIM_DEBUG_FINE_INIT - ${listName}] No candidates after sort for fine-tuning. Moving to stuck/replacement.`); setCurrentPhase('stuck_awaiting_replacement'); }
-    }
-
-    if (currentPhase === 'performing_fine_tuning') {
-      let newSimulatedList = [...activeSimulatedList];
-      const scoreCap = isScoreLimitReleased ? 1010000 : 1009000;
-      let songWasUpdatedThisPass = false;
-
-      if(activeFineTuningCandidateSongs.length === 0) {
-          console.log(`[SIM_DEBUG_FINE_PERFORM - ${listName}] No candidates for fine-tuning. Moving to stuck/replacement.`);
-          setCurrentPhase('stuck_awaiting_replacement'); return;
-      }
-      console.log(`[SIM_DEBUG_FINE_PERFORM - ${listName}] Candidates for fine-tuning: ${activeFineTuningCandidateSongs.length}. Top: ${activeFineTuningCandidateSongs[0]?.title}`);
-
-      for (const candidateSong of activeFineTuningCandidateSongs) {
-        const songIndexInSimulated = newSimulatedList.findIndex(s => s.id === candidateSong.id && s.diff === candidateSong.diff);
-        if (songIndexInSimulated === -1) continue;
-
-        let currentSongInSim = newSimulatedList[songIndexInSimulated];
-        if (currentSongInSim.targetScore < scoreCap && currentSongInSim.chartConstant) {
-          const targetMicroTuneRating = currentSongInSim.targetRating + 0.0001;
-          const minScoreInfo = findMinScoreForTargetRating(currentSongInSim, targetMicroTuneRating, isScoreLimitReleased);
-
-          if (minScoreInfo.possible && minScoreInfo.score > currentSongInSim.targetScore && minScoreInfo.score <= scoreCap) {
-            const updatedSong = { ...currentSongInSim, targetScore: minScoreInfo.score, targetRating: parseFloat(minScoreInfo.rating.toFixed(4)) };
-            newSimulatedList[songIndexInSimulated] = updatedSong;
-            songWasUpdatedThisPass = true;
-            console.log(`[SIM_DEBUG_FINE_PERFORM - ${listName}] Updated ${updatedSong.title}: tS ${updatedSong.targetScore}, tR ${updatedSong.targetRating.toFixed(4)}`);
-            break; // Only update one song per pass
-          }
-        }
-      }
-
-      if (songWasUpdatedThisPass) {
-        setActiveSimulatedList(newSimulatedList);
-        setCurrentPhase('evaluating_fine_tuning_result');
-      } else {
-        console.log(`[SIM_DEBUG_FINE_PERFORM - ${listName}] No songs updated in this fine-tuning pass. Moving to stuck/replacement.`);
-        setActiveFineTuningCandidateSongs([]); // Clear candidates as none were usable
-        setCurrentPhase('stuck_awaiting_replacement');
-      }
-    }
-
-    if (currentPhase === 'evaluating_fine_tuning_result') {
-      if (activeAverageRating === null) { setCurrentPhase('error'); setSimulationTargetList('idle'); console.error(`[SIM_DEBUG_FINE_EVAL - ${listName}] Error: activeAverageRating is null.`); return; }
-      console.log(`[SIM_DEBUG_FINE_EVAL - ${listName}] Avg Rating: ${activeAverageRating.toFixed(4)}, Target Overall: ${targetRatingNum.toFixed(4)}`);
-
-      if (currentOverallSimRating >= targetRatingNum) { setCurrentPhase('target_reached'); setSimulationTargetList('idle'); return; }
-      else { setCurrentPhase('initializing_fine_tuning_phase'); } // Loop fine-tuning for current targetList
-    }
-
-    // --- B30/N20 REPLACEMENT PHASE LOGIC ---
-    if (currentPhase === 'stuck_awaiting_replacement') {
-        if (activeSimulatedList.length === 0 && activeOriginalList.length > 0) {
-             console.error(`[SIM_DEBUG_REPLACE_INIT - ${listName}] Stuck, but activeSimulatedList is empty while original had data. Erroring for ${listName}.`);
-             // If B30 failed this way, try N20. If N20 failed this way, global error.
-             if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_INIT - B30] B30 list became empty. Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-             else { console.error(`[SIM_DEBUG_REPLACE_INIT - N20] N20 list also became empty. Global error.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-             return;
-        }
-        if (activeSimulatedList.length === 0 && activeOriginalList.length === 0) {
-             console.log(`[SIM_DEBUG_REPLACE_INIT - ${listName}] Stuck, and list was initially empty or became empty. Cannot replace for ${listName}.`);
-             if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_INIT - B30] B30 list empty. Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-             else { console.error(`[SIM_DEBUG_REPLACE_INIT - N20] N20 list also empty. Global error.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-             return;
-        }
-
-      const sortedListForReplacement = [...activeSimulatedList].sort((a, b) => a.targetRating - b.targetRating);
-      const songOut = sortedListForReplacement[0];
-      if (songOut) {
-        console.log(`[SIM_DEBUG_REPLACE_INIT - ${listName}] Stuck. Song to potentially replace (lowest tR in ${listName}): ${songOut.title} (${songOut.diff}), tR: ${songOut.targetRating.toFixed(4)}`);
-        setActiveSongToReplace(songOut);
-        setCurrentPhase('awaiting_external_data_for_replacement');
-      } else {
-        console.error(`[SIM_DEBUG_REPLACE_INIT - ${listName}] Stuck, but no song found to replace. This should not happen if list is not empty. Erroring for ${listName}.`);
-        if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_INIT - B30] Error finding song to replace. Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-        else { console.error(`[SIM_DEBUG_REPLACE_INIT - N20] Error finding song to replace. Global error.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-      }
-    }
-
-    if (currentPhase === 'awaiting_external_data_for_replacement') {
-      console.log(`[SIM_DEBUG_REPLACE_AWAIT_DATA - ${listName}] Awaiting external data for replacement.`);
-      const necessaryDataPresent = isB30Target
-        ? (allMusicData && allMusicData.length > 0 && activeSongToReplace)
-        : (allPlayedNewSongsPool && allPlayedNewSongsPool.length > 0 && activeSongToReplace);
-
-      if (necessaryDataPresent) {
-        console.log(`[SIM_DEBUG_REPLACE_AWAIT_DATA - ${listName}] External data present. Moving to identify candidates.`);
-        setCurrentPhase('identifying_candidates');
-      } else {
-          console.log(`[SIM_DEBUG_REPLACE_AWAIT_DATA - ${listName}] Waiting. AllMusic: ${allMusicData?.length}, UserPlayHistory (for B30 map): ${userPlayHistory?.length}, AllPlayedNewPool (for N20): ${allPlayedNewSongsPool?.length}, SongToReplace: ${!!activeSongToReplace}`);
-          if (!activeSongToReplace) { console.error(`[SIM_DEBUG_REPLACE_AWAIT_DATA - ${listName}] SongToReplace is null. Erroring for ${listName}.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-          else if (isB30Target && (!allMusicData || allMusicData.length === 0)) {
-             console.warn(`[SIM_DEBUG_REPLACE_AWAIT_DATA - B30] Missing allMusicData for B30 replacement. Switching to N20 simulation.`);
-             setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase');
-          }
-          else if (!isB30Target && (!allPlayedNewSongsPool || allPlayedNewSongsPool.length === 0)) {
-             console.error(`[SIM_DEBUG_REPLACE_AWAIT_DATA - N20] Missing allPlayedNewSongsPool for N20 replacement. Global error.`);
-             setCurrentPhase('error'); setSimulationTargetList('idle');
-          }
-      }
-    }
-
-    if (currentPhase === 'identifying_candidates') {
-      if (!activeSongToReplace) { console.error(`[SIM_DEBUG_REPLACE_IDENTIFY - ${listName}] activeSongToReplace is null. Erroring for ${listName}.`); setCurrentPhase('error'); setSimulationTargetList('idle'); return; }
-      console.log(`[SIM_DEBUG_REPLACE_IDENTIFY - ${listName}] Identifying candidates for ${activeSongToReplace.title} (tR: ${activeSongToReplace.targetRating.toFixed(4)})`);
-
-      let potentialCandidates: Song[] = [];
-      if (isB30Target) {
-          const currentB30IdsAndDiffs = new Set(simulatedB30Songs.map(s => `${s.id}_${s.diff}`));
-          const newSongsTitlesLower = (NewSongsData.titles?.verse || []).map(t => t.trim().toLowerCase());
-
-          potentialCandidates = allMusicData.filter(globalSong => {
-            if (!globalSong.id || !globalSong.diff || !globalSong.title) return false;
-            if (currentB30IdsAndDiffs.has(`${globalSong.id}_${globalSong.diff.toUpperCase()}`)) return false;
-            if (newSongsTitlesLower.includes(globalSong.title.trim().toLowerCase())) return false; 
-            const tempSongObj = mapApiSongToAppSong(globalSong, 0, globalSong.const);
-            if (!tempSongObj.chartConstant) return false;
-            const scoreForMaxRating = isScoreLimitReleased ? 1010000 : 1009000;
-            const potentialMaxRating = calculateChunithmSongRating(scoreForMaxRating, tempSongObj.chartConstant);
-            return potentialMaxRating > activeSongToReplace.targetRating;
-          }).map(apiEntry => {
-            const playedVersion = userPlayHistory.find(p => p.id === apiEntry.id && p.diff.toUpperCase() === apiEntry.diff.toUpperCase());
-            return mapApiSongToAppSong(playedVersion ? { ...apiEntry, score: playedVersion.score, rating: playedVersion.rating } : { ...apiEntry, score: 0, rating: 0 }, 0, apiEntry.const);
-          }).filter(song => song.chartConstant !== null);
-          console.log(`[SIM_DEBUG_REPLACE_IDENTIFY - B30] Found ${potentialCandidates.length} potential B30 replacement candidates from allMusicData (after filtering out NewSongs).`);
-      } else { // N20 target
-          const currentN20IdsAndDiffs = new Set(simulatedNew20Songs.map(s => `${s.id}_${s.diff}`));
-          potentialCandidates = allPlayedNewSongsPool.filter(newSongPoolEntry => { 
-              if (currentN20IdsAndDiffs.has(`${newSongPoolEntry.id}_${newSongPoolEntry.diff}`)) return false;
-              if (!newSongPoolEntry.chartConstant) return false;
-              const scoreForMaxRating = isScoreLimitReleased ? 1010000 : 1009000;
-              const potentialMaxRating = calculateChunithmSongRating(scoreForMaxRating, newSongPoolEntry.chartConstant);
-              return potentialMaxRating > activeSongToReplace.targetRating;
-          });
-          console.log(`[SIM_DEBUG_REPLACE_IDENTIFY - N20] Found ${potentialCandidates.length} potential N20 replacement candidates from allPlayedNewSongsPool.`);
-      }
-
-      setActiveCandidateSongsForReplacement(potentialCandidates);
-      if (potentialCandidates.length > 0) setCurrentPhase('candidates_identified');
-      else {
-        console.warn(`[SIM_DEBUG_REPLACE_IDENTIFY - ${listName}] No replacement candidates found.`);
-        if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_IDENTIFY - B30] Switching to N20 simulation.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-        else { console.error(`[SIM_DEBUG_REPLACE_IDENTIFY - N20] No N20 candidates. Global error.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-      }
-    }
-
-    if (currentPhase === 'candidates_identified') {
-        if (activeCandidateSongsForReplacement.length === 0 || !activeSongToReplace) {
-            console.warn(`[SIM_DEBUG_REPLACE_CANDIDATES_ID - ${listName}] No candidates or song to replace.`);
-            if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_CANDIDATES_ID - B30] Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-            else { console.error(`[SIM_DEBUG_REPLACE_CANDIDATES_ID - N20] Error state for N20.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-            return;
-        }
-        console.log(`[SIM_DEBUG_REPLACE_CANDIDATES_ID - ${listName}] ${activeCandidateSongsForReplacement.length} candidates for ${activeSongToReplace.title}. Selecting optimal.`);
-        setCurrentPhase('selecting_optimal_candidate');
-    }
-
-    if (currentPhase === 'selecting_optimal_candidate') {
-      if (!activeSongToReplace || activeCandidateSongsForReplacement.length === 0) {
-          console.warn(`[SIM_DEBUG_REPLACE_SELECT_OPT - ${listName}] No song to replace or no candidates.`);
-          if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_SELECT_OPT - B30] Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-          else { console.error(`[SIM_DEBUG_REPLACE_SELECT_OPT - N20] Error state for N20.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-          return;
-      }
-      let bestCandidateInfo: { song: Song | null; effort: number; neededScore: number; resultingRating: number } = { song: null, effort: Infinity, neededScore: 0, resultingRating: 0 };
-      activeCandidateSongsForReplacement.forEach(candidate => {
-        if (!candidate.chartConstant) return;
-        const targetRatingForCandidate = activeSongToReplace.targetRating + 0.0001; // Must be strictly better
-        const minScoreInfo = findMinScoreForTargetRating(candidate, targetRatingForCandidate, isScoreLimitReleased);
-        if (minScoreInfo.possible) {
-          const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : minScoreInfo.score; // Prioritize already played songs less effort
-          if (effort < bestCandidateInfo.effort || (effort === bestCandidateInfo.effort && minScoreInfo.rating > bestCandidateInfo.resultingRating)) {
-            bestCandidateInfo = { song: candidate, effort, neededScore: minScoreInfo.score, resultingRating: parseFloat(minScoreInfo.rating.toFixed(4)) };
-          }
-        }
-      });
-
-      if (bestCandidateInfo.song) {
-        setActiveOptimalCandidateSong({ ...bestCandidateInfo.song, targetScore: bestCandidateInfo.neededScore, targetRating: bestCandidateInfo.resultingRating });
-        console.log(`[SIM_DEBUG_REPLACE_SELECT_OPT - ${listName}] Optimal candidate: ${bestCandidateInfo.song.title} (Diff: ${bestCandidateInfo.song.diff}), Score: ${bestCandidateInfo.neededScore}, Rating: ${bestCandidateInfo.resultingRating.toFixed(4)}`);
-        setCurrentPhase('optimal_candidate_selected');
-      } else {
-        console.warn(`[SIM_DEBUG_REPLACE_SELECT_OPT - ${listName}] No optimal candidate found that meets criteria.`);
-        if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_SELECT_OPT - B30] Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-        else { console.error(`[SIM_DEBUG_REPLACE_SELECT_OPT - N20] Error state for N20.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-      }
-    }
-
-    if (currentPhase === 'optimal_candidate_selected') {
-        if (!activeOptimalCandidateSong || !activeSongToReplace) {
-             console.warn(`[SIM_DEBUG_REPLACE_OPTIMAL_SELECTED - ${listName}] No optimal song or song to replace.`);
-             if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_OPTIMAL_SELECTED - B30] Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-             else { console.error(`[SIM_DEBUG_REPLACE_OPTIMAL_SELECTED - N20] Error state for N20.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-             return;
-        }
-        setCurrentPhase('replacing_song');
-    }
-
-    if (currentPhase === 'replacing_song') {
-      if (!activeOptimalCandidateSong || !activeSongToReplace) {
-          console.warn(`[SIM_DEBUG_REPLACE_PERFORM - ${listName}] No optimal song or song to replace for performing replacement.`);
-          if (isB30Target) { console.log(`[SIM_DEBUG_REPLACE_PERFORM - B30] Switching to N20.`); setSimulationTargetList('n20'); setCurrentPhase('initializing_leap_phase'); }
-          else { console.error(`[SIM_DEBUG_REPLACE_PERFORM - N20] Error state for N20.`); setCurrentPhase('error'); setSimulationTargetList('idle'); }
-          return;
-      }
-      console.log(`[SIM_DEBUG_REPLACE_PERFORM - ${listName}] Replacing ${activeSongToReplace.title} (id: ${activeSongToReplace.id}, diff: ${activeSongToReplace.diff}) with ${activeOptimalCandidateSong.title} (id: ${activeOptimalCandidateSong.id}, diff: ${activeOptimalCandidateSong.diff})`);
-      const updatedList = activeSimulatedList.filter(s => !(s.id === activeSongToReplace.id && s.diff === activeSongToReplace.diff));
-      updatedList.push({ ...activeOptimalCandidateSong }); // Add the new song with its target score/rating
-      
-      // Ensure list is sorted and trimmed to correct length for B30 or N20
-      const sortedFullList = sortSongsByRatingDesc(updatedList.map(s => ({ ...s, currentRating: s.targetRating })));
-      const finalList = isB30Target ? sortedFullList.slice(0, BEST_COUNT) : sortedFullList.slice(0, NEW_20_COUNT);
-
-      setActiveSimulatedList(finalList); 
-      setActiveSongToReplace(null); setActiveOptimalCandidateSong(null); setActiveCandidateSongsForReplacement([]);
-      console.log(`[SIM_DEBUG_REPLACE_PERFORM - ${listName}] List updated and trimmed to ${finalList.length}. Restarting simulation for ${listName}.`);
-      setCurrentPhase('initializing_leap_phase'); // Restart simulation for the current list
-    }
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    currentPhase, isLoadingSongs, calculationStrategy, simulationTargetList,
-    targetRatingDisplay, currentRatingDisplay, phaseTransitionPoint, isScoreLimitReleased,
-    // B30 states
-    simulatedB30Songs, originalB30SongsData, simulatedAverageB30Rating,
-    sortedPrimaryLeapCandidatesB30, fineTuningCandidateSongsB30,
-    songToReplaceB30, candidateSongsForReplacementB30, optimalCandidateSongB30,
-    // N20 states
-    simulatedNew20Songs, originalNew20SongsData, simulatedAverageNew20Rating,
-    allPlayedNewSongsPool,
-    sortedPrimaryLeapCandidatesN20, fineTuningCandidateSongsN20,
-    songToReplaceN20, candidateSongsForReplacementN20, optimalCandidateSongN20,
-    // Shared data
-    allMusicData, userPlayHistory,
-    // Setters (to avoid stale closures if any part of logic directly uses them, though mostly through active* vars)
-    // This dependency list is very long, review if further optimization is possible later,
-    // but for correctness, ensuring all read states that influence decisions are listed.
-    setActiveSimulatedB30Songs, setActiveSimulatedNew20Songs,
-    setActiveSortedPrimaryLeapCandidatesB30, setActiveSortedPrimaryLeapCandidatesN20,
-    setActiveFineTuningCandidateSongsB30, setActiveFineTuningCandidateSongsN20,
-    setActiveSongToReplaceB30, setActiveSongToReplaceN20,
-    setActiveCandidateSongsForReplacementB30, setActiveCandidateSongsForReplacementN20,
-    setActiveOptimalCandidateSongB30, setActiveOptimalCandidateSongN20
-  ]);
+  }, [simulatedB30Songs, simulatedNew20Songs, originalB30SongsData, originalNew20SongsData, isLoadingInitialData, isSimulating]);
 
 
   return {
     apiPlayerName,
-    best30SongsData: simulatedB30Songs.length > 0
-      ? simulatedB30Songs
-      : (originalB30SongsData.length > 0
-          ? originalB30SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))
-          : []),
-    new20SongsData: simulatedNew20Songs.length > 0
-      ? simulatedNew20Songs
-      : (originalNew20SongsData.length > 0
-          ? originalNew20SongsData.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))
-          : []),
-    combinedTopSongs, // This is now correctly declared and returned
-    isLoadingSongs,
-    errorLoadingSongs,
+    // Return final simulated states for UI
+    best30SongsData: simulatedB30Songs,
+    new20SongsData: simulatedNew20Songs,
+    combinedTopSongs,
+    isLoadingSongs: isLoadingInitialData || isSimulating, // Combined loading state
+    errorLoadingSongs: errorLoadingData,
     lastRefreshed,
-    isScoreLimitReleased,
-    phaseTransitionPoint,
-    currentPhase,
+    currentPhase, // Simplified phase
     simulatedAverageB30Rating,
     simulatedAverageNew20Rating,
+    finalOverallSimulatedRating, // For display
+    simulationLog, // For potential display on test page or debug
+    // Removed intermediate simulation states as they are now internal to simulation-logic.ts
   };
 }
-

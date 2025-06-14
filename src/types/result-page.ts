@@ -1,8 +1,6 @@
 
 // src/types/result-page.ts
 
-// import type { Song as SongCardSongType } from "@/components/SongCard"; // Keep if SongCard defines it and it's identical
-
 export type ProfileData = {
     player_name: string;
     rating?: number | string;
@@ -58,45 +56,77 @@ export type Song = {
   is_fullcombo?: boolean;
   is_alljustice?: boolean;
   is_const_unknown?: boolean;
+  // Fields for simulation tracking if needed outside the pure function (less likely now)
+  sim_isNewInB30?: boolean; 
+  sim_originalB30Rating?: number;
+  sim_timesImproved?: number;
 };
 
 
 export type GlobalMusicApiResponse = {
-    records?: ShowallApiSongEntry[]; 
+    records?: ShowallApiSongEntry[];
 };
 
 export type UserShowallApiResponse = {
-    records?: ShowallApiSongEntry[]; 
+    records?: ShowallApiSongEntry[];
 };
 
 export type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
+// This phase type might still be useful for the *output* of the pure function
 export type SimulationPhase =
-  | 'idle'
-  | 'initializing_leap_phase'
-  | 'analyzing_leap_efficiency'
-  | 'performing_leap_jump'
-  | 'evaluating_leap_result'
-  | 'transitioning_to_fine_tuning'
-  | 'initializing_fine_tuning_phase'
-  | 'performing_fine_tuning'
-  | 'evaluating_fine_tuning_result'
+  | 'idle' // Or 'not_started'
+  | 'simulating' // Generic state while pure function runs
   | 'target_reached'
-  | 'stuck_awaiting_replacement' 
-  | 'awaiting_external_data_for_replacement'
-  | 'identifying_candidates'
-  | 'candidates_identified'
-  | 'selecting_optimal_candidate'
-  | 'optimal_candidate_selected'
-  | 'replacing_song'
-  | 'error';
+  | 'stuck_b30_no_improvement'
+  | 'stuck_n20_no_improvement'
+  | 'stuck_both_no_improvement' // If B30 got stuck, then N20 also got stuck
+  | 'error_data_fetch' // For initial data loading issues
+  | 'error_simulation_logic' // If pure function itself throws an error
+  // Detailed internal phases (for the pure function's log, not necessarily React state)
+  | 'internal_b30_leap'
+  | 'internal_b30_finetune'
+  | 'internal_b30_replace'
+  | 'internal_n20_leap'
+  | 'internal_n20_finetune'
+  | 'internal_n20_replace';
 
 export type CachedSimulationResult = {
-  timestamp: number; // Timestamp of when this simulation result was cached
-  sourceDataTimestamp: number; // Timestamp of the rating_data used for this simulation
+  timestamp: number;
+  sourceDataTimestamp: number;
   simulatedB30Songs: Song[];
   simulatedAverageB30Rating: number | null;
-  finalPhase: SimulationPhase;
+  simulatedNew20Songs?: Song[]; // Added for N20 cache
+  simulatedAverageNew20Rating?: number | null; // Added for N20 cache
+  finalPhase: SimulationPhase; // Use the updated SimulationPhase
 };
+
+
+// Types for the new pure simulation logic
+export interface SimulationInput {
+  originalB30Songs: Song[];
+  originalNew20Songs: Song[];
+  allPlayedNewSongsPool: Song[]; // All songs from NewSongs.json that user has played (score >= 800k)
+  allMusicData: ShowallApiSongEntry[]; // Flattened global music data
+  userPlayHistory: ShowallApiSongEntry[]; // User's full play history (records/showall)
+  currentRating: number;
+  targetRating: number;
+  calculationStrategy: CalculationStrategy;
+  isScoreLimitReleased: boolean;
+  phaseTransitionPoint: number | null; // Fine-tuning transition point for B30
+  // userNameForApi: string | null; // Potentially for logging within pure function
+  // locale: string; // For logging
+}
+
+export interface SimulationOutput {
+  simulatedB30Songs: Song[];
+  simulatedNew20Songs: Song[];
+  finalAverageB30Rating: number | null;
+  finalAverageNew20Rating: number | null;
+  finalOverallRating: number;
+  finalPhase: SimulationPhase; // e.g., 'target_reached', 'stuck_b30_no_improvement', etc.
+  simulationLog: string[]; // For debugging on the test page
+  error?: string; // If an error occurred within the simulation
+}
