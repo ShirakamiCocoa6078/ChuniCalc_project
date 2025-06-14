@@ -36,7 +36,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.2",
+    appVersion: "ChuniCalc v1.0.3",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -99,13 +99,14 @@ export const translations = {
     resultPageSyncStatusNoCache: "캐시된 사용자 데이터가 없거나 만료되었습니다.",
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
-    resultPageStrategyTitle: "전략 선택",
-    resultPageStrategyB30Only: "Best 30만으로 계산",
-    resultPageStrategyN20Only: "New 20만으로 계산",
-    resultPageStrategyCombinedFloor: "Best 30 + New 20 (저점 우선)",
-    resultPageStrategyCombinedPeak: "Best 30 + New 20 (고점 우선)",
+    resultPageStrategyTitle: "계산 전략 선택",
+    resultPageStrategyB30Focus: "Best 30 집중",
+    resultPageStrategyN20Focus: "New 20 집중",
+    resultPageStrategyCombinedFloor: "통합 (저점 우선)",
+    resultPageStrategyCombinedPeak: "통합 (고점 우선)",
     resultPageStrategyNone: "선택 안함",
-    resultPageStrategyDisclaimer: "* 전략 선택에 따라 시뮬레이션 방식이 변경됩니다.",
+    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 집중 모드로는 최대 ${rating}까지 도달 가능합니다. 목표 레이팅을 조정하거나 다른 전략을 사용해보세요.`,
+    reachableRatingN20OnlyMessage: (rating: string) => `New 20 집중 모드로는 최대 ${rating}까지 도달 가능합니다. 목표 레이팅을 조정하거나 다른 전략을 사용해보세요.`,
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
@@ -125,6 +126,7 @@ export const translations = {
     resultPageToastApiLoadSuccessTitle: "데이터 로드 완료 (API)",
     resultPageToastApiLoadSuccessDesc: (timestamp: string) => `API에서 최신 데이터를 성공적으로 불러와 캐시했습니다. (${timestamp})`,
     resultPageToastCacheLoadSuccessDesc: "로컬 캐시에서 데이터를 성공적으로 불러왔습니다.",
+    resultPageToastCacheLoadSuccessTitle: "데이터 로드 완료 (캐시)",
     resultPageHeaderCurrent: "현재:",
     resultPageHeaderTarget: "목표:",
     resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30만으로 갱신 시, 도달 가능한 최대 레이팅은 ${reachableRating} 입니다. 목표 레이팅을 확인해주세요.`,
@@ -171,7 +173,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.2",
+    appVersion: "ChuniCalc v1.0.3",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     // Toast Messages JP
@@ -205,9 +207,9 @@ export const translations = {
     toastErrorTargetRatingDesc: "目標レーティングは現在レーティングより高くする必要があります。",
     toastSuccessLocalApiKeySaved: "ローカルAPIキー保存完了",
     toastSuccessLocalApiKeySavedDesc: "入力されたAPIキーがローカルストレージに保存されました。",
-    toastSuccessLocalApiKeyRemoved: "ローカルAPIキー削除完了",
-    toastSuccessLocalApiKeyRemovedDesc: "ローカルAPIキーが空のため、ストレージから削除されました。",
-    toastSuccessLocalDataCleared: "ロー컬データ削除完了",
+    toastSuccessLocalApiKeyRemoved: "ロー컬 APIキー削除完了",
+    toastSuccessLocalApiKeyRemovedDesc: "ロー컬 APIキーが空のため、ストレージから削除されました。",
+    toastSuccessLocalDataCleared: "ローカルデータ削除完了",
     toastSuccessLocalDataClearedDesc: (count: number) => `${count}個のアプリ関連ローカルキャッシュデータが削除されました。`,
     toastInfoCachingStarted: "キャッシング開始",
     toastInfoCachingStartedDesc: (target: string) => `${target}を取得中です...`,
@@ -234,13 +236,14 @@ export const translations = {
     resultPageSyncStatusNoCache: "キャッシュされたユーザーデータがないか、期限切れです。",
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
-    resultPageStrategyTitle: "戦略選択",
-    resultPageStrategyB30Only: "Best 30のみ計算",
-    resultPageStrategyN20Only: "New 20のみ計算",
-    resultPageStrategyCombinedFloor: "Best 30 + New 20 (低点優先)",
-    resultPageStrategyCombinedPeak: "Best 30 + New 20 (高点優先)",
+    resultPageStrategyTitle: "計算戦略選択",
+    resultPageStrategyB30Focus: "Best 30 集中",
+    resultPageStrategyN20Focus: "New 20 集中",
+    resultPageStrategyCombinedFloor: "統合 (低点優先)",
+    resultPageStrategyCombinedPeak: "統合 (高点優先)",
     resultPageStrategyNone: "選択なし",
-    resultPageStrategyDisclaimer: "※戦略選択に応じてシミュレーション方式が変更されます。",
+    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 集中モードでは最大 ${rating} まで到達可能です。目標レーティングを調整するか、他の戦略を試してください。`,
+    reachableRatingN20OnlyMessage: (rating: string) => `New 20 集中モードでは最大 ${rating} まで到達可能です。目標レーティングを調整するか、他の戦略を試してください。`,
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
@@ -260,6 +263,7 @@ export const translations = {
     resultPageToastApiLoadSuccessTitle: "データロード完了 (API)",
     resultPageToastApiLoadSuccessDesc: (timestamp: string) => `APIから最新データを正常にロードしキャッシュしました。(${timestamp})`,
     resultPageToastCacheLoadSuccessDesc: "ローカルキャッシュからデータを正常にロードしました。",
+    resultPageToastCacheLoadSuccessTitle: "データロード完了 (キャッシュ)",
     resultPageHeaderCurrent: "現在:",
     resultPageHeaderTarget: "目標:",
     resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30のみの更新では、到達可能な最大レーティングは ${reachableRating} です。目標レーティングを確認してください。`,
@@ -290,19 +294,35 @@ export type TranslationValues = {
     : string;
 };
 
+// Augmenting getTranslation to correctly infer and use the specific locale's type
+// This requires a bit more advanced TypeScript to make it fully type-safe per locale.
+// For simplicity, we'll stick to the current approach which assumes KR keys are the superset.
+// A more robust solution would involve conditional types or mapped types over `translations` itself.
+
+// A helper type for internal use in getTranslation to type check args for specific locale keys
+// This is a conceptual type, actual implementation within getTranslation is tricky without overloads for each key
+type TranslationArgs<L extends Locale, K extends keyof typeof translations[L]> =
+  typeof translations[L][K] extends TranslationFunction<infer P, any> ? P : [];
+
+
 // Overload signatures for getTranslation
-export function getTranslation<K extends BaseTranslationKeys>(
-  locale: Locale,
+export function getTranslation<L extends Locale, K extends keyof typeof translations[L]>(
+  locale: L,
   key: K,
-  ...args: (typeof translations)['KR'][K] extends TranslationFunction<infer P, any> ? P : []
+  ...args: TranslationArgs<L, K>
 ): string {
   const primaryTranslations = translations[locale] || translations.KR;
-  const fallbackTranslations = translations.KR;
-
   let messageOrFn = primaryTranslations[key as keyof typeof primaryTranslations];
 
-  if (messageOrFn === undefined) {
+  // Fallback to KR if key not found in specified locale
+  if (messageOrFn === undefined && locale !== 'KR') {
+    const fallbackTranslations = translations.KR;
     messageOrFn = fallbackTranslations[key as keyof typeof fallbackTranslations];
+  }
+
+  if (messageOrFn === undefined) {
+    console.warn(`[Translation] Key "${String(key)}" not found in locale "${locale}" or fallback "KR".`);
+    return String(key); // Return key itself if not found anywhere
   }
 
   if (typeof messageOrFn === 'function') {
@@ -313,3 +333,25 @@ export function getTranslation<K extends BaseTranslationKeys>(
   return messageOrFn as string; // messageOrFn is a string here
 }
 
+// Helper type to allow type checking for getTranslation in `useChuniResultData` or other files
+// This makes it easier to use getTranslation with the correct locale type.
+// This is a conceptual placeholder - actual type safety for args requires more complex setup or direct use of `translations[locale][key]`
+// For now, the getTranslation function itself tries to handle this.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type GetTranslationTypeForLocale<L extends Locale> = <K extends keyof typeof translations[L]>(key: K, ...args: TranslationArgs<L, K>) => string;
+
+// Add a placeholder for the type of `getTranslation` for better intellisense if needed elsewhere,
+// although direct usage of `getTranslation` is preferred.
+export type GetTranslationFn = typeof getTranslation;
+
+// Add a type for the translations object itself for more direct access if needed
+export type AllTranslationsType = typeof translations;
+
+// Create a type helper specifically for the KR keys, as it's often used as the base
+export type KRTranslationKey = keyof AllTranslationsType['KR'];
+
+// Define a type for the structure of the locale object used by useLanguage hook
+// This is somewhat conceptual for getTranslation but good for LanguageContext
+export type LocaleType = {
+  [K in KRTranslationKey]: AllTranslationsType['KR'][K];
+};
