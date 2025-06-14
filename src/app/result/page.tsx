@@ -59,6 +59,9 @@ function ResultContent() {
     phaseTransitionPoint,
     currentPhase,
     simulatedAverageB30Rating,
+    simulatedAverageNew20Rating,
+    finalOverallSimulatedRating,
+    simulationLog,
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -79,50 +82,14 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
+        // Global music data is not user-specific, but might be good to clear if forcing a full refresh
         localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
 
-        // Clear simulation caches for this user
-        const simCachePrefixBase = `${LOCAL_STORAGE_PREFIX}simulation_${userNameForApi}_`;
-        console.log(`[CACHE_CLEAR_ON_REFRESH] Attempting to clear simulation caches starting with prefix: ${simCachePrefixBase}`);
-        let clearedSimCacheCount = 0;
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.startsWith(simCachePrefixBase)) {
-                keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => {
-            localStorage.removeItem(key);
-            clearedSimCacheCount++;
-            console.log(`[CACHE_CLEAR_ON_REFRESH] Removed simulation cache: ${key}`);
-        });
-        
-        console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data, global music, and ${clearedSimCacheCount} simulation caches cleared for refresh trigger.`);
+        console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data and global music cleared for refresh trigger.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY); // Also clear global if no specific user or default user
-        // For default user or no user, we might want to clear generic simulation caches if any (though unlikely to exist without username)
-        const genericSimCachePrefix = `${LOCAL_STORAGE_PREFIX}simulation_`;
-        const genericKeysToRemove: string[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            // Clear simulation caches that might not be tied to a specific user (e.g. if userNameForApi was null when key was formed)
-            // OR if it's a default player name, clear its specific caches if any were formed.
-            if (key && key.startsWith(genericSimCachePrefix) && (!userNameForApi || userNameForApi === defaultPlayerName || !key.startsWith(`${LOCAL_STORAGE_PREFIX}simulation_${userNameForApi}_`))) {
-                 // This condition is a bit complex, aiming to clear broader simulation caches if not a specific user's refresh
-            }
-            if (userNameForApi === defaultPlayerName && key && key.startsWith(`${LOCAL_STORAGE_PREFIX}simulation_${defaultPlayerName}_`)) {
-                genericKeysToRemove.push(key);
-            }
-        }
-        let clearedGenericSimCount = 0;
-        genericKeysToRemove.forEach(key => {
-            localStorage.removeItem(key);
-            clearedGenericSimCount++;
-            console.log(`[CACHE_CLEAR_ON_REFRESH] Removed generic/default user simulation cache: ${key}`);
-        });
-        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared. Additionally cleared ${clearedGenericSimCount} generic/default user simulation caches.`);
+        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
+        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared (no specific user or default user).`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: "글로벌 음악 목록 캐시를 삭제하고 새로고침을 시도합니다."});
     }
     setCalculationStrategy(null); 
@@ -138,6 +105,17 @@ function ResultContent() {
     let textColor = "text-blue-700 dark:text-blue-300";
     let IconComponent: React.ElementType = Info;
     let iconShouldSpin = false;
+    
+    const b30AvgStr = (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating)) 
+        ? simulatedAverageB30Rating.toFixed(4) 
+        : 'N/A';
+    const n20AvgStr = (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating)) 
+        ? simulatedAverageNew20Rating.toFixed(4) 
+        : 'N/A';
+    const overallRatingStr = (typeof finalOverallSimulatedRating === 'number' && !isNaN(finalOverallSimulatedRating))
+        ? finalOverallSimulatedRating.toFixed(4)
+        : 'N/A';
+
 
     if (errorLoadingSongs) {
         statusText = getTranslation(locale, 'resultPageErrorLoadingTitle') + `: ${errorLoadingSongs}`;
@@ -154,97 +132,69 @@ function ResultContent() {
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
                 statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다.";
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
-            } else if (simulatedAverageB30Rating && targetRatingDisplay && simulatedAverageB30Rating >= parseFloat(targetRatingDisplay) ){
-                 statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
+            } else if (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating) && targetRatingDisplay && simulatedAverageB30Rating >= parseFloat(targetRatingDisplay) ){
+                 statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${b30AvgStr}`;
                  bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             } else {
                  statusText = "시뮬레이션 대기 중. 조건 충족 시 자동으로 시작됩니다.";
                  IconComponent = PlaySquare;
             }
             break;
-          case 'initializing_leap_phase':
-            statusText = "도약 페이즈 (1-1): 대상 그룹 결정 중...";
-            IconComponent = ListChecks; iconShouldSpin = true;
-            break;
-          case 'analyzing_leap_efficiency':
-            statusText = "도약 페이즈 (1-2): 곡별 다음 등급 도약 효율성 분석 중...";
-            IconComponent = Telescope; iconShouldSpin = true;
-            break;
-          case 'performing_leap_jump':
-            statusText = "도약 페이즈 (1-3): 최적 대상 곡 점수 상승 실행 중...";
-            IconComponent = Rocket; iconShouldSpin = true;
-            break;
-          case 'evaluating_leap_result':
-            statusText = "도약 페이즈 (1-4): 결과 확인 및 다음 페이즈 판단 중...";
-            IconComponent = BarChart3; iconShouldSpin = true;
-            break;
-          case 'transitioning_to_fine_tuning':
-            statusText = "페이즈 전환: '미세 조정 페이즈'(과제 2)로 이동 준비 중...";
-            IconComponent = Shuffle; iconShouldSpin = true;
-            break;
-          case 'initializing_fine_tuning_phase':
-            statusText = "미세 조정 페이즈 (2-1): 대상 그룹 결정 중...";
-            IconComponent = FilterIcon; iconShouldSpin = true;
-            break;
-          case 'performing_fine_tuning':
-            statusText = "미세 조정 페이즈 (2-2): 점수 미세 조정 실행 중...";
-            IconComponent = TrendingUp; iconShouldSpin = true;
-            break;
-          case 'evaluating_fine_tuning_result':
-            statusText = "미세 조정 페이즈 (2-3): 결과 확인 중...";
-            IconComponent = Activity; iconShouldSpin = true;
-            break;
+          case 'simulating':
+             statusText = "시뮬레이션 실행 중... (로직 수행 중)";
+             IconComponent = Activity; iconShouldSpin = true;
+             break;
           case 'target_reached':
-            statusText = `목표 달성! 최종 시뮬레이션 평균 B30 레이팅: ${simulatedAverageB30Rating?.toFixed(4) || 'N/A'}`;
+            statusText = `목표 달성! 최종 전체 레이팅: ${overallRatingStr} (B30: ${b30AvgStr}, N20: ${n20AvgStr})`;
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
-          case 'stuck_awaiting_replacement':
-            statusText = "현 페이즈에서 점수 상승 불가. B30 곡 교체 로직 (과제 3-2) 준비 중...";
+          case 'stuck_b30_no_improvement':
+            statusText = "B30 개선 불가. N20 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr;
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
-          case 'awaiting_external_data_for_replacement':
-            statusText = "B30 교체 (3-2): 외부 데이터 (전체 곡 목록/사용자 기록) 로딩 대기 중...";
-            IconComponent = Hourglass; iconShouldSpin = true;
+          case 'stuck_n20_no_improvement':
+            statusText = "N20 개선 불가. B30 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr;
+            bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
-          case 'identifying_candidates':
-            statusText = "B30 교체 (3-2): B30 외부에서 교체 후보 곡 탐색 중...";
-            IconComponent = FileSearch; iconShouldSpin = true;
+          case 'stuck_both_no_improvement':
+            statusText = "B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: " + overallRatingStr;
+            bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
-          case 'candidates_identified':
-            statusText = "B30 교체 (3-2): 교체 후보 곡 탐색 완료. 최적 후보 선정 준비 중...";
-            IconComponent = CheckCircle2;
+          case 'error_data_fetch': // This phase is from the hook if initial data fails
+            statusText = `데이터 로딩 오류: ${errorLoadingSongs || '알 수 없는 오류'}`;
+            bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
-          case 'selecting_optimal_candidate':
-            statusText = "B30 교체 (3-2): 최적 교체 후보 선정 중...";
-            IconComponent = Brain; iconShouldSpin = true;
-            break;
-          case 'optimal_candidate_selected':
-            statusText = "B30 교체 (3-2): 최적 교체 후보 선정 완료. B30 리스트 업데이트 준비 중...";
-            IconComponent = CheckCircle2;
-            break;
-          case 'replacing_song':
-             statusText = "B30 교체 (3-2): B30 리스트 업데이트 및 평균 레이팅 재계산 중...";
-             IconComponent = Replace; iconShouldSpin = true;
-             break;
-          case 'error':
-            statusText = "시뮬레이션 중 오류가 발생했습니다. 콘솔을 확인해주세요.";
-            bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = XCircle;
+          case 'error_simulation_logic': // This phase is from the hook if pure function returns error
+            statusText = `시뮬레이션 로직 오류: ${simulationLog.find(log => log.toLowerCase().includes("error")) || '알 수 없는 시뮬레이션 오류'}`;
+            bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
           default:
-            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}`;
+            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
             IconComponent = AlertTriangle;
         }
     }
 
-    if (simulatedAverageB30Rating !== null && currentPhase !== 'target_reached' && currentPhase !== 'idle' && !isLoadingSongs && !errorLoadingSongs) {
-      statusText += ` (현재 B30 평균: ${simulatedAverageB30Rating.toFixed(4)})`;
-    }
-    if (phaseTransitionPoint !== null && currentPhase !== 'target_reached' && !isLoadingSongs && !errorLoadingSongs &&
-        (currentPhase.startsWith('initializing_leap') || currentPhase.startsWith('analyzing_leap') || currentPhase.startsWith('performing_leap') || currentPhase.startsWith('evaluating_leap') ||
-         currentPhase.startsWith('initializing_fine_tuning') || currentPhase.startsWith('performing_fine_tuning') || currentPhase.startsWith('evaluating_fine_tuning') ||
-         currentPhase === 'idle')
-    ) {
-      statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
+    // Append averages and PTP only if not an error/loading state and if strategy is selected
+    if (calculationStrategy && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic') {
+        if (currentPhase !== 'idle' && currentPhase !== 'target_reached') { // Don't show intermediate averages if already target_reached or idle (unless idle shows final)
+            let detailString = "";
+            if (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating)) {
+                detailString += ` (B30 평균: ${simulatedAverageB30Rating.toFixed(4)}`;
+                if (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating) && new20SongsData.length > 0) {
+                    detailString += `, N20 평균: ${simulatedAverageNew20Rating.toFixed(4)}`;
+                }
+                detailString += ")";
+            }
+             if (statusText.includes("...")) { // If it's a "simulating" type message.
+                statusText = statusText.replace("...", detailString + "...");
+             } else if (currentPhase !== 'target_reached') { // Avoid appending if target already displayed its own full message
+                statusText += detailString;
+             }
+        }
+
+        if (typeof phaseTransitionPoint === 'number' && !isNaN(phaseTransitionPoint) && currentPhase !== 'target_reached') {
+            statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
+        }
     }
     
 
@@ -352,7 +302,7 @@ function ResultContent() {
             <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
           </TabsList>
 
-          {(isLoadingSongs && currentPhase === 'idle' && !calculationStrategy) ? ( 
+          {(isLoadingSongs && !calculationStrategy && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic') ? ( 
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
@@ -463,5 +413,7 @@ export default function ResultPage() {
   );
 }
 
+
+    
 
     
