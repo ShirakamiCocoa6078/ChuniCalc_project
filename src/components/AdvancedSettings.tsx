@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain } from "lucide-react"; // Added Brain
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain } from "lucide-react"; 
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
@@ -115,7 +115,6 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message));
       }
       const data = await response.json();
-      // Assuming the pure simulation will fetch its own, so this might be redundant for main app if sim logic is fully externalized
       setCachedData<GlobalMusicApiResponse>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, data);
       toast({
           title: getTranslation(locale, 'toastSuccessGlobalMusicCached'),
@@ -245,7 +244,7 @@ export default function AdvancedSettings() {
                 </Button>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/developer/simulation-test">
-                    <Brain className="mr-2 h-4 w-4"/> Go to Simulation Logic Test Page
+                    <Brain className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToSimulationTestPageButton')}
                   </Link>
                 </Button>
               </div>
@@ -306,3 +305,4 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
+

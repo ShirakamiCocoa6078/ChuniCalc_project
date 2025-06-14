@@ -36,7 +36,14 @@ export type ShowallApiSongEntry = {
   is_const_unknown?: boolean; // Important for const fallback
 };
 
-export type CalculationStrategy = "peak" | "floor";
+// Defines the strategy selected by the user in the UI
+export type CalculationStrategy =
+  | "b30_focus"         // Focus on B30, N20 fixed (uses floor-like algorithm internally for now)
+  | "n20_focus"         // Focus on N20, B30 fixed (uses floor-like algorithm internally for now)
+  | "hybrid_floor"      // Full simulation using floor-preference algorithm
+  | "hybrid_peak"       // Full simulation using peak-preference algorithm
+  | "none"              // No simulation, show current state
+  | null;               // Initial state
 
 export type Song = {
   id: string;
@@ -56,8 +63,8 @@ export type Song = {
   is_fullcombo?: boolean;
   is_alljustice?: boolean;
   is_const_unknown?: boolean;
-  // Fields for simulation tracking if needed outside the pure function (less likely now)
-  sim_isNewInB30?: boolean; 
+  // Fields for simulation tracking if needed outside the pure function
+  sim_isNewInB30?: boolean;
   sim_originalB30Rating?: number;
   sim_timesImproved?: number;
 };
@@ -75,49 +82,43 @@ export type RatingApiResponse = {
     best?: { entries?: RatingApiSongEntry[] };
 };
 
-// This phase type might still be useful for the *output* of the pure function
 export type SimulationPhase =
-  | 'idle' // Or 'not_started'
-  | 'simulating' // Generic state while pure function runs
+  | 'idle'
+  | 'simulating'
   | 'target_reached'
   | 'stuck_b30_no_improvement'
   | 'stuck_n20_no_improvement'
-  | 'stuck_both_no_improvement' // If B30 got stuck, then N20 also got stuck
-  | 'error_data_fetch' // For initial data loading issues
-  | 'error_simulation_logic' // If pure function itself throws an error
-  // Detailed internal phases (for the pure function's log, not necessarily React state)
-  | 'internal_b30_leap'
-  | 'internal_b30_finetune'
-  | 'internal_b30_replace'
-  | 'internal_n20_leap'
-  | 'internal_n20_finetune'
-  | 'internal_n20_replace';
+  | 'stuck_both_no_improvement'
+  | 'error_data_fetch'
+  | 'error_simulation_logic'
+  | 'target_unreachable_info'; // New phase for pre-calculation check
 
 export type CachedSimulationResult = {
   timestamp: number;
   sourceDataTimestamp: number;
   simulatedB30Songs: Song[];
   simulatedAverageB30Rating: number | null;
-  simulatedNew20Songs?: Song[]; // Added for N20 cache
-  simulatedAverageNew20Rating?: number | null; // Added for N20 cache
-  finalPhase: SimulationPhase; // Use the updated SimulationPhase
+  simulatedNew20Songs?: Song[];
+  simulatedAverageNew20Rating?: number | null;
+  finalPhase: SimulationPhase;
 };
 
 
-// Types for the new pure simulation logic
+// Types for the pure simulation logic
 export interface SimulationInput {
   originalB30Songs: Song[];
   originalNew20Songs: Song[];
-  allPlayedNewSongsPool: Song[]; // All songs from NewSongs.json that user has played (score >= 800k)
-  allMusicData: ShowallApiSongEntry[]; // Flattened global music data
-  userPlayHistory: ShowallApiSongEntry[]; // User's full play history (records/showall)
+  allPlayedNewSongsPool: Song[];
+  allMusicData: ShowallApiSongEntry[];
+  userPlayHistory: ShowallApiSongEntry[];
   currentRating: number;
   targetRating: number;
-  calculationStrategy: CalculationStrategy;
+  // algorithmPreference tells the engine how to prioritize improvements (e.g., floor or peak logic)
+  algorithmPreference: "floor" | "peak";
+  // simulationMode tells the engine which lists are subject to change
+  simulationMode: "b30_only" | "n20_only" | "hybrid";
   isScoreLimitReleased: boolean;
-  phaseTransitionPoint: number | null; // Fine-tuning transition point for B30
-  // userNameForApi: string | null; // Potentially for logging within pure function
-  // locale: string; // For logging
+  phaseTransitionPoint: number | null;
 }
 
 export interface SimulationOutput {
@@ -126,7 +127,13 @@ export interface SimulationOutput {
   finalAverageB30Rating: number | null;
   finalAverageNew20Rating: number | null;
   finalOverallRating: number;
-  finalPhase: SimulationPhase; // e.g., 'target_reached', 'stuck_b30_no_improvement', etc.
-  simulationLog: string[]; // For debugging on the test page
-  error?: string; // If an error occurred within the simulation
+  finalPhase: SimulationPhase;
+  simulationLog: string[];
+  error?: string;
 }
+
+// Type for pre-calculation result
+export type TheoreticalMaxInfo = {
+  reachableRating: number;
+  message: string | null; // Message to display if target is unreachable
+};
