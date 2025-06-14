@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 const CHUNIREC_API_BASE_URL = 'https://api.chunirec.net/2.0';
 
 export async function GET(request: NextRequest) {
-  const apiKey = process.env.CHUNIREC_API_KEY;
+  const apiKey = process.env.CHUNIREC_API_KEY; // This is the expected environment variable name
 
   if (!apiKey) {
     console.error('[PROXY_ERROR] CHUNIREC_API_KEY is not set in server environment variables. This is a server configuration issue.');
@@ -81,4 +81,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined }, { status: 503 }); // Service Unavailable
   }
 }
-

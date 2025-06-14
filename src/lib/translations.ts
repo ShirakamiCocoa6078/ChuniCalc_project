@@ -38,7 +38,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.7",
+    appVersion: "ChuniCalc v1.0.8",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -104,10 +104,11 @@ export const translations = {
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
     resultPageStrategyTitle: "계산 전략 선택",
-    resultPageStrategyB30Focus: "Best 30 집중 최적화",
-    resultPageStrategyN20Focus: "New 20 집중 최적화",
+    resultPageStrategyB30Focus: "Best 30 집중",
+    resultPageStrategyN20Focus: "New 20 집중",
     resultPageStrategyCombinedFloor: "전체 최적화 (저점 우선)",
     resultPageStrategyCombinedPeak: "전체 최적화 (고점 우선)",
+    resultPageStrategyCombined: "통합 (B30 + N20)",
     resultPageStrategyNone: "선택 안함",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -136,8 +137,8 @@ export const translations = {
     resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
     resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
-    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 곡들의 갱신만으로는 현재 목표 레이팅에 도달할 수 없습니다. (현재 New 20 고정 시, Best 30 최대 도달 가능 레이팅: 약 ${rating})`,
-    reachableRatingN20OnlyMessage: (rating: string) => `New 20 곡들의 갱신만으로는 현재 목표 레이팅에 도달할 수 없습니다. (현재 Best 30 고정 시, New 20 최대 도달 가능 레이팅: 약 ${rating})`,
+    reachableRatingB30Message: (rating: string) => `Best 30의 갱신으로 도달 할 수 있는 최대치입니다. 레이팅: ${rating}`,
+    reachableRatingN20Message: (rating: string) => `New 20의 갱신으로 도달 할 수 있는 최대치입니다. 레이팅: ${rating}`,
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -175,7 +176,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.7",
+    appVersion: "ChuniCalc v1.0.8",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     toastErrorApiKeyNotSet: "API設定エラー",
@@ -240,10 +241,11 @@ export const translations = {
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
     resultPageStrategyTitle: "計算戦略選択",
-    resultPageStrategyB30Focus: "Best 30 集中最適化",
-    resultPageStrategyN20Focus: "New 20 集中最適化",
+    resultPageStrategyB30Focus: "Best 30 集中",
+    resultPageStrategyN20Focus: "New 20 集中",
     resultPageStrategyCombinedFloor: "全体最適化 (低点優先)",
     resultPageStrategyCombinedPeak: "全体最適化 (高点優先)",
+    resultPageStrategyCombined: "統合 (B30 + N20)",
     resultPageStrategyNone: "選択なし",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -272,8 +274,8 @@ export const translations = {
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
-    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 曲の更新だけでは現在の目標レーティングに到達できません。(現在の New 20 固定時、Best 30 最大到達可能レーティング: 約 ${rating})`,
-    reachableRatingN20OnlyMessage: (rating: string) => `New 20 曲の更新だけでは現在の目標レーティングに到達できません。(現在の Best 30 固定時、New 20 最大到達可能レーティング: 約 ${rating})`,
+    reachableRatingB30Message: (rating: string) => `Best 30の更新で到達可能な最大値です。レーティング: ${rating}`,
+    reachableRatingN20Message: (rating: string) => `New 20の更新で到達可能な最大値です。レーティング: ${rating}`,
   }
 };
 
@@ -322,4 +324,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-
