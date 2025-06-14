@@ -26,7 +26,7 @@ export const translations = {
     localApiKeyHelp: "여기에 개인 Chunirec API 토큰을 입력하면, 앱 실행 시 우선적으로 이 키를 사용합니다. 비워두고 저장하면 제거됩니다.",
     developerModeLabel: "개발자 모드",
     goToApiTestPageButton: "API 테스트 페이지로 이동",
-    goToSimulationTestPageButton: "시뮬레이션 로직 테스트 페이지로 이동", // Added
+    goToSimulationTestPageButton: "시뮬레이션 로직 테스트 페이지로 이동",
     manualCachingLabel: "수동 데이터 캐싱",
     cacheGlobalMusicButton: "전역 음악 목록 캐시 (music/showall)",
     cacheUserNicknameLabel: "캐시할 사용자 닉네임",
@@ -36,7 +36,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.0",
+    appVersion: "ChuniCalc v1.0.1",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -100,10 +100,10 @@ export const translations = {
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
     resultPageStrategyTitle: "전략 선택",
-    resultPageStrategyHybridPeak: "하이브리드 고점",
-    resultPageStrategyHybridFloor: "하이브리드 저점",
-    resultPageStrategyB30Only: "Best 30만",
-    resultPageStrategyN20Only: "New 20만",
+    resultPageStrategyHybridPeak: "전체 최적화 (고점 우선)", // 변경됨
+    resultPageStrategyHybridFloor: "전체 최적화 (저점 우선)", // 변경됨
+    resultPageStrategyB30Only: "Best 30 집중", // 추가됨
+    resultPageStrategyN20Only: "New 20 집중", // 추가됨
     resultPageStrategyNone: "선택 안함",
     resultPageStrategyDisclaimer: "* 전략 선택에 따라 시뮬레이션 방식이 변경됩니다.",
     resultPageTabBest30: "Best 30",
@@ -158,7 +158,7 @@ export const translations = {
     localApiKeyHelp: "ここに個人用Chunirec APIトークンを入力すると、アプリ実行時に優先的にこのキーを使用します。空にして保存すると削除されます。",
     developerModeLabel: "開発者モード",
     goToApiTestPageButton: "APIテストページへ移動",
-    goToSimulationTestPageButton: "シミュレーションロジックテストページへ移動", // Added
+    goToSimulationTestPageButton: "シミュレーションロジックテストページへ移動",
     manualCachingLabel: "手動データキャッシング",
     cacheGlobalMusicButton: "グローバル曲リストキャッシュ (music/showall)",
     cacheUserNicknameLabel: "キャッシュするユーザーニックネーム",
@@ -168,7 +168,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.0",
+    appVersion: "ChuniCalc v1.0.1",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     // Toast Messages JP
@@ -232,10 +232,10 @@ export const translations = {
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
     resultPageStrategyTitle: "戦略選択",
-    resultPageStrategyHybridPeak: "ハイブリッド 高点",
-    resultPageStrategyHybridFloor: "ハイブリッド 低点",
-    resultPageStrategyB30Only: "Best 30のみ",
-    resultPageStrategyN20Only: "New 20のみ",
+    resultPageStrategyHybridPeak: "全体最適化 (高点優先)", // 변경됨
+    resultPageStrategyHybridFloor: "全体最適化 (低点優先)", // 변경됨
+    resultPageStrategyB30Only: "Best 30 集中", // 추가됨
+    resultPageStrategyN20Only: "New 20 集中", // 추가됨
     resultPageStrategyNone: "選択なし",
     resultPageStrategyDisclaimer: "※戦略選択に応じてシミュレーション方式が変更されます。",
     resultPageTabBest30: "Best 30",
