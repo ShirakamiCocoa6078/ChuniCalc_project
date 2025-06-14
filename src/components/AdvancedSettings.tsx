@@ -290,7 +290,7 @@ export default function AdvancedSettings() {
 
         <div className="text-sm">
             <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
-            <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="mailto:your-email@example.com" className="text-primary hover:underline">your-email@example.com</a></p>
+            <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="https://x.com/Shirakami_cocoa" className="text-primary hover:underline">@Shirakami_cocoa</a></p>
             {clientHasMounted && (
               <p className="text-xs text-muted-foreground mt-1">{getTranslation(locale, 'appVersion')}</p>
             )}

@@ -176,28 +176,80 @@ export const getNextGradeBoundaryScore = (currentScore: number): number | null =
     return null;
 };
 
-export function calculateMaxPotentialRatingOfSongList(
-  songs: (Song | ShowallApiSongEntry)[], // Can accept either full Song objects or API entries
+// Renamed function: Calculates average of an existing list and can compute overall rating based on fixed B30/N20 averages
+export function calculateAverageAndOverallRating(
+  songs: Song[],
   listLimit: number,
-  scoreCap: number = 1009000,
-  isPlayedFilter?: (song: ShowallApiSongEntry) => boolean // Optional filter for N20 pool
-): { list: Song[], sum: number, average: number | null } {
-  const maxedSongs: Song[] = songs
-    .map(s => {
-      // If it's already a Song, use its chartConstant. If it's ShowallApiSongEntry, map it first.
-      const songToConsider = ('currentScore' in s) ? s as Song : mapApiSongToAppSong(s as ShowallApiSongEntry, 0, (s as ShowallApiSongEntry).const);
-      if (isPlayedFilter && !isPlayedFilter(s as ShowallApiSongEntry)) {
-        return null;
-      }
-      if (!songToConsider.chartConstant) return null;
-      const maxRating = calculateChunithmSongRating(scoreCap, songToConsider.chartConstant);
-      return { ...songToConsider, currentRating: maxRating, currentScore: scoreCap, targetRating: maxRating, targetScore: scoreCap };
-    })
-    .filter(song => song !== null) as Song[];
+  propertyToConsiderForRating: 'currentRating' | 'targetRating' = 'currentRating',
+  fixedB30Avg?: number | null,
+  fixedN20Avg?: number | null,
+  actualB30Count?: number,
+  actualN20Count?: number
+): { list: Song[], sum: number, average: number | null, overallAverage?: number } {
+  let overallAverage: number | undefined = undefined;
 
-  const sortedMaxedSongs = sortSongsByRatingDesc(maxedSongs); // Sorts by currentRating which is now maxRating
-  const topMaxedList = sortedMaxedSongs.slice(0, listLimit);
-  const sum = topMaxedList.reduce((acc, s_item) => acc + s_item.currentRating, 0);
-  const average = topMaxedList.length > 0 ? parseFloat((sum / topMaxedList.length).toFixed(4)) : null;
-  return { list: topMaxedList, sum, average };
+  if (fixedB30Avg !== undefined && fixedN20Avg !== undefined && actualB30Count !== undefined && actualN20Count !== undefined) {
+    const B30_COUNT_FOR_AVG = Math.min(30, actualB30Count);
+    const N20_COUNT_FOR_AVG = Math.min(20, actualN20Count);
+    const totalEffectiveSongs = B30_COUNT_FOR_AVG + N20_COUNT_FOR_AVG;
+
+    if (totalEffectiveSongs > 0) {
+      const sumB30 = (fixedB30Avg || 0) * B30_COUNT_FOR_AVG;
+      const sumN20 = (fixedN20Avg || 0) * N20_COUNT_FOR_AVG;
+      overallAverage = parseFloat(((sumB30 + sumN20) / totalEffectiveSongs).toFixed(4));
+    } else {
+      overallAverage = 0;
+    }
+  }
+
+  const songsToConsider = songs.map(s => {
+    const songToConsider = { ...s }; // Shallow copy
+    const rating = songToConsider[propertyToConsiderForRating];
+    return { ...songToConsider, ratingToUse: typeof rating === 'number' ? rating : 0 };
+  });
+
+  const sortedSongs = [...songsToConsider].sort((a, b) => b.ratingToUse - a.ratingToUse);
+  const topSongs = sortedSongs.slice(0, listLimit);
+
+  const sum = topSongs.reduce((acc, s_item) => acc + s_item.ratingToUse, 0);
+  const average = topSongs.length > 0 ? parseFloat((sum / topSongs.length).toFixed(4)) : null;
+
+  return { list: topSongs, sum, average, overallAverage };
+}
+
+
+// New function: Calculates theoretical max ratings for a list of candidates
+export function calculateTheoreticalMaxRatingsForList(
+  candidatePool: (Song | ShowallApiSongEntry)[],
+  listLimit: number,
+  scoreToAssume: number
+): { list: Song[]; average: number | null; sum: number } {
+  const maxedSongs: Song[] = candidatePool
+    .map(s_item => {
+      const songToConsider = ('currentScore' in s_item)
+        ? { ...s_item } as Song // It's already a Song, create a shallow copy
+        : mapApiSongToAppSong(s_item as ShowallApiSongEntry, 0, (s_item as ShowallApiSongEntry).const);
+
+      if (!songToConsider.chartConstant) {
+        return { ...songToConsider, targetRating: 0, targetScore: 0 }; // Keep original currentScore/Rating
+      }
+      const maxRating = calculateChunithmSongRating(scoreToAssume, songToConsider.chartConstant);
+      return {
+        ...songToConsider,
+        targetScore: scoreToAssume,
+        targetRating: parseFloat(maxRating.toFixed(4)),
+      };
+    })
+    .filter(song => song.chartConstant !== null) // Ensure only songs with chartConstant are processed
+    .sort((a, b) => b.targetRating - a.targetRating); // Sort by the new targetRating
+
+  const topSongs = maxedSongs.slice(0, listLimit);
+
+  if (topSongs.length === 0) {
+    return { list: [], average: null, sum: 0 };
+  }
+
+  const sum = topSongs.reduce((acc, s_item) => acc + s_item.targetRating, 0);
+  const average = parseFloat((sum / topSongs.length).toFixed(4));
+  return { list: topSongs, average, sum };
 }
