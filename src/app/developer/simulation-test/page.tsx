@@ -27,6 +27,8 @@ import type {
   UserShowallApiResponse
 } from "@/types/result-page";
 import NewSongsData from '@/data/NewSongs.json';
+import SongCard from "@/components/SongCard"; // Added
+import { cn } from "@/lib/utils"; // Added
 
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
@@ -86,6 +88,7 @@ export default function SimulationTestPage() {
     if (isNaN(currentRatingNum) || isNaN(targetRatingNum) || !nickname.trim() || !strategy) {
       setError("Please fill in all fields correctly.");
       setIsLoading(false);
+      setLogDisplay(prev => prev + "Error: Please fill in all fields correctly.\n");
       return;
     }
     
@@ -93,6 +96,7 @@ export default function SimulationTestPage() {
     if (!API_TOKEN) {
       setError("API Token not found. Please set it in Advanced Settings or environment variables.");
       setIsLoading(false);
+      setLogDisplay(prev => prev + "Error: API Token not found.\n");
       return;
     }
 
@@ -100,32 +104,33 @@ export default function SimulationTestPage() {
 
     try {
       // Fetch all necessary data
-      const profileData = await fetchApi<ProfileData>(`profile.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
-      const ratingData = await fetchApi<RatingApiResponse>(`rating_data.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
-      let globalMusicRaw = getCachedData<any[]>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
-      if (!globalMusicRaw) {
+      const profileDataResponse = await fetchApi<ProfileData>(`profile.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
+      const ratingDataResponse = await fetchApi<RatingApiResponse>(`rating_data.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
+      
+      let globalMusicRawResponse = getCachedData<any[]>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+      if (!globalMusicRawResponse) {
         const apiGlobalMusic = await fetchApi<any[] | {records: any[]}>(`music/showall.json?region=jp2`, API_TOKEN);
-        globalMusicRaw = Array.isArray(apiGlobalMusic) ? apiGlobalMusic : apiGlobalMusic?.records || [];
-        // No setCachedData here, as this test page shouldn't interfere with main app's cache management
+        globalMusicRawResponse = Array.isArray(apiGlobalMusic) ? apiGlobalMusic : apiGlobalMusic?.records || [];
+        // Note: This test page does not write to the global cache to avoid interference.
       }
-      const userShowallData = await fetchApi<UserShowallApiResponse>(`showall.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN, "records");
+      
+      const userShowallDataResponse = await fetchApi<UserShowallApiResponse>(`showall.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN, "records");
 
-
-      appendLog(`Profile: ${profileData?.player_name}, Rating Data entries: ${ratingData?.best?.entries?.length || 0}`);
-      appendLog(`Global Music Raw entries: ${globalMusicRaw?.length || 0}`);
-      appendLog(`User Showall entries: ${userShowallData?.records?.length || 0}`);
+      appendLog(`Profile: ${profileDataResponse?.player_name}, Rating Data entries: ${ratingDataResponse?.best?.entries?.length || 0}`);
+      appendLog(`Global Music Raw entries: ${globalMusicRawResponse?.length || 0}`);
+      appendLog(`User Showall entries: ${userShowallDataResponse?.length || 0}`);
 
 
       // Process data
-      const initialB30ApiEntries = ratingData?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && e.id && e.diff && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && e.title) || [];
+      const initialB30ApiEntries = ratingDataResponse?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && e.id && e.diff && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && e.title) || [];
       const originalB30Songs = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
       appendLog(`Processed Original B30 Songs: ${originalB30Songs.length}`);
 
 
-      const allMusicDataFlattened = globalMusicRaw.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
+      const allMusicDataFlattened = globalMusicRawResponse.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
       appendLog(`Flattened Global Music Data: ${allMusicDataFlattened.length}`);
 
-      const userPlayHistoryRecords = userShowallData?.records || [];
+      const userPlayHistoryRecords = userShowallDataResponse || []; // Assuming fetchApi returns the records array directly if 'records' field is passed
       
       const newSongTitlesRaw = NewSongsData.titles?.verse || [];
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
@@ -147,14 +152,13 @@ export default function SimulationTestPage() {
         return acc;
       }, [] as ShowallApiSongEntry[]);
 
-      const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
-      const allPlayedNewSongsPool = sortSongsByRatingDesc(mappedPlayedNewSongs);
+      const allPlayedNewSongsPool = sortSongsByRatingDesc(playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
       const originalNew20Songs = allPlayedNewSongsPool.slice(0, NEW_20_COUNT);
       appendLog(`Processed Original New20 Songs: ${originalNew20Songs.length} (from pool of ${allPlayedNewSongsPool.length})`);
 
 
-      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10;
-      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95;
+      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10; // Example threshold
+      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95; // Example value
 
       const simulationInput: SimulationInput = {
         originalB30Songs,
@@ -173,13 +177,22 @@ export default function SimulationTestPage() {
       const result = runFullSimulation(simulationInput);
       setSimulationResult(result);
       appendLog("Simulation complete. Result received.");
-      appendLog("\n--- Simulation Internal Log ---");
-      result.simulationLog.forEach(logEntry => appendLog(logEntry));
+      
+      if (result.simulationLog && result.simulationLog.length > 0) {
+        appendLog("\n--- Simulation Internal Log ---");
+        result.simulationLog.forEach(logEntry => appendLog(logEntry));
+      } else {
+        appendLog("\n--- Simulation Internal Log Empty ---");
+      }
+      if(result.error) {
+        setError(`Simulation ended with error: ${result.error}`);
+        appendLog(`Simulation ended with error: ${result.error}`);
+      }
 
 
     } catch (e: any) {
-      setError(`Simulation failed: ${e.message || String(e)}`);
-      appendLog(`Error: ${e.message || String(e)}`);
+      setError(`Simulation setup failed: ${e.message || String(e)}`);
+      appendLog(`Error during setup or API fetch: ${e.message || String(e)}`);
       console.error("Simulation Test Page Error:", e);
     } finally {
       setIsLoading(false);
@@ -190,18 +203,27 @@ export default function SimulationTestPage() {
     setLogDisplay(prev => prev + message + "\n");
   };
 
-  async function fetchApi<T>(endpointPath: string, token: string, recordsField?: "records"): Promise<T | null> {
-    const baseUrl = "https://api.chunirec.net/2.0/records/"; // Assuming most are records
-    const musicBaseUrl = "https://api.chunirec.net/2.0/music/";
-    
-    let url = endpointPath.startsWith("music/") ? `${musicBaseUrl}${endpointPath.substring(6)}&token=${token}` : `${baseUrl}${endpointPath}&token=${token}`;
-    if (endpointPath.startsWith("profile.json") || endpointPath.startsWith("rating_data.json") || endpointPath.startsWith("showall.json")) {
-         // Already includes query params like user_name
+  async function fetchApi<T>(endpointPath: string, token: string, recordsField?: keyof UserShowallApiResponse): Promise<T | null> {
+    let baseUrl = "https://api.chunirec.net/2.0/";
+    let finalEndpointPath = endpointPath;
+    if (endpointPath.startsWith("music/")) {
+      baseUrl += "music/";
+      finalEndpointPath = endpointPath.substring(6);
+    } else if (endpointPath.startsWith("records/")) {
+      baseUrl += "records/";
+      finalEndpointPath = endpointPath.substring(8);
     } else {
-        url = `${endpointPath.includes("music/") ? musicBaseUrl : baseUrl}${endpointPath}&token=${token}`;
+      // Default to records if no prefix, or handle as is if it's a full path segment like 'profile.json'
+      if (!endpointPath.includes('/')) { // Simple filename
+          baseUrl += "records/";
+      } else { // Path segment already included
+          baseUrl = "https://api.chunirec.net/2.0/"; // Reset base for full path segments
+      }
     }
-
-
+    
+    let url = `${baseUrl}${finalEndpointPath}`;
+    url += (url.includes('?') ? '&' : '?') + `token=${token}`;
+  
     appendLog(`Fetching: ${url.replace(token, "REDACTED_TOKEN")}`);
     const response = await fetch(url);
     if (!response.ok) {
@@ -209,13 +231,14 @@ export default function SimulationTestPage() {
       throw new Error(`API fetch failed for ${endpointPath} (status: ${response.status}): ${errorData.error?.message || response.statusText}`);
     }
     const data = await response.json();
-    return recordsField ? data[recordsField] : data;
+    return recordsField && data && typeof data === 'object' && recordsField in data ? data[recordsField] : data;
   }
 
+  const songListGridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
   return (
     <main className="min-h-screen bg-background text-foreground p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <header className="mb-8 flex items-center justify-between">
           <h1 className="text-3xl font-bold font-headline flex items-center">
             <Brain className="mr-3 h-8 w-8 text-primary" />
@@ -277,7 +300,7 @@ export default function SimulationTestPage() {
           </Card>
         )}
 
-        <Card>
+        <Card className="mb-6">
           <CardHeader>
             <CardTitle>Simulation Output & Log</CardTitle>
           </CardHeader>
@@ -292,7 +315,7 @@ export default function SimulationTestPage() {
             />
             {simulationResult && (
               <>
-                <Label htmlFor="simulationJsonResult">Full Result (JSON):</Label>
+                <Label htmlFor="simulationJsonResult">Full Result Object (JSON):</Label>
                 <Textarea
                   id="simulationJsonResult"
                   readOnly
@@ -303,7 +326,52 @@ export default function SimulationTestPage() {
             )}
           </CardContent>
         </Card>
+
+        {simulationResult && simulationResult.simulatedB30Songs && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Simulated Best 30 Songs</CardTitle>
+              <CardDescription>
+                Final B30 Avg: {simulationResult.finalAverageB30Rating?.toFixed(4) || "N/A"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {simulationResult.simulatedB30Songs.length > 0 ? (
+                <div className={cn("grid grid-cols-1 gap-4", songListGridCols)}>
+                  {simulationResult.simulatedB30Songs.map((song, index) => (
+                    <SongCard key={`sim-b30-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={strategy} />
+                  ))}
+                </div>
+              ) : (
+                <p>No Best 30 songs in simulation result.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {simulationResult && simulationResult.simulatedNew20Songs && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Simulated New 20 Songs</CardTitle>
+               <CardDescription>
+                Final N20 Avg: {simulationResult.finalAverageNew20Rating?.toFixed(4) || "N/A"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {simulationResult.simulatedNew20Songs.length > 0 ? (
+                <div className={cn("grid grid-cols-1 gap-4", songListGridCols)}>
+                  {simulationResult.simulatedNew20Songs.map((song, index) => (
+                    <SongCard key={`sim-n20-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={strategy} />
+                  ))}
+                </div>
+              ) : (
+                <p>No New 20 songs in simulation result.</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </main>
   );
 }
+
