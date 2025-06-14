@@ -36,7 +36,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.1",
+    appVersion: "ChuniCalc v1.0.2",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -100,10 +100,10 @@ export const translations = {
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
     resultPageStrategyTitle: "전략 선택",
-    resultPageStrategyHybridPeak: "전체 최적화 (고점 우선)", // 변경됨
-    resultPageStrategyHybridFloor: "전체 최적화 (저점 우선)", // 변경됨
-    resultPageStrategyB30Only: "Best 30 집중", // 추가됨
-    resultPageStrategyN20Only: "New 20 집중", // 추가됨
+    resultPageStrategyB30Only: "Best 30만으로 계산",
+    resultPageStrategyN20Only: "New 20만으로 계산",
+    resultPageStrategyCombinedFloor: "Best 30 + New 20 (저점 우선)",
+    resultPageStrategyCombinedPeak: "Best 30 + New 20 (고점 우선)",
     resultPageStrategyNone: "선택 안함",
     resultPageStrategyDisclaimer: "* 전략 선택에 따라 시뮬레이션 방식이 변경됩니다.",
     resultPageTabBest30: "Best 30",
@@ -124,13 +124,16 @@ export const translations = {
     resultPageSuspenseFallback: "결과 로딩 중...",
     resultPageToastApiLoadSuccessTitle: "데이터 로드 완료 (API)",
     resultPageToastApiLoadSuccessDesc: (timestamp: string) => `API에서 최신 데이터를 성공적으로 불러와 캐시했습니다. (${timestamp})`,
-    resultPageToastCacheLoadSuccessTitle: "데이터 로드 완료 (캐시)",
     resultPageToastCacheLoadSuccessDesc: "로컬 캐시에서 데이터를 성공적으로 불러왔습니다.",
     resultPageHeaderCurrent: "현재:",
     resultPageHeaderTarget: "목표:",
-    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. (N20 고정 시 최대: ${reachableRating})`,
-    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. (B30 고정 시 최대: ${reachableRating})`,
+    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30만으로 갱신 시, 도달 가능한 최대 레이팅은 ${reachableRating} 입니다. 목표 레이팅을 확인해주세요.`,
+    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20만으로 갱신 시, 도달 가능한 최대 레이팅은 ${reachableRating} 입니다. 목표 레이팅을 확인해주세요.`,
     resultPageNoCombinedData: "Best 30 및 New 20 곡 데이터가 모두 없습니다.",
+    resultPageErrorInvalidRatingsInput: "잘못된 레이팅 입력값입니다. 현재 또는 목표 레이팅을 확인해주세요.",
+    resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
+    resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
+    resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -168,7 +171,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.1",
+    appVersion: "ChuniCalc v1.0.2",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     // Toast Messages JP
@@ -204,7 +207,7 @@ export const translations = {
     toastSuccessLocalApiKeySavedDesc: "入力されたAPIキーがローカルストレージに保存されました。",
     toastSuccessLocalApiKeyRemoved: "ローカルAPIキー削除完了",
     toastSuccessLocalApiKeyRemovedDesc: "ローカルAPIキーが空のため、ストレージから削除されました。",
-    toastSuccessLocalDataCleared: "ローカルデータ削除完了",
+    toastSuccessLocalDataCleared: "ロー컬データ削除完了",
     toastSuccessLocalDataClearedDesc: (count: number) => `${count}個のアプリ関連ローカルキャッシュデータが削除されました。`,
     toastInfoCachingStarted: "キャッシング開始",
     toastInfoCachingStartedDesc: (target: string) => `${target}を取得中です...`,
@@ -232,10 +235,10 @@ export const translations = {
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
     resultPageStrategyTitle: "戦略選択",
-    resultPageStrategyHybridPeak: "全体最適化 (高点優先)", // 변경됨
-    resultPageStrategyHybridFloor: "全体最適化 (低点優先)", // 변경됨
-    resultPageStrategyB30Only: "Best 30 集中", // 추가됨
-    resultPageStrategyN20Only: "New 20 集中", // 추가됨
+    resultPageStrategyB30Only: "Best 30のみ計算",
+    resultPageStrategyN20Only: "New 20のみ計算",
+    resultPageStrategyCombinedFloor: "Best 30 + New 20 (低点優先)",
+    resultPageStrategyCombinedPeak: "Best 30 + New 20 (高点優先)",
     resultPageStrategyNone: "選択なし",
     resultPageStrategyDisclaimer: "※戦略選択に応じてシミュレーション方式が変更されます。",
     resultPageTabBest30: "Best 30",
@@ -256,13 +259,16 @@ export const translations = {
     resultPageSuspenseFallback: "結果読み込み中...",
     resultPageToastApiLoadSuccessTitle: "データロード完了 (API)",
     resultPageToastApiLoadSuccessDesc: (timestamp: string) => `APIから最新データを正常にロードしキャッシュしました。(${timestamp})`,
-    resultPageToastCacheLoadSuccessTitle: "データロード完了 (キャッシュ)",
     resultPageToastCacheLoadSuccessDesc: "ローカルキャッシュからデータを正常にロードしました。",
     resultPageHeaderCurrent: "現在:",
     resultPageHeaderTarget: "目標:",
-    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30の更新だけでは目標レーティングに到達できません。(N20固定時の最大: ${reachableRating})`,
-    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20の更新だけでは目標レーティングに到達できません。(B30固定時の最大: ${reachableRating})`,
+    resultPageErrorTargetUnreachableB30: (reachableRating: string) => `Best 30のみの更新では、到達可能な最大レーティングは ${reachableRating} です。目標レーティングを確認してください。`,
+    resultPageErrorTargetUnreachableN20: (reachableRating: string) => `New 20のみの更新では、到達可能な最大レーティングは ${reachableRating} です。目標レーティングを確認してください。`,
     resultPageNoCombinedData: "Best 30 および New 20 曲データが両方ともありません。",
+    resultPageErrorInvalidRatingsInput: "無効なレーティング入力値です。現在または目標レーティングを確認してください。",
+    resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
+    resultPageLogSimulationStarting: "シミュレーションを準備中です...",
+    resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
   }
 };
 

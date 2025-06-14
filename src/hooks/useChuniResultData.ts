@@ -7,8 +7,9 @@ import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
+import constOverrides from '@/data/const-overrides.json'; // Added
 import { getTranslation, type Locale } from '@/lib/translations';
-import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateChunithmSongRating } from '@/lib/rating-utils';
+import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateChunithmSongRating, calculateMaxPotentialRatingOfSongList } from '@/lib/rating-utils';
 import { runFullSimulation } from '@/lib/simulation-logic';
 import type {
   Song,
@@ -20,50 +21,54 @@ import type {
   SimulationPhase,
   UserShowallApiResponse,
   SimulationInput,
-  SimulationOutput,
-  TheoreticalMaxInfo
+  SimulationOutput
 } from "@/types/result-page";
 
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
-const MAX_SCORE_NORMAL = 1009000; // SSS+ boundary
+const MAX_SCORE_FOR_MAX_RATING = 1009000; // SSS+ boundary for max const-based rating
 
-// Helper to calculate average rating for a list based on targetRating
-const calculateAverageTargetRating = (songs: Song[], count: number): number | null => {
+// Helper to calculate average rating for a list based on a specific rating property (current or target)
+const calculateAverageRating = (
+  songs: Song[],
+  count: number,
+  ratingProperty: 'currentRating' | 'targetRating'
+): number | null => {
   if (!songs || songs.length === 0) return null;
-  const topSongs = sortSongsByRatingDesc([...songs].map(s => ({ ...s, currentRating: s.targetRating }))).slice(0, count);
-  if (topSongs.length === 0) return null;
-  const sum = topSongs.reduce((acc, s) => acc + s.targetRating, 0);
-  return parseFloat((sum / topSongs.length).toFixed(4));
-};
-
-// Helper to calculate average rating for a list based on currentRating
-const calculateAverageCurrentRating = (songs: Song[], count: number): number | null => {
-  if (!songs || songs.length === 0) return null;
-  const topSongs = sortSongsByRatingDesc([...songs]).slice(0, count);
-  if (topSongs.length === 0) return null;
-  const sum = topSongs.reduce((acc, s) => acc + s.currentRating, 0);
+  const topSongs = [...songs]
+    .sort((a, b) => b[ratingProperty] - a[ratingProperty]) // Sort by the specified rating property
+    .slice(0, count);
+  if (topSongs.length === 0) return 0; // Or null, depending on how you want to handle empty top list
+  const sum = topSongs.reduce((acc, s) => acc + s[ratingProperty], 0);
   return parseFloat((sum / topSongs.length).toFixed(4));
 };
 
 const calculateOverallRatingFromAverages = (
   avgB30: number | null,
   avgN20: number | null,
-  actualB30Count: number, // Pass actual count from original list
-  actualN20Count: number  // Pass actual count from original list
+  actualB30Count: number,
+  actualN20Count: number
 ): number => {
   if (avgB30 === null || actualB30Count === 0) return 0;
 
   const effectiveB30Count = Math.min(actualB30Count, BEST_COUNT);
   const effectiveN20Count = Math.min(actualN20Count, NEW_20_COUNT);
 
-  if (avgN20 !== null && effectiveN20Count > 0 && effectiveB30Count > 0) {
-     const totalRatingSum = (avgB30 * effectiveB30Count) + (avgN20 * effectiveN20Count);
-     const totalSongCount = effectiveB30Count + effectiveN20Count;
-     if (totalSongCount === 0) return 0;
-     return parseFloat((totalRatingSum / totalSongCount).toFixed(4));
+  let totalRatingSum = 0;
+  let totalSongCount = 0;
+
+  if (effectiveB30Count > 0) {
+    totalRatingSum += avgB30 * effectiveB30Count;
+    totalSongCount += effectiveB30Count;
   }
-  return avgB30; // Default to B30 average if N20 is not applicable
+
+  if (avgN20 !== null && effectiveN20Count > 0) {
+     totalRatingSum += avgN20 * effectiveN20Count;
+     totalSongCount += effectiveN20Count;
+  }
+
+  if (totalSongCount === 0) return 0;
+  return parseFloat((totalRatingSum / totalSongCount).toFixed(4));
 };
 
 
@@ -97,80 +102,6 @@ const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
     }
     return flattenedEntries;
 };
-
-
-// Helper function for pre-calculation
-const calculateTheoreticalMaxOverallRating = (
-  mode: "b30_only" | "n20_only",
-  originalB30Songs: Song[],
-  originalNew20Songs: Song[],
-  allMusicData: ShowallApiSongEntry[],
-  allPlayedNewSongsPool: Song[],
-  locale: Locale
-): TheoreticalMaxInfo => {
-  let fixedListRatingSum = 0;
-  let fixedListCount = 0;
-  let variableListPotentialMaxRatingSum = 0;
-  let variableListCount = 0;
-  const newSongsTitlesLower = (NewSongsData.titles?.verse || []).map(t => t.trim().toLowerCase());
-
-  if (mode === "b30_only") {
-    // N20 is fixed
-    fixedListRatingSum = originalNew20Songs.reduce((sum, song) => sum + song.currentRating, 0);
-    fixedListCount = originalNew20Songs.length;
-
-    // Calculate B30 potential
-    const b30CandidatePool: Song[] = [...originalB30Songs];
-    const originalB30Ids = new Set(originalB30Songs.map(s => `${s.id}_${s.diff}`));
-    const originalN20Ids = new Set(originalNew20Songs.map(s => `${s.id}_${s.diff}`));
-
-    allMusicData.forEach(apiSong => {
-      if (!originalB30Ids.has(`${apiSong.id}_${apiSong.diff.toUpperCase()}`) &&
-          !originalN20Ids.has(`${apiSong.id}_${apiSong.diff.toUpperCase()}`)) { // Must not be in fixed N20
-        const song = mapApiSongToAppSong(apiSong, 0, apiSong.const);
-        if (song.chartConstant) {
-          b30CandidatePool.push(song);
-        }
-      }
-    });
-
-    const potentialB30Ratings = b30CandidatePool
-      .map(song => song.chartConstant ? calculateChunithmSongRating(MAX_SCORE_NORMAL, song.chartConstant) : 0)
-      .sort((a, b) => b - a)
-      .slice(0, BEST_COUNT);
-
-    variableListPotentialMaxRatingSum = potentialB30Ratings.reduce((sum, rating) => sum + rating, 0);
-    variableListCount = potentialB30Ratings.length;
-
-  } else { // n20_only mode
-    // B30 is fixed
-    fixedListRatingSum = originalB30Songs.reduce((sum, song) => sum + song.currentRating, 0);
-    fixedListCount = originalB30Songs.length;
-
-    // Calculate N20 potential (from allPlayedNewSongsPool)
-    const n20CandidatePool: Song[] = [...allPlayedNewSongsPool]; // Already filtered for NewSongs.json and played
-
-    const potentialN20Ratings = n20CandidatePool
-      .map(song => song.chartConstant ? calculateChunithmSongRating(MAX_SCORE_NORMAL, song.chartConstant) : 0)
-      .sort((a, b) => b - a)
-      .slice(0, NEW_20_COUNT);
-
-    variableListPotentialMaxRatingSum = potentialN20Ratings.reduce((sum, rating) => sum + rating, 0);
-    variableListCount = potentialN20Ratings.length;
-  }
-
-  const totalMaxRatingSum = fixedListRatingSum + variableListPotentialMaxRatingSum;
-  const totalSongCount = fixedListCount + variableListCount;
-  const reachableRating = totalSongCount > 0 ? parseFloat((totalMaxRatingSum / totalSongCount).toFixed(4)) : 0;
-
-  let message: string | null = null;
-  // This function doesn't compare with target, the caller does.
-  // It just returns the reachable value.
-  // Message generation will be done in the hook.
-
-  return { reachableRating, message };
-};
-
 
 interface UseChuniResultDataProps {
   userNameForApi: string | null;
@@ -210,14 +141,13 @@ export function useChuniResultData({
   const [combinedTopSongs, setCombinedTopSongs] = useState<Song[]>([]);
 
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true);
-  const [isSimulating, setIsSimulating] = useState(false); // For the actual runFullSimulation call
+  const [isSimulating, setIsSimulating] = useState(false);
   const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SimulationPhase>('idle');
-  const [phaseTransitionPoint, setPhaseTransitionPoint] = useState<number | null>(null);
-  const [preCalculationMessage, setPreCalculationMessage] = useState<string | null>(null);
+  const [preSimulationMessage, setPreSimulationMessage] = useState<string | null>(null);
 
-  const prevCalculationStrategyRef = useRef<CalculationStrategy>(null);
+  const prevCalculationStrategyRef = useRef<CalculationStrategy | null>(null);
 
 
   useEffect(() => {
@@ -235,14 +165,14 @@ export function useChuniResultData({
       setSimulatedB30Songs([]); setSimulatedNew20Songs([]);
       setSimulatedAverageB30Rating(null); setSimulatedAverageNew20Rating(null);
       setFinalOverallSimulatedRating(null); setSimulationLog([]);
-      setCurrentPhase('idle'); setPreCalculationMessage(null);
+      setCurrentPhase('idle'); setPreSimulationMessage(null);
 
       const profileKey = `${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`;
       const ratingDataKey = `${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`;
       const globalMusicKey = GLOBAL_MUSIC_DATA_KEY;
       const userShowallKey = `${LOCAL_STORAGE_PREFIX}showall_${userNameForApi}`;
 
-      let profileCacheItem: CachedData<ProfileData> | null = null;
+      let profileCacheItem: { timestamp: number; data: ProfileData } | null = null;
       if (clientHasMounted) {
         const rawProfileCache = localStorage.getItem(profileKey);
         if (rawProfileCache) {
@@ -269,13 +199,11 @@ export function useChuniResultData({
           globalMusicCacheRaw.forEach(rawEntry => {
               tempFlattenedGlobalMusicRecords.push(...flattenGlobalMusicEntry(rawEntry));
           });
-          setAllMusicData(tempFlattenedGlobalMusicRecords);
           console.log(`[DATA_FETCH_HOOK] Loaded ${tempFlattenedGlobalMusicRecords.length} flattened global music entries from cache.`);
       }
 
       if (userShowallCache && Array.isArray(userShowallCache.records)) {
          tempUserShowallRecords = userShowallCache.records.filter((e: any): e is ShowallApiSongEntry => e && typeof e.id === 'string' && typeof e.diff === 'string');
-         setUserPlayHistory(tempUserShowallRecords);
          console.log(`[DATA_FETCH_HOOK] Loaded ${tempUserShowallRecords.length} user play history entries from cache.`);
       }
 
@@ -302,19 +230,21 @@ export function useChuniResultData({
                 const fetchedGlobalMusicApi = Array.isArray(res.data) ? res.data : (res.data?.records || []);
                 tempFlattenedGlobalMusicRecords = [];
                 fetchedGlobalMusicApi.forEach(rawEntry => { tempFlattenedGlobalMusicRecords.push(...flattenGlobalMusicEntry(rawEntry)); });
-                setAllMusicData(tempFlattenedGlobalMusicRecords);
-                setCachedData<any[]>(globalMusicKey, fetchedGlobalMusicApi, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempFlattenedGlobalMusicRecords.length} flattened global music entries from API.`);
               }
               if (res.type === 'userShowall' && (!userShowallCache || tempUserShowallRecords.length === 0)) {
                 const records = Array.isArray(res.data) ? res.data : (res.data?.records || []);
                 tempUserShowallRecords = records.filter((e: any): e is ShowallApiSongEntry => e && typeof e.id === 'string' && typeof e.diff === 'string');
-                setUserPlayHistory(tempUserShowallRecords);
-                setCachedData<UserShowallApiResponse>(userShowallKey, { records: tempUserShowallRecords });
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempUserShowallRecords.length} user play history entries from API.`);
               }
             }
             if (criticalError) throw new Error(criticalError);
+
+            // Save to cache AFTER all API calls succeed for the missing data
+            if (apiRequestsMap.has('globalMusic')) setCachedData<any[]>(globalMusicKey, globalMusicCacheRaw, GLOBAL_MUSIC_CACHE_EXPIRY_MS); // This seems wrong, should save the fetched data
+            if (apiRequestsMap.has('userShowall')) setCachedData<UserShowallApiResponse>(userShowallKey, { records: tempUserShowallRecords });
+
+
             const newCacheTimeStr = new Date(newCacheTimestamp).toLocaleString(locale);
             setLastRefreshed(getTranslation(locale, 'resultPageSyncStatus', newCacheTimeStr));
             if (responses.some(res => res.ok)) toast({ title: getTranslation(locale, 'resultPageToastApiLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastApiLoadSuccessDesc', newCacheTimeStr) });
@@ -331,13 +261,46 @@ export function useChuniResultData({
          toast({ title: getTranslation(locale, 'resultPageToastCacheLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastCacheLoadSuccessDesc') });
       }
 
-      if (!ratingData) { setIsLoadingInitialData(false); setErrorLoadingData("Rating data missing."); return; }
-      if (tempFlattenedGlobalMusicRecords.length === 0) { setIsLoadingInitialData(false); setErrorLoadingData("Global music data missing."); return; }
-      if (tempUserShowallRecords.length === 0 && userNameForApi !== defaultPlayerName) { setIsLoadingInitialData(false); setErrorLoadingData("User play history missing."); return; }
+      // --- Apply Constant Overrides ---
+      if (Array.isArray(constOverrides) && constOverrides.length > 0 && tempFlattenedGlobalMusicRecords.length > 0) {
+        console.log(`[CONST_OVERRIDE] Applying ${constOverrides.length} overrides to ${tempFlattenedGlobalMusicRecords.length} global songs...`);
+        constOverrides.forEach(override => {
+          let songsFoundAndOverridden = 0;
+          tempFlattenedGlobalMusicRecords.forEach(globalSong => {
+            if (globalSong.title.trim().toLowerCase() === override.title.trim().toLowerCase() &&
+                globalSong.diff.toUpperCase() === override.diff.toUpperCase()) {
+              if (typeof override.const === 'number') {
+                globalSong.const = override.const;
+                console.log(`[CONST_OVERRIDE_APPLIED] Overridden: ${override.title} (${override.diff}) to ${override.const}`);
+                songsFoundAndOverridden++;
+              } else {
+                console.warn(`[CONST_OVERRIDE_SKIP] Invalid const value for ${override.title} (${override.diff}):`, override.const);
+              }
+            }
+          });
+          if (songsFoundAndOverridden === 0) {
+            console.warn(`[CONST_OVERRIDE_NOT_FOUND] Song not found in master list for override: ${override.title} (${override.diff})`);
+          }
+        });
+      } else {
+        console.log("[CONST_OVERRIDE] No overrides to apply or global music list is empty.");
+      }
+      // --- End of Apply Constant Overrides ---
+
+      setAllMusicData(tempFlattenedGlobalMusicRecords);
+      setUserPlayHistory(tempUserShowallRecords);
+
+
+      if (!ratingData) { setIsLoadingInitialData(false); setErrorLoadingData("Rating data missing after fetch/cache attempt."); return; }
+      if (tempFlattenedGlobalMusicRecords.length === 0) { setIsLoadingInitialData(false); setErrorLoadingData("Global music data missing after fetch/cache attempt."); return; }
+      if (tempUserShowallRecords.length === 0 && userNameForApi !== defaultPlayerName) { setIsLoadingInitialData(false); setErrorLoadingData("User play history missing after fetch/cache attempt."); return; }
 
 
       const initialB30ApiEntries = ratingData?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && typeof e.title === 'string' && e.title.trim() !== '') || [];
-      const processedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
+      const processedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => {
+        const masterSongData = tempFlattenedGlobalMusicRecords.find(ms => ms.id === entry.id && ms.diff.toUpperCase() === entry.diff.toUpperCase());
+        return mapApiSongToAppSong(entry, index, masterSongData?.const ?? entry.const);
+      }));
       setOriginalB30SongsData(processedOriginalB30);
       console.log(`[DATA_FETCH_HOOK] Original B30 songs mapped: ${processedOriginalB30.length}`);
 
@@ -356,12 +319,12 @@ export function useChuniResultData({
       const playedNewSongsApi = newSongDefinitions.reduce((acc, newSongDef) => {
         const userPlayRecord = userPlayedMap.get(`${newSongDef.id}_${newSongDef.diff.toUpperCase()}`);
         if (userPlayRecord && typeof userPlayRecord.score === 'number' && userPlayRecord.score >= 800000) {
-          acc.push({ ...newSongDef, score: userPlayRecord.score, is_played: true });
+          acc.push({ ...newSongDef, score: userPlayRecord.score, is_played: true, rating: userPlayRecord.rating }); // Include user's rating if available
         }
         return acc;
       }, [] as ShowallApiSongEntry[]);
 
-      const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
+      const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)); // Const is already overridden if applicable
       const sortedAllPlayedNewSongsPool = sortSongsByRatingDesc(mappedPlayedNewSongs);
       setAllPlayedNewSongsPool(sortedAllPlayedNewSongsPool);
 
@@ -380,133 +343,143 @@ export function useChuniResultData({
 
   useEffect(() => {
     console.log(`[SIM_STRATEGY_EFFECT] Running. Strategy: ${calculationStrategy}, Prev: ${prevCalculationStrategyRef.current}, isLoading: ${isLoadingInitialData}, OriginalB30Count: ${originalB30SongsData.length}, currentPhase: ${currentPhase}`);
-    setPreCalculationMessage(null); // Reset pre-calc message on strategy change
+
+    setPreSimulationMessage(null);
 
     if (isLoadingInitialData || !clientHasMounted) {
       console.log("[SIM_STRATEGY_EFFECT] Waiting for initial data or client mount.");
       return;
     }
 
+    const currentRatingNum = parseFloat(currentRatingDisplay || "0");
+    const targetRatingNum = parseFloat(targetRatingDisplay || "0");
+
     if (calculationStrategy === "none" || calculationStrategy === null) {
-      console.log("[SIM_STRATEGY_EFFECT] No strategy selected or 'none'. Displaying original data.");
+      console.log("[SIM_STRATEGY_EFFECT] No strategy selected. Displaying original data.");
       const initialDisplayB30 = originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
       const initialDisplayN20 = originalNew20SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
       setSimulatedB30Songs(initialDisplayB30);
       setSimulatedNew20Songs(initialDisplayN20);
-      const initialB30Avg = calculateAverageCurrentRating(originalB30SongsData, BEST_COUNT);
-      const initialN20Avg = calculateAverageCurrentRating(originalNew20SongsData, NEW_20_COUNT);
+      const initialB30Avg = calculateAverageRating(originalB30SongsData, BEST_COUNT, 'currentRating');
+      const initialN20Avg = calculateAverageRating(originalNew20SongsData, NEW_20_COUNT, 'currentRating');
       setSimulatedAverageB30Rating(initialB30Avg);
       setSimulatedAverageNew20Rating(initialN20Avg);
       setFinalOverallSimulatedRating(calculateOverallRatingFromAverages(initialB30Avg, initialN20Avg, originalB30SongsData.length, originalNew20SongsData.length));
       setCurrentPhase('idle');
-      setSimulationLog(["계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다."]);
+      setSimulationLog([getTranslation(locale, 'resultPageLogNoStrategy')]);
       prevCalculationStrategyRef.current = calculationStrategy;
       return;
     }
 
-    // --- Pre-calculation for focused modes ---
-    if (calculationStrategy === "b30_focus" || calculationStrategy === "n20_focus") {
-      if (!targetRatingDisplay || isNaN(parseFloat(targetRatingDisplay))) {
-        setPreCalculationMessage("목표 레이팅을 올바르게 입력해주세요.");
-        setCurrentPhase('idle'); // Or a new phase like 'awaiting_target_rating'
-        return;
-      }
-      const targetRatingNum = parseFloat(targetRatingDisplay);
-      const mode = calculationStrategy === "b30_focus" ? "b30_only" : "n20_only";
-      const theoreticalMaxInfo = calculateTheoreticalMaxOverallRating(
-        mode,
-        originalB30SongsData,
-        originalNew20SongsData,
-        allMusicData,
-        allPlayedNewSongsPool,
-        locale
-      );
-
-      if (targetRatingNum > theoreticalMaxInfo.reachableRating) {
-        const message = mode === "b30_only"
-          ? `Best 30의 갱신으로 도달 할 수 있는 최대치(${theoreticalMaxInfo.reachableRating.toFixed(4)})에 이미 도달했거나 초과했습니다.`
-          : `New 20의 갱신으로 도달 할 수 있는 최대치(${theoreticalMaxInfo.reachableRating.toFixed(4)})에 이미 도달했거나 초과했습니다.`;
-        setPreCalculationMessage(message);
-        setCurrentPhase('target_unreachable_info');
-        // Display original data as there's no simulation to run
-        const initialDisplayB30 = originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
-        const initialDisplayN20 = originalNew20SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
-        setSimulatedB30Songs(initialDisplayB30);
-        setSimulatedNew20Songs(initialDisplayN20);
-        setSimulatedAverageB30Rating(calculateAverageCurrentRating(originalB30SongsData, BEST_COUNT));
-        setSimulatedAverageNew20Rating(calculateAverageCurrentRating(originalNew20SongsData, NEW_20_COUNT));
-        setFinalOverallSimulatedRating(calculateOverallRatingFromAverages(
-            calculateAverageCurrentRating(originalB30SongsData, BEST_COUNT),
-            calculateAverageCurrentRating(originalNew20SongsData, NEW_20_COUNT),
-            originalB30SongsData.length,
-            originalNew20SongsData.length
-        ));
-        return; // Stop further processing for this strategy
-      }
-    }
-    // --- End of Pre-calculation ---
-
-
-    if (prevCalculationStrategyRef.current !== calculationStrategy) {
-      console.log(`[SIM_STRATEGY_EFFECT] Strategy changed from ${prevCalculationStrategyRef.current} to ${calculationStrategy}. Resetting simulation states for fresh run.`);
-      setSimulatedB30Songs(originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating })));
-      setSimulatedNew20Songs(originalNew20SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating })));
-      const currentB30Avg = calculateAverageCurrentRating(originalB30SongsData, BEST_COUNT);
-      const currentN20Avg = calculateAverageCurrentRating(originalNew20SongsData, NEW_20_COUNT);
-      setSimulatedAverageB30Rating(currentB30Avg);
-      setSimulatedAverageNew20Rating(currentN20Avg);
-      setFinalOverallSimulatedRating(calculateOverallRatingFromAverages(currentB30Avg, currentN20Avg, originalB30SongsData.length, originalNew20SongsData.length));
-      setSimulationLog([]);
-      prevCalculationStrategyRef.current = calculationStrategy;
-    }
-
-    if (!currentRatingDisplay || !targetRatingDisplay) { return; }
-    if (originalB30SongsData.length === 0 && originalNew20SongsData.length === 0) {
+    if (originalB30SongsData.length === 0 && originalNew20SongsData.length === 0 && calculationStrategy !== 'none') {
         setErrorLoadingData(getTranslation(locale, 'resultPageNoBest30Data'));
         setCurrentPhase('error_data_fetch');
         return;
     }
+    if (isNaN(currentRatingNum) || isNaN(targetRatingNum)) {
+        setErrorLoadingData(getTranslation(locale, 'resultPageErrorInvalidRatingsInput'));
+        setCurrentPhase('error_data_fetch');
+        return;
+    }
+
+
+    let simulationScope: 'b30_only' | 'n20_only' | 'combined' = 'combined';
+    let improvementMethod: 'floor' | 'peak' = 'floor'; // Default, will be overridden for combined_peak
+
+    if (calculationStrategy === 'b30_only') simulationScope = 'b30_only';
+    else if (calculationStrategy === 'n20_only') simulationScope = 'n20_only';
+    else if (calculationStrategy === 'combined_floor') { simulationScope = 'combined'; improvementMethod = 'floor'; }
+    else if (calculationStrategy === 'combined_peak') { simulationScope = 'combined'; improvementMethod = 'peak'; }
+
+
+    // --- Pre-calculation for 'b30_only' or 'n20_only' ---
+    if (simulationScope === 'b30_only' || simulationScope === 'n20_only') {
+        let fixedListRatingSum = 0;
+        let fixedListCount = 0;
+        let variableListPotentialSongs: ShowallApiSongEntry[] = [];
+        let variableListLimit = 0;
+        let precalcMessageKey: keyof (typeof translations)['KR'] | null = null;
+
+        if (simulationScope === 'b30_only') {
+            originalNew20SongsData.forEach(song => fixedListRatingSum += song.currentRating);
+            fixedListCount = originalNew20SongsData.length;
+
+            const newSongsTitlesLower = (NewSongsData.titles?.verse || []).map(t => t.trim().toLowerCase());
+            variableListPotentialSongs = allMusicData.filter(ms => {
+                 const titleLower = ms.title.trim().toLowerCase();
+                 return !newSongsTitlesLower.includes(titleLower) &&
+                        !originalNew20SongsData.some(n20s => n20s.id === ms.id && n20s.diff === ms.diff.toUpperCase());
+            });
+            variableListLimit = BEST_COUNT;
+            precalcMessageKey = 'resultPageErrorTargetUnreachableB30';
+        } else { // n20_only
+            originalB30SongsData.forEach(song => fixedListRatingSum += song.currentRating);
+            fixedListCount = originalB30SongsData.length;
+            // For N20, potential songs come from allPlayedNewSongsPool that are not in originalB30
+            // allPlayedNewSongsPool already contains ShowallApiSongEntry like objects with user's score
+            // But for theoretical max, we map them to max potential
+            variableListPotentialSongs = allPlayedNewSongsPool
+                .filter(poolSong => !originalB30SongsData.some(b30s => b30s.id === poolSong.id && b30s.diff === poolSong.diff))
+                .map(pSong => ({ // Convert Song from pool to ShowallApiSongEntry for calculateMaxPotentialRatingOfSongList
+                    id: pSong.id,
+                    diff: pSong.diff,
+                    title: pSong.title,
+                    genre: pSong.genre || "N/A",
+                    const: pSong.chartConstant,
+                    level: pSong.level || "N/A",
+                }));
+            variableListLimit = NEW_20_COUNT;
+            precalcMessageKey = 'resultPageErrorTargetUnreachableN20';
+        }
+
+        const { sum: variableListMaxPotentialSum, average: variableListMaxPotentialAvg } = calculateMaxPotentialRatingOfSongList(
+            variableListPotentialSongs,
+            variableListLimit,
+            MAX_SCORE_FOR_MAX_RATING
+        );
+
+        let reachableRatingThisMode = 0;
+        if (variableListMaxPotentialAvg !== null) {
+             const totalSum = fixedListRatingSum + variableListMaxPotentialSum;
+             const totalCount = fixedListCount + Math.min(variableListPotentialSongs.length, variableListLimit) ;
+             if (totalCount > 0) {
+                reachableRatingThisMode = parseFloat((totalSum / totalCount).toFixed(4));
+             }
+        } else if (fixedListCount > 0 && simulationScope === 'n20_only') { // N20 is empty, B30 has songs
+            reachableRatingThisMode = parseFloat((fixedListRatingSum / fixedListCount).toFixed(4));
+        } else if (fixedListCount > 0 && simulationScope === 'b30_only') { // B30 is empty, N20 has songs
+            reachableRatingThisMode = parseFloat((fixedListRatingSum / fixedListCount).toFixed(4));
+        }
+
+
+        if (targetRatingNum > reachableRatingThisMode) {
+            setPreSimulationMessage(getTranslation(locale, precalcMessageKey as keyof typeof translations['KR'], reachableRatingThisMode.toFixed(4)));
+            setCurrentPhase('target_unreachable');
+            // Display original data if target is unreachable
+            const initialDisplayB30 = originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
+            const initialDisplayN20 = originalNew20SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
+            setSimulatedB30Songs(initialDisplayB30);
+            setSimulatedNew20Songs(initialDisplayN20);
+            setSimulatedAverageB30Rating(calculateAverageRating(initialDisplayB30, BEST_COUNT, 'currentRating'));
+            setSimulatedAverageNew20Rating(calculateAverageRating(initialDisplayN20, NEW_20_COUNT, 'currentRating'));
+            setFinalOverallSimulatedRating(calculateOverallRatingFromAverages(
+                calculateAverageRating(initialDisplayB30, BEST_COUNT, 'currentRating'),
+                calculateAverageRating(initialDisplayN20, NEW_20_COUNT, 'currentRating'),
+                initialDisplayB30.length,
+                initialDisplayN20.length
+            ));
+            setIsSimulating(false);
+            return; // Stop further processing
+        }
+    }
+
 
     const runSimulationAsync = async () => {
         if (isSimulating) { return; }
         setIsSimulating(true); setCurrentPhase('simulating');
-        setSimulationLog(prev => [...prev, "Preparing simulation input..."]);
-
-        const currentRatingNum = parseFloat(currentRatingDisplay);
-        const targetRatingNum = parseFloat(targetRatingDisplay);
-
-        if (isNaN(currentRatingNum) || isNaN(targetRatingNum)) {
-            setErrorLoadingData("Invalid rating numbers for simulation."); setCurrentPhase('error_data_fetch'); setIsSimulating(false); return;
-        }
+        setSimulationLog(prev => [...prev, getTranslation(locale, 'resultPageLogSimulationStarting')]);
 
         const calculatedPhaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95;
-        setPhaseTransitionPoint(parseFloat(calculatedPhaseTransitionPoint.toFixed(4)));
-
-        let simMode: SimulationInput["simulationMode"];
-        let algoPref: SimulationInput["algorithmPreference"];
-
-        switch (calculationStrategy) {
-            case "b30_focus":
-                simMode = "b30_only";
-                algoPref = "floor"; // Default algorithm for focused B30
-                break;
-            case "n20_focus":
-                simMode = "n20_only";
-                algoPref = "floor"; // Default algorithm for focused N20
-                break;
-            case "hybrid_floor":
-                simMode = "hybrid";
-                algoPref = "floor";
-                break;
-            case "hybrid_peak":
-                simMode = "hybrid";
-                algoPref = "peak";
-                break;
-            default: // Should not happen if "none" is handled above
-                setIsSimulating(false);
-                setCurrentPhase("idle");
-                return;
-        }
 
         const simulationInput: SimulationInput = {
             originalB30Songs: JSON.parse(JSON.stringify(originalB30SongsData)),
@@ -516,29 +489,41 @@ export function useChuniResultData({
             userPlayHistory: JSON.parse(JSON.stringify(userPlayHistory)),
             currentRating: currentRatingNum,
             targetRating: targetRatingNum,
-            algorithmPreference: algoPref,
-            simulationMode: simMode,
+            calculationStrategy: calculationStrategy as CalculationStrategy, // Ensure it's not null
+            improvementMethod: improvementMethod,
+            simulationScope: simulationScope,
             isScoreLimitReleased: (targetRatingNum - currentRatingNum) * 50 > 10,
             phaseTransitionPoint: parseFloat(calculatedPhaseTransitionPoint.toFixed(4)),
         };
 
-        console.log(`[SIM_STRATEGY_EFFECT] Calling runFullSimulation. Mode: ${simMode}, Algo: ${algoPref}`);
-        setSimulationLog(prev => [...prev, `Calling runFullSimulation (Mode: ${simMode}, Algo: ${algoPref})...`]);
+        console.log(`[SIM_STRATEGY_EFFECT] Calling runFullSimulation. Scope: ${simulationInput.simulationScope}, Method: ${simulationInput.improvementMethod}`);
+        setSimulationLog(prev => [...prev, `Calling runFullSimulation (Scope: ${simulationInput.simulationScope}, Method: ${simulationInput.improvementMethod})...`]);
 
         try {
             const result: SimulationOutput = runFullSimulation(simulationInput);
             console.log("[SIM_STRATEGY_EFFECT] SimulationOutput received:", result);
-            setSimulationLog(prev => [...prev, ...result.simulationLog, `Simulation Ended. Final Phase: ${result.finalPhase}`]);
+
             setSimulatedB30Songs(result.simulatedB30Songs);
             setSimulatedNew20Songs(result.simulatedNew20Songs);
             setSimulatedAverageB30Rating(result.finalAverageB30Rating);
             setSimulatedAverageNew20Rating(result.finalAverageNew20Rating);
             setFinalOverallSimulatedRating(result.finalOverallRating);
-            setCurrentPhase(result.finalPhase);
-            if (result.error) { setErrorLoadingData(`Simulation logic error: ${result.error}`); setCurrentPhase('error_simulation_logic');}
+            setCurrentPhase(result.finalPhase); // This should now include 'target_unreachable' if set by runFullSimulation
+            setSimulationLog(prev => [...prev, ...result.simulationLog, `Simulation Ended. Final Phase: ${result.finalPhase}`]);
+
+            if (result.error) {
+              setErrorLoadingData(getTranslation(locale, 'resultPageErrorSimulationGeneric', result.error));
+              setCurrentPhase('error_simulation_logic');
+            } else if (result.finalPhase === 'target_unreachable' && result.reachableRating) {
+                 // This case might be handled by pre-calculation now, but as a fallback.
+                 const messageKey = simulationScope === 'b30_only' ? 'resultPageErrorTargetUnreachableB30' : 'resultPageErrorTargetUnreachableN20';
+                 setPreSimulationMessage(getTranslation(locale, messageKey as keyof typeof translations['KR'], result.reachableRating.toFixed(4)));
+            }
+
         } catch (e: any) {
             console.error("[SIM_STRATEGY_EFFECT] Error during runFullSimulation call:", e);
-            setErrorLoadingData(`Critical error in simulation: ${e.message}`); setCurrentPhase('error_simulation_logic');
+            setErrorLoadingData(getTranslation(locale, 'resultPageErrorSimulationGeneric', e.message));
+            setCurrentPhase('error_simulation_logic');
             setSimulationLog(prev => [...prev, `Critical error: ${e.message}`]);
         } finally {
             setIsSimulating(false);
@@ -546,7 +531,13 @@ export function useChuniResultData({
         }
     };
 
-    runSimulationAsync();
+    if (calculationStrategy !== 'none' && calculationStrategy !== null) {
+      runSimulationAsync();
+    } else {
+      // This case should already be handled by the "No strategy selected" block above.
+      // If it reaches here, ensure states are correctly set for idle/original display.
+      setIsSimulating(false);
+    }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -578,6 +569,8 @@ export function useChuniResultData({
 
     if (baseB30.length > 0 || baseN20.length > 0) {
       const songMap = new Map<string, Song>();
+
+      // For combined view, always use targetRating as the "currentRating" for sorting
       const songsToCombineB30 = baseB30.map(song => ({ ...song, currentRating: song.targetRating }));
       songsToCombineB30.forEach(song => songMap.set(`${song.id}_${song.diff}`, { ...song }));
       console.log(`[COMBINED_SONGS_EFFECT] songMap after B30 processing. Size: ${songMap.size}`);
@@ -601,7 +594,7 @@ export function useChuniResultData({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
       simulatedB30Songs, simulatedNew20Songs,
-      originalB30SongsData, originalNew20SongsData,
+      originalB30SongsData, originalNew20SongsData, // Ensure originals are also deps if used as fallback
       isLoadingInitialData, isSimulating,
   ]);
 
@@ -614,12 +607,12 @@ export function useChuniResultData({
     isLoadingSongs: isLoadingInitialData || isSimulating,
     errorLoadingSongs: errorLoadingData,
     lastRefreshed,
-    phaseTransitionPoint,
     currentPhase,
     simulatedAverageB30Rating,
     simulatedAverageNew20Rating,
     finalOverallSimulatedRating,
     simulationLog,
-    preCalculationMessage,
+    preSimulationMessage,
   };
 }
+
