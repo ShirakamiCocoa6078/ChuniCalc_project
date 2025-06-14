@@ -25,6 +25,7 @@ export const translations = {
     localApiKeyPlaceholder: "개인 Chunirec API 토큰 입력",
     saveApiKeyButton: "로컬 API 키 저장/업데이트",
     localApiKeyHelp: "여기에 개인 Chunirec API 토큰을 입력하면, 앱 실행 시 우선적으로 이 키를 사용합니다. 비워두고 저장하면 제거됩니다.",
+    localApiKeyNoLongerUsed: "참고: 이 로컬 API 키는 더 이상 앱의 주 API 호출에 사용되지 않습니다. API 호출은 보안을 위해 서버 프록시를 통해 이루어집니다.",
     developerModeLabel: "개발자 모드",
     goToApiTestPageButton: "API 테스트 페이지로 이동",
     goToSimulationTestPageButton: "시뮬레이션 로직 테스트 페이지로 이동",
@@ -37,7 +38,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.6",
+    appVersion: "ChuniCalc v1.0.7",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -105,8 +106,8 @@ export const translations = {
     resultPageStrategyTitle: "계산 전략 선택",
     resultPageStrategyB30Focus: "Best 30 집중 최적화",
     resultPageStrategyN20Focus: "New 20 집중 최적화",
-    resultPageStrategyCombinedFloor: "전체 최적화 (저점)",
-    resultPageStrategyCombinedPeak: "전체 최적화 (고점)",
+    resultPageStrategyCombinedFloor: "전체 최적화 (저점 우선)",
+    resultPageStrategyCombinedPeak: "전체 최적화 (고점 우선)",
     resultPageStrategyNone: "선택 안함",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -135,8 +136,8 @@ export const translations = {
     resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
     resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
-    reachableRatingB30Message: (rating: string) => `Best 30 곡들의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. 현재 N20을 고정한 상태에서 B30 곡들을 최대로 갱신했을 때 도달 가능한 레이팅은 약 ${rating} 입니다.`,
-    reachableRatingN20Message: (rating: string) => `New 20 곡들의 갱신만으로는 목표 레이팅에 도달할 수 없습니다. 현재 B30을 고정한 상태에서 N20 곡들을 최대로 갱신했을 때 도달 가능한 레이팅은 약 ${rating} 입니다.`,
+    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 곡들의 갱신만으로는 현재 목표 레이팅에 도달할 수 없습니다. (현재 New 20 고정 시, Best 30 최대 도달 가능 레이팅: 약 ${rating})`,
+    reachableRatingN20OnlyMessage: (rating: string) => `New 20 곡들의 갱신만으로는 현재 목표 레이팅에 도달할 수 없습니다. (현재 Best 30 고정 시, New 20 최대 도달 가능 레이팅: 약 ${rating})`,
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -161,6 +162,7 @@ export const translations = {
     localApiKeyPlaceholder: "個人用 Chunirec API トークン入力",
     saveApiKeyButton: "ローカルAPIキー保存/更新",
     localApiKeyHelp: "ここに個人用Chunirec APIトークンを入力すると、アプリ実行時に優先的にこのキーを使用します。空にして保存すると削除されます。",
+    localApiKeyNoLongerUsed: "注意: このローカルAPIキーは、アプリの主要なAPI呼び出しには使用されなくなりました。API呼び出しはセキュリティのため、サーバープロキシ経由で行われます。",
     developerModeLabel: "開発者モード",
     goToApiTestPageButton: "APIテストページへ移動",
     goToSimulationTestPageButton: "シミュレーションロジックテストページへ移動",
@@ -173,7 +175,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.6",
+    appVersion: "ChuniCalc v1.0.7",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     toastErrorApiKeyNotSet: "API設定エラー",
@@ -201,7 +203,7 @@ export const translations = {
     toastErrorInvalidInput: "不正な入力",
     toastErrorInvalidInputDesc: "レーティングは数値で入力する必要があります。",
     toastErrorCurrentRatingTooHigh: "現在レーティングが高すぎます",
-    toastErrorCurrentRatingTooHighDesc: "現在レーティングが17.50以上です。この計算機ではこれ以上の成長を予測できません。",
+    toastErrorCurrentRatingTooHighDesc: "現在レー팅が17.50以上です。この計算機ではこれ以上の成長を予測できません。",
     toastErrorInvalidRatingRange: "不正なレーティング範囲",
     toastErrorInvalidRatingRangeDesc: "現在レーティングは0.00～17.49、目標レーティングは0.00～17.50の間である必要があります。",
     toastErrorTargetRating: "目標レーティングエラー",
@@ -240,8 +242,8 @@ export const translations = {
     resultPageStrategyTitle: "計算戦略選択",
     resultPageStrategyB30Focus: "Best 30 集中最適化",
     resultPageStrategyN20Focus: "New 20 集中最適化",
-    resultPageStrategyCombinedFloor: "全体最適化 (低点)",
-    resultPageStrategyCombinedPeak: "全体最適化 (高点)",
+    resultPageStrategyCombinedFloor: "全体最適化 (低点優先)",
+    resultPageStrategyCombinedPeak: "全体最適化 (高点優先)",
     resultPageStrategyNone: "選択なし",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -270,8 +272,8 @@ export const translations = {
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
-    reachableRatingB30Message: (rating: string) => `Best 30 曲の更新だけでは目標レーティングに到達できません。現在のNew 20を固定した状態で、Best 30 曲を最大まで更新した場合に到達可能なレーティングは約 ${rating} です。`,
-    reachableRatingN20Message: (rating: string) => `New 20 曲の更新だけでは目標レーティングに到達できません。現在のBest 30を固定した状態で、New 20 曲を最大まで更新した場合に到達可能なレーティングは約 ${rating} です。`,
+    reachableRatingB30OnlyMessage: (rating: string) => `Best 30 曲の更新だけでは現在の目標レーティングに到達できません。(現在の New 20 固定時、Best 30 最大到達可能レーティング: 約 ${rating})`,
+    reachableRatingN20OnlyMessage: (rating: string) => `New 20 曲の更新だけでは現在の目標レーティングに到達できません。(現在の Best 30 固定時、New 20 最大到達可能レーティング: 約 ${rating})`,
   }
 };
 
@@ -320,3 +322,4 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+

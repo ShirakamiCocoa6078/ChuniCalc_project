@@ -35,12 +35,13 @@ export const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: stri
         }
         
         const startCharIndex = Math.max(openBraceIndex, openBracketIndex);
-        // If no opening char found before the term in this path, or if it's not the start of a valid JSON object/array root
+        
+        let startParseIndex = startCharIndex !== -1 ? startCharIndex : 0;
+        
+        // If no opening char found before the term, or if it's not the start of a valid JSON object/array root
         if (startCharIndex === -1 && (jsonDataStr[0] !== '[' && jsonDataStr[0] !== '{')) {
              continue; 
         }
-        
-        let startParseIndex = startCharIndex !== -1 ? startCharIndex : 0;
         
         const startChar = jsonDataStr[startParseIndex];
         if (startChar !== '{' && startChar !== '[') { // Ensure we start from a valid JSON structure
@@ -56,28 +57,30 @@ export const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: stri
 
             if (balance === 0 && endIdx >= matchIndex) { // Found a balanced block that contains the matchIndex
                 const currentBlock = jsonDataStr.substring(startParseIndex, endIdx + 1);
-                if (currentBlock.toLowerCase().includes(lowerTerm)) { // Double check term is within this specific block
+                // Double check term is within this specific block AND it's valid JSON
+                if (currentBlock.toLowerCase().includes(lowerTerm)) { 
                     try {
-                        JSON.parse(currentBlock); // Check if it's valid JSON
+                        JSON.parse(currentBlock); 
                         if (currentBlock.length < smallestBlockLength) {
                             smallestValidBlock = currentBlock;
-                            smallestBlockLength = currentBlock.length;
+                            getBlockLength = currentBlock.length;
                         }
-                    } catch (e) { /* ignore invalid JSON snippets for this path */ }
+                    } catch (e) { 
+                        // console.warn("Skipping invalid JSON block snippet:", currentBlock.substring(0,100));
+                    }
                 }
-                break; // Move to the next matchIndex
+                break; 
             }
         }
     }
     
     try {
-        // Return the smallest valid block found, pretty-printed, or an error message.
         return smallestValidBlock ? JSON.stringify(JSON.parse(smallestValidBlock), null, 2) : `Could not find a valid JSON block containing "${term}".`;
     } catch {
-        // Fallback if re-parsing for stringify fails (e.g. smallestValidBlock was malformed despite initial check)
         return smallestValidBlock || `Could not find a valid JSON block containing "${term}".`; 
     }
 };
+
 
 export type ApiHelperEndpointString =
   | "/2.0/records/profile.json"
@@ -110,15 +113,24 @@ export const displayFilteredData = (
     return { content: typeof data === 'string' ? data : JSON.stringify(data, null, 2) };
   }
   
-  const originalStringifiedData = JSON.stringify(data, null, 2);
+  let originalStringifiedData: string;
+  try {
+    originalStringifiedData = JSON.stringify(data, null, 2);
+  } catch (e) {
+    // If data is already a string (e.g., malformed JSON from API), use it as is
+    originalStringifiedData = typeof data === 'string' ? data : "Error: Could not stringify data.";
+  }
+
 
   if (!lowerSearchTerm || lowerSearchTerm === "") {
-    // For specific endpoints, always add line numbers even without search
-    if (endpoint === "/2.0/records/rating_data.json" || 
+    const needsLineNumbers = 
+        endpoint === "/2.0/records/rating_data.json" || 
         endpoint === "/2.0/records/showall.json" || 
         endpoint === "N20_DEBUG_USER" || 
         endpoint === "N20_DEBUG_USER_FILTERED" ||
-        endpoint === "N20_DEBUG_POOL") {
+        endpoint === "N20_DEBUG_POOL";
+
+    if (needsLineNumbers) {
           const lines = originalStringifiedData.split('\n');
           const numDigits = String(lines.length).length;
           const content = lines.map((line, index) => `  ${String(index + 1).padStart(numDigits, ' ')}. ${line}`).join('\n');
@@ -131,6 +143,7 @@ export const displayFilteredData = (
     return { content: originalStringifiedData };
   }
 
+  // Search logic for various endpoints
   if (endpoint === "/2.0/records/rating_data.json" || 
       endpoint === "/2.0/records/showall.json" || 
       endpoint === "N20_DEBUG_USER" || 
@@ -179,7 +192,13 @@ export const displayFilteredData = (
       endpoint === "SONG_BY_ID_RESULT") {
     
     let searchResultContent: string;
-    const dataToSearch = (typeof data === 'string' && endpoint !== "SONG_BY_ID_RESULT") ? JSON.parse(data) : data; 
+    let dataToSearch = data;
+    // music/showall.json's proxy returns direct array, not {records: ...} usually
+    // but handle if data is already parsed or a string.
+    if (typeof data === 'string' && endpoint !== "SONG_BY_ID_RESULT") {
+        try { dataToSearch = JSON.parse(data); } catch { /* use original stringified data */ }
+    }
+
 
     if (Array.isArray(dataToSearch)) {
         const matchedBlocks: string[] = [];
@@ -188,7 +207,11 @@ export const displayFilteredData = (
             if (itemStringForSearch.toLowerCase().includes(lowerSearchTerm)) {
                 const prettyItemString = JSON.stringify(item, null, 2);
                 const smallestBlock = findSmallestEnclosingBlockHelper(prettyItemString, lowerSearchTerm);
-                if (smallestBlock) matchedBlocks.push(smallestBlock);
+                if (smallestBlock && smallestBlock.startsWith("{") && smallestBlock.endsWith("}")) { // Basic check
+                    matchedBlocks.push(smallestBlock);
+                } else if (smallestBlock) { // If it's an error message or partial
+                    matchedBlocks.push(prettyItemString); // Fallback to full item
+                }
             }
         });
         searchResultContent = matchedBlocks.length > 0 ? matchedBlocks.join('\n\n---\n\n') : `"${searchTerm}" not found in any entry.`;
@@ -202,12 +225,12 @@ export const displayFilteredData = (
         }
         return { content: searchResultContent, summary: `Searching within the item for "${searchTerm}".`};
     } else { 
-        searchResultContent = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm) || `Could not process or find term in data.`;
-        return { content: searchResultContent, summary: `Searching in raw data for "${searchTerm}".`};
+        const block = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm);
+        return { content: block || `Could not process or find term in data. Defaulting to full data if search term is present, else original data.`, summary: `Generic search in raw data for "${searchTerm}".`};
     }
   }
   
-  // Default fallback search
+  // Default fallback search if term is present but no specific endpoint logic matched
   if (lowerSearchTerm) {
       const block = findSmallestEnclosingBlockHelper(originalStringifiedData, lowerSearchTerm);
       return { content: block || `"${searchTerm}" not found or no specific block could be isolated.`, summary: `Generic search for "${searchTerm}".` };
@@ -232,8 +255,11 @@ export const fetchApiForDebug = async (
       params.user_name = userName;
     }
     
+    // Ensure proxyEndpoint does not start with a '/' for the query parameter
+    const endpointParam = proxyEndpoint.startsWith('/') ? proxyEndpoint.substring(1) : proxyEndpoint;
+
     const url = new URL(`/api/chunirecApiProxy`, window.location.origin);
-    url.searchParams.append('proxyEndpoint', proxyEndpoint.startsWith('/') ? proxyEndpoint.substring(1) : proxyEndpoint);
+    url.searchParams.append('proxyEndpoint', endpointParam);
     for (const key in params) {
       url.searchParams.append(key, params[key]);
     }
