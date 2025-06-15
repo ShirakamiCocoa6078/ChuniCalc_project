@@ -24,10 +24,12 @@ export const translations = {
     localApiKeyPlaceholder: "개인 Chunirec API 토큰 (참고용)",
     saveApiKeyButton: "로컬 참조용 API 키 저장/업데이트",
     localApiKeyHelpUpdated: "이곳에 API 키를 저장해두면 필요시 참조할 수 있습니다. 앱의 API 호출은 보안 프록시를 통하므로, 여기에 저장된 값은 실제 API 요청에 직접 사용되지 않습니다. 비우고 저장하면 제거됩니다.",
+    adminNameLabel: "관리자 이름", // New
+    adminNamePlaceholder: "관리자 이름 입력", // New
     adminPasswordLabel: "개발자 인증",
     adminPasswordPlaceholder: "비밀번호 입력",
     authenticateButton: "인증",
-    authenticationFailedToast: "인증 실패. 비밀번호를 확인해주세요.",
+    authenticationFailedToast: "인증 실패. 이름 또는 비밀번호를 확인해주세요.", // Updated
     authenticationSuccessToast: "개발자 인증 성공!",
     developerSectionTitle: "개발자 도구",
     developerToolsToggleShow: "개발자 도구 상세 표시",
@@ -44,8 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.10",
-    // Removed: adminPanelToggleShow, adminPanelToggleHide, developerModeLabel, developerModeTurnOnPrompt, toastInfoDevModeEnabled, toastInfoDevModeDisabled, toastInfoAdminPanelShown, toastInfoAdminPanelHidden
+    appVersion: "ChuniCalc v1.0.11", // Updated version
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 설정 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 설정되지 않았습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.",
@@ -78,7 +79,6 @@ export const translations = {
     toastErrorTargetRating: "목표 레이팅 오류",
     toastErrorTargetRatingDesc: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
     toastSuccessLocalApiKeySaved: "로컬 참조용 API 키 저장됨",
-    // toastSuccessLocalApiKeySavedDesc: "입력한 API 키가 로컬 저장소에 저장되었습니다.", // Replaced by localApiKeyHelpUpdated
     toastSuccessLocalApiKeyRemoved: "로컬 참조용 API 키 제거됨",
     toastSuccessLocalApiKeyRemovedDesc: "로컬 참조용 API 키가 비어있어 저장소에서 제거되었습니다.",
     toastSuccessLocalDataCleared: "앱 캐시 삭제 완료",
@@ -105,10 +105,10 @@ export const translations = {
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
     resultPageRefreshButton: "사용자 데이터 새로고침",
     resultPageStrategyTitle: "계산 전략 선택",
-    resultPageStrategyB30Focus: "Best 30 집중 최적화",
-    resultPageStrategyN20Focus: "New 20 집중 최적화",
-    resultPageStrategyCombinedFloor: "전체 최적화 (저점 우선)",
-    resultPageStrategyCombinedPeak: "전체 최적화 (고점 우선)",
+    resultPageStrategyB30Focus: "Best 30 집중 최적화", // Updated
+    resultPageStrategyN20Focus: "New 20 집중 최적화", // Updated
+    resultPageStrategyCombinedFloor: "전체 최적화 (저점 우선)", // Updated
+    resultPageStrategyCombinedPeak: "전체 최적화 (고점 우선)", // Updated
     resultPageStrategyNone: "선택 안함",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -162,10 +162,12 @@ export const translations = {
     localApiKeyPlaceholder: "個人用 Chunirec API トークン (参照用)",
     saveApiKeyButton: "ローカル参照用APIキー保存/更新",
     localApiKeyHelpUpdated: "ここにAPIキーを保存しておくと、必要に応じて参照できます。アプリのAPI呼び出しは安全なプロキシ経由で行われるため、ここに保存された値は実際のAPIリクエストには直接使用されません。空にして保存すると削除されます。",
+    adminNameLabel: "管理者名", // New
+    adminNamePlaceholder: "管理者名を入力", // New
     adminPasswordLabel: "開発者認証",
     adminPasswordPlaceholder: "パスワード入力",
     authenticateButton: "認証",
-    authenticationFailedToast: "認証失敗。パスワードを確認してください。",
+    authenticationFailedToast: "認証失敗。名前またはパスワードを確認してください。", // Updated
     authenticationSuccessToast: "開発者認証成功！",
     developerSectionTitle: "開発者ツール",
     developerToolsToggleShow: "開発者ツール詳細表示",
@@ -182,7 +184,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.10",
+    appVersion: "ChuniCalc v1.0.11", // Updated version
     toastErrorApiKeyNotSet: "API設定エラー",
     toastErrorApiKeyNotSetDesc: "Chunirec APIトークンが設定されていません。詳細設定でローカルトークンを入力するか、環境変数を確認してください。",
     toastErrorNicknameNeeded: "ユーザー名が必要です",
@@ -239,10 +241,10 @@ export const translations = {
     resultPageSyncStatusChecking: "同期状態確認中...",
     resultPageRefreshButton: "ユーザーデータ更新",
     resultPageStrategyTitle: "計算戦略選択",
-    resultPageStrategyB30Focus: "Best 30 集中最適化",
-    resultPageStrategyN20Focus: "New 20 集中最適化",
-    resultPageStrategyCombinedFloor: "全体最適化 (低点優先)",
-    resultPageStrategyCombinedPeak: "全体最適化 (高点優先)",
+    resultPageStrategyB30Focus: "Best 30 集中最適化", // Updated
+    resultPageStrategyN20Focus: "New 20 集中最適化", // Updated
+    resultPageStrategyCombinedFloor: "全体最適化 (低点優先)", // Updated
+    resultPageStrategyCombinedPeak: "全体最適化 (高点優先)", // Updated
     resultPageStrategyNone: "選択なし",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -305,12 +307,15 @@ export function getTranslation<L extends Locale, K extends keyof typeof translat
   }
 
   if (messageOrFn === undefined) {
-    console.warn(`[Translation] Key "${String(key)}" not found in locale "${locale}" or fallback "KR".`);
-    return String(key);
+    // If a default value was provided in the component, use it.
+    // The last arg might be a default string if the key wasn't found.
+    const defaultText = args.length > 0 && typeof args[args.length -1] === 'string' && !Object.keys(primaryTranslations).includes(args[args.length -1] as K) ? args[args.length -1] as string : String(key);
+    console.warn(`[Translation] Key "${String(key)}" not found in locale "${locale}" or fallback "KR". Using default: "${defaultText}"`);
+    return defaultText;
   }
 
   if (typeof messageOrFn === 'function') {
-    return (messageOrFn as TranslationFunction<any[], string>)(...args);
+    return (messageOrFn as TranslationFunction<any[], string>)(...args.slice(0, messageOrFn.length));
   }
   return messageOrFn as string;
 }

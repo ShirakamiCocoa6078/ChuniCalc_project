@@ -13,8 +13,6 @@ import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, Fla
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
-// Removed: DEVELOPER_MODE_KEY, ADMIN_PANEL_VISIBLE_KEY
-
 export default function AdvancedSettings() {
   const [localApiTokenInput, setLocalApiTokenInput] = useState("");
   const [cacheNickname, setCacheNickname] = useState("");
@@ -22,6 +20,7 @@ export default function AdvancedSettings() {
   const [isCachingUser, setIsCachingUser] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
 
+  const [nameInput, setNameInput] = useState(""); // Added for admin name
   const [passwordInput, setPasswordInput] = useState("");
   const [isDeveloperAuthenticated, setIsDeveloperAuthenticated] = useState(false);
   const [showDeveloperToolsDetails, setShowDeveloperToolsDetails] = useState(false);
@@ -36,7 +35,6 @@ export default function AdvancedSettings() {
       if (storedToken) {
         setLocalApiTokenInput(storedToken);
       }
-      // No more developer mode check from localStorage
     }
   }, []);
 
@@ -62,18 +60,26 @@ export default function AdvancedSettings() {
     setPasswordInput(e.target.value);
   };
 
+  const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => { // Added
+    setNameInput(e.target.value);
+  };
+
   const handleAuthenticate = () => {
+    const adminName = process.env.NEXT_PUBLIC_ADMIN_NAME1;
     const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
-    if (adminPassword && passwordInput === adminPassword) {
+
+    if (adminName && nameInput === adminName && adminPassword && passwordInput === adminPassword) {
       setIsDeveloperAuthenticated(true);
+      setNameInput(""); // Clear name input
       setPasswordInput(""); // Clear password input
       toast({ title: getTranslation(locale, 'authenticationSuccessToast') });
     } else {
       toast({
-        title: getTranslation(locale, 'authenticationFailedToast'),
+        title: getTranslation(locale, 'authenticationFailedToast'), // Consider changing this to a more generic "Name or Password incorrect"
         variant: "destructive"
       });
-      setPasswordInput(""); // Clear password input
+      setNameInput(""); 
+      setPasswordInput(""); 
     }
   };
 
@@ -81,26 +87,20 @@ export default function AdvancedSettings() {
     setShowDeveloperToolsDetails(prev => !prev);
   };
 
-  // Functions to be moved inside developer authenticated section
   const handleClearAllLocalData = () => {
     if (typeof window !== 'undefined') {
       let clearedCount = 0;
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        // Keep userApiToken as it's managed separately now
         if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && key !== 'chuniCalcData_userApiToken') {
             keysToRemove.push(key);
         }
       }
-      // Do not remove 'chuniCalcData_userApiToken' here, as it's an always-visible setting.
-      // If user clears its input and saves, it will be removed.
-
       keysToRemove.forEach(key => {
         localStorage.removeItem(key);
         clearedCount++;
       });
-
       toast({
           title: getTranslation(locale, 'toastSuccessLocalDataCleared'),
           description: getTranslation(locale, 'toastSuccessLocalDataClearedDesc', clearedCount)
@@ -206,7 +206,6 @@ export default function AdvancedSettings() {
       </CardHeader>
       
       <CardContent className="space-y-6 pt-6">
-        {/* Always Visible: Local API Key Setting */}
         <div className="space-y-2">
           <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
             <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
@@ -226,7 +225,6 @@ export default function AdvancedSettings() {
 
         <hr/>
 
-        {/* Always Visible: Contact & Info */}
         <div className="text-sm">
             <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
             <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="https://x.com/Shirakami_cocoa" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@Shirakami_cocoa</a></p>
@@ -236,12 +234,26 @@ export default function AdvancedSettings() {
         </div>
       </CardContent>
 
-      {/* Password Authentication Section or Authenticated Developer Section */}
       {!isDeveloperAuthenticated ? (
         <CardFooter className="border-t pt-6 flex-col space-y-3">
           <div className="w-full space-y-1">
+            <Label htmlFor="adminNameInput" className="flex items-center font-medium">
+              <UserCircle className="mr-2 h-5 w-5 text-orange-500" /> {/* Changed Icon */}
+              {getTranslation(locale, 'adminNameLabel', "Admin Name")} {/* Added translation key or default */}
+            </Label>
+            <Input
+              id="adminNameInput"
+              type="text"
+              placeholder={getTranslation(locale, 'adminNamePlaceholder', "Enter admin name")}
+              value={nameInput}
+              onChange={handleNameChange}
+              onKeyDown={(e) => e.key === 'Enter' && handleAuthenticate()}
+            />
+          </div>
+          <div className="w-full space-y-1 mt-2">
             <Label htmlFor="adminPasswordInput" className="flex items-center font-medium">
-              <ShieldAlert className="mr-2 h-5 w-5 text-orange-500" /> {getTranslation(locale, 'adminPasswordLabel')}
+              <ShieldAlert className="mr-2 h-5 w-5 text-orange-500" /> 
+              {getTranslation(locale, 'adminPasswordLabel')}
             </Label>
             <Input
               id="adminPasswordInput"
@@ -252,7 +264,7 @@ export default function AdvancedSettings() {
               onKeyDown={(e) => e.key === 'Enter' && handleAuthenticate()}
             />
           </div>
-          <Button onClick={handleAuthenticate} className="w-full">
+          <Button onClick={handleAuthenticate} className="w-full mt-2">
             <LogIn className="mr-2 h-4 w-4" /> {getTranslation(locale, 'authenticateButton')}
           </Button>
         </CardFooter>
