@@ -6,6 +6,16 @@ const CHUNIREC_API_BASE_URL = 'https://api.chunirec.net/2.0';
 export async function GET(request: NextRequest) {
   const apiKey = process.env.CHUNIREC_API_KEY; // This is the expected environment variable name
 
+  // --- 임시 디버깅 로그 시작 ---
+  // 이 로그는 환경 변수가 서버 프로세스에 의해 올바르게 인식되었는지 확인하기 위함입니다.
+  // 실제 API 키 값은 절대 로그로 남기지 마세요.
+  console.log(
+    '[PROXY_ENV_CHECK] CHUNIREC_API_KEY is defined:',
+    !!apiKey,
+    apiKey ? `Length: ${apiKey.length}` : '(Not Set or Empty)'
+  );
+  // --- 임시 디버깅 로그 끝 ---
+
   if (!apiKey) {
     console.error('[PROXY_ERROR] CHUNIREC_API_KEY is not set in server environment variables. This is a server configuration issue.');
     return NextResponse.json({ error: 'Server configuration error: API key for Chunirec is missing or not accessible by the server.' }, { status: 500 });
@@ -81,3 +91,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined }, { status: 503 }); // Service Unavailable
   }
 }
+

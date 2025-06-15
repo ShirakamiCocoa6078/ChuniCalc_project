@@ -38,7 +38,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 데이터, API 응답, 로컬 API 토큰, 개발자 모드 설정, 관리자 패널 표시 상태 제외)를 삭제합니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.8",
+    appVersion: "ChuniCalc v1.0.9",
     adminPanelToggleShow: "관리자 패널 표시",
     adminPanelToggleHide: "관리자 패널 숨기기",
     // Toast Messages KR
@@ -91,7 +91,7 @@ export const translations = {
     toastInfoDevModeEnabled: "개발자 모드 활성화됨",
     toastInfoDevModeDisabled: "개발자 모드 비활성화됨",
     toastInfoAdminPanelShown: "관리자 패널 표시됨",
-    toastInfoAdminPanelHidden: "관리자 패널 숨겨짐",
+    toastInfoAdminPanelHidden: "관리자 패널 비활성화됨",
     // Result Page
     resultPageDefaultPlayerName: "플레이어",
     resultPageNotAvailable: "N/A",
@@ -108,7 +108,9 @@ export const translations = {
     resultPageStrategyN20Focus: "New 20 집중",
     resultPageStrategyCombinedFloor: "전체 최적화 (저점 우선)",
     resultPageStrategyCombinedPeak: "전체 최적화 (고점 우선)",
-    resultPageStrategyCombined: "통합 (B30 + N20)",
+    resultPageStrategyCombined: "통합 (B30 + N20)", // Actually used value in code
+    resultPageStrategyB30Only: "Best 30만으로 계산",
+    resultPageStrategyN20Only: "New 20만으로 계산",
     resultPageStrategyNone: "선택 안함",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -139,6 +141,8 @@ export const translations = {
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
     reachableRatingB30Message: (rating: string) => `Best 30의 갱신으로 도달 할 수 있는 최대치입니다. 레이팅: ${rating}`,
     reachableRatingN20Message: (rating: string) => `New 20의 갱신으로 도달 할 수 있는 최대치입니다. 레이팅: ${rating}`,
+    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 집중 모드] 이 모드에서 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 달성할 수 없습니다.`,
+    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 집중 모드] 이 모드에서 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 달성할 수 없습니다.`,
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -176,7 +180,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UIデータ、API応答、ローカルAPIトークン、開発者モード設定、管理者パネル表示状態を除く）を削除します。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.8",
+    appVersion: "ChuniCalc v1.0.9",
     adminPanelToggleShow: "管理者パネル表示",
     adminPanelToggleHide: "管理者パネル非表示",
     toastErrorApiKeyNotSet: "API設定エラー",
@@ -204,15 +208,15 @@ export const translations = {
     toastErrorInvalidInput: "不正な入力",
     toastErrorInvalidInputDesc: "レーティングは数値で入力する必要があります。",
     toastErrorCurrentRatingTooHigh: "現在レーティングが高すぎます",
-    toastErrorCurrentRatingTooHighDesc: "現在レー팅が17.50以上です。この計算機ではこれ以上の成長を予測できません。",
+    toastErrorCurrentRatingTooHighDesc: "現在レーティングが17.50以上です。この計算機ではこれ以上の成長を予測できません。",
     toastErrorInvalidRatingRange: "不正なレーティング範囲",
     toastErrorInvalidRatingRangeDesc: "現在レーティングは0.00～17.49、目標レーティングは0.00～17.50の間である必要があります。",
     toastErrorTargetRating: "目標レーティングエラー",
     toastErrorTargetRatingDesc: "目標レーティングは現在レーティングより高くする必要があります。",
     toastSuccessLocalApiKeySaved: "ローカルAPIキー保存完了",
     toastSuccessLocalApiKeySavedDesc: "入力されたAPIキーがローカルストレージに保存されました。",
-    toastSuccessLocalApiKeyRemoved: "ロー컬 APIキー削除完了",
-    toastSuccessLocalApiKeyRemovedDesc: "ロー컬 APIキーが空のため、ストレージから削除されました。",
+    toastSuccessLocalApiKeyRemoved: "ローカル APIキー削除完了",
+    toastSuccessLocalApiKeyRemovedDesc: "ローカル APIキーが空のため、ストレージから削除されました。",
     toastSuccessLocalDataCleared: "ローカルデータ削除完了",
     toastSuccessLocalDataClearedDesc: (count: number) => `${count}個のアプリ関連ローカルキャッシュデータが削除されました。`,
     toastInfoCachingStarted: "キャッシング開始",
@@ -245,7 +249,9 @@ export const translations = {
     resultPageStrategyN20Focus: "New 20 集中",
     resultPageStrategyCombinedFloor: "全体最適化 (低点優先)",
     resultPageStrategyCombinedPeak: "全体最適化 (高点優先)",
-    resultPageStrategyCombined: "統合 (B30 + N20)",
+    resultPageStrategyCombined: "統合 (Best 30 + New 20)", // Actually used value in code
+    resultPageStrategyB30Only: "Best 30のみで計算",
+    resultPageStrategyN20Only: "New 20のみで計算",
     resultPageStrategyNone: "選択なし",
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
@@ -276,6 +282,8 @@ export const translations = {
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
     reachableRatingB30Message: (rating: string) => `Best 30の更新で到達可能な最大値です。レーティング: ${rating}`,
     reachableRatingN20Message: (rating: string) => `New 20の更新で到達可能な最大値です。レーティング: ${rating}`,
+    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] このモードで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合は達成できません。`,
+    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] このモードで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合は達成できません。`,
   }
 };
 
@@ -324,3 +332,4 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+
