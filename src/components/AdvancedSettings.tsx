@@ -1,46 +1,42 @@
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-// import { getApiToken } from "@/lib/get-api-token"; // No longer needed for proxied caching
-import { setCachedData, getCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2 } from "lucide-react";
+import { setCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
-const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
-const ADMIN_PANEL_VISIBLE_KEY = `${LOCAL_STORAGE_PREFIX}isAdminPanelVisible`;
+// Removed: DEVELOPER_MODE_KEY, ADMIN_PANEL_VISIBLE_KEY
 
 export default function AdvancedSettings() {
-  const [localApiTokenInput, setLocalApiTokenInput] = useState(""); // For the input field only
+  const [localApiTokenInput, setLocalApiTokenInput] = useState("");
   const [cacheNickname, setCacheNickname] = useState("");
-  const [isDeveloperModeActive, setIsDeveloperModeActive] = useState(false);
-  const [isAdminPanelContentVisible, setIsAdminPanelContentVisible] = useState(false);
-  const [clientHasMounted, setClientHasMounted] = useState(false);
   const [isCachingGlobal, setIsCachingGlobal] = useState(false);
   const [isCachingUser, setIsCachingUser] = useState(false);
+  const [clientHasMounted, setClientHasMounted] = useState(false);
+
+  const [passwordInput, setPasswordInput] = useState("");
+  const [isDeveloperAuthenticated, setIsDeveloperAuthenticated] = useState(false);
+  const [showDeveloperToolsDetails, setShowDeveloperToolsDetails] = useState(false);
+
   const { toast } = useToast();
   const { locale } = useLanguage();
 
   useEffect(() => {
     setClientHasMounted(true);
     if (typeof window !== 'undefined') {
-      const storedToken = localStorage.getItem('chuniCalcData_userApiToken'); // Keep for display if user had one
+      const storedToken = localStorage.getItem('chuniCalcData_userApiToken');
       if (storedToken) {
         setLocalApiTokenInput(storedToken);
       }
-      const devMode = localStorage.getItem(DEVELOPER_MODE_KEY);
-      setIsDeveloperModeActive(devMode === 'true');
-
-      // Admin panel content visibility also depends on its own toggle state
-      const adminPanelVisibleSetting = localStorage.getItem(ADMIN_PANEL_VISIBLE_KEY);
-      setIsAdminPanelContentVisible(adminPanelVisibleSetting === 'true');
+      // No more developer mode check from localStorage
     }
   }, []);
 
@@ -53,39 +49,57 @@ export default function AdvancedSettings() {
             description: getTranslation(locale, 'toastSuccessLocalApiKeyRemovedDesc')
         });
       } else {
-        // Note: This token is saved locally but NOT used for API calls anymore by main app.
-        // It's just for user's reference or if they have other tools using it.
         localStorage.setItem('chuniCalcData_userApiToken', localApiTokenInput.trim());
         toast({
             title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'),
-            description: getTranslation(locale, 'toastSuccessLocalApiKeySavedDesc') + " (Note: App now uses a server-side key for API calls)"
+            description: getTranslation(locale, 'localApiKeyHelpUpdated')
         });
       }
     }
   };
 
+  const handlePasswordChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setPasswordInput(e.target.value);
+  };
+
+  const handleAuthenticate = () => {
+    const adminPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD;
+    if (adminPassword && passwordInput === adminPassword) {
+      setIsDeveloperAuthenticated(true);
+      setPasswordInput(""); // Clear password input
+      toast({ title: getTranslation(locale, 'authenticationSuccessToast') });
+    } else {
+      toast({
+        title: getTranslation(locale, 'authenticationFailedToast'),
+        variant: "destructive"
+      });
+      setPasswordInput(""); // Clear password input
+    }
+  };
+
+  const toggleShowDeveloperToolsDetails = () => {
+    setShowDeveloperToolsDetails(prev => !prev);
+  };
+
+  // Functions to be moved inside developer authenticated section
   const handleClearAllLocalData = () => {
     if (typeof window !== 'undefined') {
       let clearedCount = 0;
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        // Keep developer mode and admin panel visibility settings
-        if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && key !== DEVELOPER_MODE_KEY && key !== ADMIN_PANEL_VISIBLE_KEY) {
+        // Keep userApiToken as it's managed separately now
+        if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && key !== 'chuniCalcData_userApiToken') {
             keysToRemove.push(key);
         }
       }
-      if (localStorage.getItem('chuniCalcData_userApiToken')) {
-          keysToRemove.push('chuniCalcData_userApiToken');
-      }
+      // Do not remove 'chuniCalcData_userApiToken' here, as it's an always-visible setting.
+      // If user clears its input and saves, it will be removed.
 
       keysToRemove.forEach(key => {
         localStorage.removeItem(key);
         clearedCount++;
       });
-
-      setLocalApiTokenInput(localStorage.getItem('chuniCalcData_userApiToken') || "");
-
 
       toast({
           title: getTranslation(locale, 'toastSuccessLocalDataCleared'),
@@ -107,7 +121,6 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
       const data = await response.json();
-      // The proxy returns the direct data, not {records: ...} for music/showall
       setCachedData<any[]>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, Array.isArray(data) ? data : (data?.records || []), GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       toast({
           title: getTranslation(locale, 'toastSuccessGlobalMusicCached'),
@@ -145,7 +158,7 @@ export default function AdvancedSettings() {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
-      const data = await response.json(); // records/showall returns {records: [...]}
+      const data = await response.json();
       setCachedData<any>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data);
       toast({
           title: getTranslation(locale, 'toastSuccessUserRecordsCached'),
@@ -163,26 +176,6 @@ export default function AdvancedSettings() {
     }
   };
 
-  const toggleDeveloperModeSetting = (checked: boolean) => {
-    setIsDeveloperModeActive(checked);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(DEVELOPER_MODE_KEY, String(checked));
-      if (!checked) { // If turning off dev mode, also hide admin panel content
-        setIsAdminPanelContentVisible(false);
-        localStorage.setItem(ADMIN_PANEL_VISIBLE_KEY, String(false));
-      }
-    }
-    toast({ title: checked ? getTranslation(locale, 'toastInfoDevModeEnabled') : getTranslation(locale, 'toastInfoDevModeDisabled') });
-  };
-
-  const toggleAdminPanelContent = () => {
-    const newVisibility = !isAdminPanelContentVisible;
-    setIsAdminPanelContentVisible(newVisibility);
-    if (typeof window !== 'undefined') {
-        localStorage.setItem(ADMIN_PANEL_VISIBLE_KEY, String(newVisibility));
-    }
-    // toast({ title: newVisibility ? getTranslation(locale, 'toastInfoAdminPanelShown') : getTranslation(locale, 'toastInfoAdminPanelHidden') });
-  };
 
   if (!clientHasMounted) {
     return (
@@ -207,69 +200,89 @@ export default function AdvancedSettings() {
           <Settings className="mr-2 h-6 w-6 text-primary" />
           {getTranslation(locale, 'advancedSettingsTitle')}
         </CardTitle>
-        {isDeveloperModeActive ? (
-          <CardDescription>
-            {getTranslation(locale, 'advancedSettingsDescription')}
-          </CardDescription>
-        ) : (
-          <CardDescription>
-            {getTranslation(locale, 'developerModeTurnOnPrompt')}
-          </CardDescription>
-        )}
+        <CardDescription>
+          {getTranslation(locale, 'advancedSettingsDesc')}
+        </CardDescription>
       </CardHeader>
       
-      {/* Always show Developer Mode Toggle */}
-      <CardContent className="pt-2 pb-2 border-b">
-        <div className="flex items-center space-x-2 justify-between">
-          <Label htmlFor="developer-mode-main-toggle" className="flex items-center font-medium text-base">
-            <FlaskConical className="mr-2 h-5 w-5 text-purple-500" /> {getTranslation(locale, 'developerModeLabel')}
+      <CardContent className="space-y-6 pt-6">
+        {/* Always Visible: Local API Key Setting */}
+        <div className="space-y-2">
+          <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
+            <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
           </Label>
-          <Switch
-            id="developer-mode-main-toggle"
-            checked={isDeveloperModeActive}
-            onCheckedChange={toggleDeveloperModeSetting}
-            disabled={!clientHasMounted}
+          <Input
+            id="localApiTokenInput"
+            type="text"
+            placeholder={getTranslation(locale, 'localApiKeyPlaceholder')}
+            value={localApiTokenInput}
+            onChange={(e) => setLocalApiTokenInput(e.target.value)}
           />
+          <Button onClick={handleSaveLocalApiToken} className="w-full mt-1">{getTranslation(locale, 'saveApiKeyButton')}</Button>
+          <p className="text-xs text-muted-foreground mt-1">
+            {getTranslation(locale, 'localApiKeyHelpUpdated')}
+          </p>
+        </div>
+
+        <hr/>
+
+        {/* Always Visible: Contact & Info */}
+        <div className="text-sm">
+            <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
+            <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="https://x.com/Shirakami_cocoa" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@Shirakami_cocoa</a></p>
+            {clientHasMounted && (
+              <p className="text-xs text-muted-foreground mt-1">{getTranslation(locale, 'appVersion')}</p>
+            )}
         </div>
       </CardContent>
 
-      {isDeveloperModeActive && (
+      {/* Password Authentication Section or Authenticated Developer Section */}
+      {!isDeveloperAuthenticated ? (
+        <CardFooter className="border-t pt-6 flex-col space-y-3">
+          <div className="w-full space-y-1">
+            <Label htmlFor="adminPasswordInput" className="flex items-center font-medium">
+              <ShieldAlert className="mr-2 h-5 w-5 text-orange-500" /> {getTranslation(locale, 'adminPasswordLabel')}
+            </Label>
+            <Input
+              id="adminPasswordInput"
+              type="password"
+              placeholder={getTranslation(locale, 'adminPasswordPlaceholder')}
+              value={passwordInput}
+              onChange={handlePasswordChange}
+              onKeyDown={(e) => e.key === 'Enter' && handleAuthenticate()}
+            />
+          </div>
+          <Button onClick={handleAuthenticate} className="w-full">
+            <LogIn className="mr-2 h-4 w-4" /> {getTranslation(locale, 'authenticateButton')}
+          </Button>
+        </CardFooter>
+      ) : (
         <>
-          <CardContent className="space-y-6 pt-6">
-            <div className="space-y-2">
-              <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
-                <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')} (Not Used by App)
-              </Label>
-              <Input
-                id="localApiTokenInput"
-                type="text"
-                placeholder={getTranslation(locale, 'localApiKeyPlaceholder')}
-                value={localApiTokenInput}
-                onChange={(e) => setLocalApiTokenInput(e.target.value)}
-              />
-              <Button onClick={handleSaveLocalApiToken} className="w-full mt-1">{getTranslation(locale, 'saveApiKeyButton')}</Button>
-              <p className="text-xs text-muted-foreground mt-1">
-                {getTranslation(locale, 'localApiKeyHelp')} {getTranslation(locale, 'localApiKeyNoLongerUsed')}
-              </p>
-            </div>
+          <CardHeader className="border-t pt-6">
+            <CardTitle className="font-headline text-xl flex items-center">
+              <FlaskConical className="mr-2 h-5 w-5 text-purple-500" />
+              {getTranslation(locale, 'developerSectionTitle')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-2">
+            <Button onClick={toggleShowDeveloperToolsDetails} variant="outline" className="w-full">
+              <Settings className="mr-2 h-4 w-4"/>
+              {showDeveloperToolsDetails ? getTranslation(locale, 'developerToolsToggleHide') : getTranslation(locale, 'developerToolsToggleShow')}
+            </Button>
 
-            {/* Admin Panel Content - visibility controlled by isAdminPanelContentVisible */}
-            {isAdminPanelContentVisible && (
-              <>
-                <hr/>
-                <div className="space-y-2">
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/developer/api-test">
-                      <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link href="/developer/simulation-test">
-                      <Brain className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToSimulationTestPageButton')}
-                    </Link>
-                  </Button>
-                </div>
-
+            {showDeveloperToolsDetails && (
+              <div className="space-y-4 pt-3 border-t mt-3">
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/developer/api-test">
+                    <DatabaseZap className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToApiTestPageButton')}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/developer/simulation-test">
+                    <Brain className="mr-2 h-4 w-4"/> {getTranslation(locale, 'goToSimulationTestPageButton')}
+                  </Link>
+                </Button>
+                
                 <hr/>
                 <div className="space-y-3">
                     <h3 className="font-medium flex items-center"><CloudDownload className="mr-2 h-5 w-5 text-primary" />{getTranslation(locale, 'manualCachingLabel')}</h3>
@@ -280,9 +293,9 @@ export default function AdvancedSettings() {
                         </Button>
                     </div>
                     <div>
-                        <Label htmlFor="cacheNickname" className="text-sm">{getTranslation(locale, 'cacheUserNicknameLabel')}</Label>
+                        <Label htmlFor="cacheNicknameDev" className="text-sm">{getTranslation(locale, 'cacheUserNicknameLabel')}</Label>
                          <Input
-                            id="cacheNickname"
+                            id="cacheNicknameDev"
                             type="text"
                             placeholder={getTranslation(locale, 'cacheUserNicknamePlaceholder')}
                             value={cacheNickname}
@@ -305,26 +318,18 @@ export default function AdvancedSettings() {
                     {getTranslation(locale, 'clearLocalDataHelp')}
                   </p>
                 </div>
-              </>
+              </div>
             )}
-
-            <hr/>
-            <div className="text-sm">
-                <h3 className="font-medium mb-1">{getTranslation(locale, 'contactInfoLabel')}</h3>
-                <p className="text-muted-foreground">{getTranslation(locale, 'contactInfoBugReport')} <a href="https://x.com/Shirakami_cocoa" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@Shirakami_cocoa</a></p>
-                {clientHasMounted && (
-                  <p className="text-xs text-muted-foreground mt-1">{getTranslation(locale, 'appVersion')}</p>
-                )}
-            </div>
           </CardContent>
-          <CardFooter>
-            <Button onClick={toggleAdminPanelContent} variant="outline" className="w-full">
-                <ShieldAlert className="mr-2 h-4 w-4" />
-                {isAdminPanelContentVisible ? getTranslation(locale, 'adminPanelToggleHide') : getTranslation(locale, 'adminPanelToggleShow')}
-            </Button>
+          <CardFooter className="border-t pt-3 pb-3">
+            <p className="text-xs text-muted-foreground text-center w-full">
+              {getTranslation(locale, 'developerModeActiveMessage')}
+            </p>
           </CardFooter>
         </>
       )}
     </Card>
   );
 }
+
+    

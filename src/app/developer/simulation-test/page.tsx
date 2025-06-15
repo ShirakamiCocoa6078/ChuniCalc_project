@@ -12,7 +12,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Play, Brain } from "lucide-react";
 import { getApiToken } from "@/lib/get-api-token";
-import { getCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_DATA_KEY, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { getCachedData, GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache"; // Removed USER_DATA_CACHE_EXPIRY_MS as it's not directly used here like this
 import { mapApiSongToAppSong, sortSongsByRatingDesc } from "@/lib/rating-utils";
 import { runFullSimulation } from "@/lib/simulation-logic";
 import type {
@@ -27,8 +27,8 @@ import type {
   UserShowallApiResponse
 } from "@/types/result-page";
 import NewSongsData from '@/data/NewSongs.json';
-import SongCard from "@/components/SongCard"; // Added
-import { cn } from "@/lib/utils"; // Added
+import SongCard from "@/components/SongCard"; 
+import { cn } from "@/lib/utils"; 
 
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
@@ -72,9 +72,16 @@ export default function SimulationTestPage() {
   const [nickname, setNickname] = useState("cocoa");
   const [currentRatingStr, setCurrentRatingStr] = useState("17.28");
   const [targetRatingStr, setTargetRatingStr] = useState("17.29");
-  const [strategy, setStrategy] = useState<CalculationStrategy>("floor");
+  const [uiStrategy, setUiStrategy] = useState<CalculationStrategy>("hybrid_floor"); // Defaulting to a combined strategy for testing
 
   const [logDisplay, setLogDisplay] = useState<string>("");
+  const [clientHasMounted, setClientHasMounted] = useState(false); // Added for client-side checks
+
+  useEffect(() => {
+    setClientHasMounted(true);
+    // No developer mode check from localStorage needed here anymore
+  }, []);
+
 
   const handleRunSimulation = async () => {
     setIsLoading(true);
@@ -85,52 +92,46 @@ export default function SimulationTestPage() {
     const currentRatingNum = parseFloat(currentRatingStr);
     const targetRatingNum = parseFloat(targetRatingStr);
 
-    if (isNaN(currentRatingNum) || isNaN(targetRatingNum) || !nickname.trim() || !strategy) {
+    if (isNaN(currentRatingNum) || isNaN(targetRatingNum) || !nickname.trim() || !uiStrategy) {
       setError("Please fill in all fields correctly.");
       setIsLoading(false);
       setLogDisplay(prev => prev + "Error: Please fill in all fields correctly.\n");
       return;
     }
     
-    const API_TOKEN = getApiToken();
-    if (!API_TOKEN) {
-      setError("API Token not found. Please set it in Advanced Settings or environment variables.");
-      setIsLoading(false);
-      setLogDisplay(prev => prev + "Error: API Token not found.\n");
-      return;
-    }
-
-    appendLog("Fetching initial data...");
+    // API Token is handled by the proxy
+    appendLog("Fetching initial data via proxy...");
 
     try {
-      // Fetch all necessary data
-      const profileDataResponse = await fetchApi<ProfileData>(`profile.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
-      const ratingDataResponse = await fetchApi<RatingApiResponse>(`rating_data.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN);
+      // Fetch all necessary data using the proxy
+      const profileProxyEndpoint = `records/profile.json`;
+      const profileDataResponse = await fetchApi<ProfileData>(profileProxyEndpoint, { region: 'jp2', user_name: nickname });
+
+      const ratingProxyEndpoint = `records/rating_data.json`;
+      const ratingDataResponse = await fetchApi<RatingApiResponse>(ratingProxyEndpoint, { region: 'jp2', user_name: nickname });
       
       let globalMusicRawResponse = getCachedData<any[]>(GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
       if (!globalMusicRawResponse) {
-        const apiGlobalMusic = await fetchApi<any[] | {records: any[]}>(`music/showall.json?region=jp2`, API_TOKEN);
+        const globalMusicProxyEndpoint = `music/showall.json`;
+        const apiGlobalMusic = await fetchApi<any[] | {records: any[]}>(globalMusicProxyEndpoint, { region: 'jp2' });
         globalMusicRawResponse = Array.isArray(apiGlobalMusic) ? apiGlobalMusic : apiGlobalMusic?.records || [];
-        // Note: This test page does not write to the global cache to avoid interference.
       }
       
-      const userShowallDataResponse = await fetchApi<UserShowallApiResponse>(`showall.json?region=jp2&user_name=${encodeURIComponent(nickname)}`, API_TOKEN, "records");
+      const userShowallProxyEndpoint = `records/showall.json`;
+      const userShowallDataResponse = await fetchApi<UserShowallApiResponse>(userShowallProxyEndpoint, { region: 'jp2', user_name: nickname }, "records");
 
       appendLog(`Profile: ${profileDataResponse?.player_name}, Rating Data entries: ${ratingDataResponse?.best?.entries?.length || 0}`);
       appendLog(`Global Music Raw entries: ${globalMusicRawResponse?.length || 0}`);
       appendLog(`User Showall entries: ${userShowallDataResponse?.length || 0}`);
 
-
-      // Process data
       const initialB30ApiEntries = ratingDataResponse?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && e.id && e.diff && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && e.title) || [];
       const originalB30Songs = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const)));
       appendLog(`Processed Original B30 Songs: ${originalB30Songs.length}`);
 
-
       const allMusicDataFlattened = globalMusicRawResponse.reduce((acc, entry) => acc.concat(flattenGlobalMusicEntry(entry)), [] as ShowallApiSongEntry[]);
       appendLog(`Flattened Global Music Data: ${allMusicDataFlattened.length}`);
 
-      const userPlayHistoryRecords = userShowallDataResponse || []; // Assuming fetchApi returns the records array directly if 'records' field is passed
+      const userPlayHistoryRecords = userShowallDataResponse || [];
       
       const newSongTitlesRaw = NewSongsData.titles?.verse || [];
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
@@ -156,10 +157,26 @@ export default function SimulationTestPage() {
       const originalNew20Songs = allPlayedNewSongsPool.slice(0, NEW_20_COUNT);
       appendLog(`Processed Original New20 Songs: ${originalNew20Songs.length} (from pool of ${allPlayedNewSongsPool.length})`);
 
+      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10; 
+      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95; 
 
-      const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10; // Example threshold
-      const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95; // Example value
+      let simulationScope: SimulationInput['simulationScope'] = 'hybrid';
+      let improvementMethod: SimulationInput['improvementMethod'] = 'floor'; // default
 
+      if (uiStrategy === 'b30_only') {
+        simulationScope = 'b30_only';
+        improvementMethod = 'floor'; // Or let user choose for this too via UI later
+      } else if (uiStrategy === 'n20_only') {
+        simulationScope = 'n20_only';
+        improvementMethod = 'floor'; // Or let user choose
+      } else if (uiStrategy === 'hybrid_floor') {
+        simulationScope = 'hybrid';
+        improvementMethod = 'floor';
+      } else if (uiStrategy === 'hybrid_peak') {
+        simulationScope = 'hybrid';
+        improvementMethod = 'peak';
+      }
+      
       const simulationInput: SimulationInput = {
         originalB30Songs,
         originalNew20Songs,
@@ -168,7 +185,8 @@ export default function SimulationTestPage() {
         userPlayHistory: userPlayHistoryRecords,
         currentRating: currentRatingNum,
         targetRating: targetRatingNum,
-        calculationStrategy: strategy,
+        simulationScope,
+        improvementMethod,
         isScoreLimitReleased,
         phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
       };
@@ -187,6 +205,9 @@ export default function SimulationTestPage() {
       if(result.error) {
         setError(`Simulation ended with error: ${result.error}`);
         appendLog(`Simulation ended with error: ${result.error}`);
+      } else if (result.unreachableMessage) {
+        setError(`Target Unreachable: ${result.unreachableMessage} (Max: ${result.reachableRating?.toFixed(4) || 'N/A'})`);
+        appendLog(`Target Unreachable: ${result.unreachableMessage} (Max: ${result.reachableRating?.toFixed(4) || 'N/A'})`);
       }
 
 
@@ -203,36 +224,34 @@ export default function SimulationTestPage() {
     setLogDisplay(prev => prev + message + "\n");
   };
 
-  async function fetchApi<T>(endpointPath: string, token: string, recordsField?: keyof UserShowallApiResponse): Promise<T | null> {
-    let baseUrl = "https://api.chunirec.net/2.0/";
-    let finalEndpointPath = endpointPath;
-    if (endpointPath.startsWith("music/")) {
-      baseUrl += "music/";
-      finalEndpointPath = endpointPath.substring(6);
-    } else if (endpointPath.startsWith("records/")) {
-      baseUrl += "records/";
-      finalEndpointPath = endpointPath.substring(8);
-    } else {
-      // Default to records if no prefix, or handle as is if it's a full path segment like 'profile.json'
-      if (!endpointPath.includes('/')) { // Simple filename
-          baseUrl += "records/";
-      } else { // Path segment already included
-          baseUrl = "https://api.chunirec.net/2.0/"; // Reset base for full path segments
-      }
+  async function fetchApi<T>(proxyEndpointPath: string, params: Record<string, string> = {}, recordsField?: keyof UserShowallApiResponse): Promise<T | null> {
+    const url = new URL(`/api/chunirecApiProxy`, window.location.origin);
+    url.searchParams.append('proxyEndpoint', proxyEndpointPath);
+    for (const key in params) {
+        url.searchParams.append(key, params[key]);
     }
     
-    let url = `${baseUrl}${finalEndpointPath}`;
-    url += (url.includes('?') ? '&' : '?') + `token=${token}`;
-  
-    appendLog(`Fetching: ${url.replace(token, "REDACTED_TOKEN")}`);
-    const response = await fetch(url);
+    appendLog(`Fetching: ${url.toString()}`);
+    const response = await fetch(url.toString());
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: { message: "Response not JSON" }}));
-      throw new Error(`API fetch failed for ${endpointPath} (status: ${response.status}): ${errorData.error?.message || response.statusText}`);
+      throw new Error(`API fetch failed for ${proxyEndpointPath} (status: ${response.status}): ${errorData.error?.message || response.statusText}`);
     }
     const data = await response.json();
     return recordsField && data && typeof data === 'object' && recordsField in data ? data[recordsField] : data;
   }
+
+  if (!clientHasMounted) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">페이지 로딩 중...</p>
+      </div>
+    );
+  }
+  // Removed developer mode check for rendering the page content
+  // if (!isDeveloperMode) { ... }
+
 
   const songListGridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
@@ -270,15 +289,23 @@ export default function SimulationTestPage() {
               <Input id="targetRating" type="number" value={targetRatingStr} onChange={(e) => setTargetRatingStr(e.target.value)} placeholder="e.g., 17.10" />
             </div>
             <div>
-              <Label>Calculation Strategy</Label>
-              <RadioGroup value={strategy} onValueChange={(v) => setStrategy(v as CalculationStrategy)} className="flex space-x-4 mt-1">
+              <Label>Calculation Strategy (UI Choice)</Label>
+              <RadioGroup value={uiStrategy} onValueChange={(v) => setUiStrategy(v as CalculationStrategy)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="floor" id="strat-floor" />
-                  <Label htmlFor="strat-floor">Floor</Label>
+                  <RadioGroupItem value="b30_only" id="strat-b30-only" />
+                  <Label htmlFor="strat-b30-only">B30 Only</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="peak" id="strat-peak" />
-                  <Label htmlFor="strat-peak">Peak</Label>
+                  <RadioGroupItem value="n20_only" id="strat-n20-only" />
+                  <Label htmlFor="strat-n20-only">N20 Only</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="hybrid_floor" id="strat-hybrid-floor" />
+                  <Label htmlFor="strat-hybrid-floor">Hybrid (Floor)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="hybrid_peak" id="strat-hybrid-peak" />
+                  <Label htmlFor="strat-hybrid-peak">Hybrid (Peak)</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -292,7 +319,7 @@ export default function SimulationTestPage() {
         {error && (
           <Card className="mb-6 border-destructive">
             <CardHeader>
-              <CardTitle className="text-destructive">Error</CardTitle>
+              <CardTitle className="text-destructive">Error / Info</CardTitle>
             </CardHeader>
             <CardContent>
               <pre className="text-sm text-destructive whitespace-pre-wrap">{error}</pre>
@@ -339,7 +366,7 @@ export default function SimulationTestPage() {
               {simulationResult.simulatedB30Songs.length > 0 ? (
                 <div className={cn("grid grid-cols-1 gap-4", songListGridCols)}>
                   {simulationResult.simulatedB30Songs.map((song, index) => (
-                    <SongCard key={`sim-b30-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={strategy} />
+                    <SongCard key={`sim-b30-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={uiStrategy} />
                   ))}
                 </div>
               ) : (
@@ -361,7 +388,7 @@ export default function SimulationTestPage() {
               {simulationResult.simulatedNew20Songs.length > 0 ? (
                 <div className={cn("grid grid-cols-1 gap-4", songListGridCols)}>
                   {simulationResult.simulatedNew20Songs.map((song, index) => (
-                    <SongCard key={`sim-n20-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={strategy} />
+                    <SongCard key={`sim-n20-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={uiStrategy} />
                   ))}
                 </div>
               ) : (
@@ -375,3 +402,4 @@ export default function SimulationTestPage() {
   );
 }
 
+    

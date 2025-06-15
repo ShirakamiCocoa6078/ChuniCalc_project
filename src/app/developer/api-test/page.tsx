@@ -11,20 +11,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { getApiToken } from "@/lib/get-api-token";
 import { ArrowLeft, Loader2, AlertTriangle, Send, Search as SearchIcon, ListChecks, PlaySquare, Filter, Star, DatabaseZap, FileJson, Server, CalendarDays, FilterIcon, FileSearch, BarChartHorizontalBig } from "lucide-react";
-import { LOCAL_STORAGE_PREFIX } from "@/lib/cache";
+// Removed LOCAL_STORAGE_PREFIX, DEVELOPER_MODE_KEY
 import type { ShowallApiSongEntry as AppShowallApiSongEntry, Song as AppSongType } from "@/app/result/page"; 
 import NewSongsData from '@/data/NewSongs.json';
 import { 
     findSmallestEnclosingBlockHelper, 
     displayFilteredData, 
     fetchApiForDebug,
-    type ApiEndpointString as ApiHelperEndpointString,
+    type ApiHelperEndpointString as ApiHelperEndpointString, // Renamed for clarity if needed
     type DisplayFilteredDataEndpointType,
     type FetchApiForDebugEndpointType,
 } from "@/lib/api-test-helpers";
 
 
-const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`;
+// const DEVELOPER_MODE_KEY = `${LOCAL_STORAGE_PREFIX}isDeveloperMode`; // Removed
 
 // This type is used by the handleFetch function, specific to this page's main API test sections
 type ApiEndpoint =
@@ -172,11 +172,9 @@ const mapToAppSongForDebug = (apiSong: AppShowallApiSongEntry): AppSongType => {
   const score = typeof apiSong.score === 'number' ? apiSong.score : 0;
   let effectiveChartConstant: number | null = null;
 
-  // Priority 1: apiSong.const if it's a positive number
   if (typeof apiSong.const === 'number' && apiSong.const > 0) {
     effectiveChartConstant = apiSong.const;
   } 
-  // Priority 2: User's rule for when apiSong.const is 0
   else if (apiSong.const === 0) {
     if ((typeof apiSong.level === 'string' || typeof apiSong.level === 'number') && String(apiSong.level).trim() !== "") {
       const parsedLevel = parseFloat(String(apiSong.level));
@@ -189,8 +187,6 @@ const mapToAppSongForDebug = (apiSong: AppShowallApiSongEntry): AppSongType => {
       }
     }
   } 
-  // Priority 3: Original fallback if apiSong.is_const_unknown is true and const wasn't positive or 0 (i.e. likely null)
-  // This applies if effectiveChartConstant is still null at this point.
   else if (effectiveChartConstant === null && apiSong.is_const_unknown && 
            (typeof apiSong.level === 'string' || typeof apiSong.level === 'number') &&
            String(apiSong.level).trim() !== "") {
@@ -211,8 +207,8 @@ const mapToAppSongForDebug = (apiSong: AppShowallApiSongEntry): AppSongType => {
     chartConstant: effectiveChartConstant,
     currentScore: score,
     currentRating: calculatedCurrentRating,
-    targetScore: score, // For debug, target can be same as current initially
-    targetRating: calculatedCurrentRating, // For debug
+    targetScore: score, 
+    targetRating: calculatedCurrentRating, 
   };
 };
 
@@ -229,7 +225,7 @@ const sortSongsByRatingDescDebug = (songs: AppSongType[]): AppSongType[] => {
 
 
 export default function ApiTestPage() {
-  const [isDeveloperMode, setIsDeveloperMode] = useState(false);
+  // const [isDeveloperMode, setIsDeveloperMode] = useState(false); // Removed
   const [clientHasMounted, setClientHasMounted] = useState(false);
   const { toast } = useToast();
 
@@ -246,10 +242,7 @@ export default function ApiTestPage() {
 
   useEffect(() => {
     setClientHasMounted(true);
-    if (typeof window !== 'undefined') {
-      const devMode = localStorage.getItem(DEVELOPER_MODE_KEY);
-      setIsDeveloperMode(devMode === 'true');
-    }
+    // Removed localStorage check for developer mode
   }, []);
 
 
@@ -258,13 +251,8 @@ export default function ApiTestPage() {
     setState: React.Dispatch<React.SetStateAction<UserApiTestState | GlobalApiTestState>>,
     nicknameFromState?: string
   ) => {
-    const apiToken = getApiToken();
-    if (!apiToken) {
-      toast({ title: "API 토큰 없음", description: "API를 호출하려면 토큰이 필요합니다.", variant: "destructive" });
-      setState(prev => ({ ...prev, loading: false, error: "API 토큰이 없습니다." }));
-      return;
-    }
-
+    // API token is handled by the proxy, no need to get it here.
+    
     const requiresNickname = endpoint !== "/2.0/music/showall.json";
     if (requiresNickname && (!nicknameFromState || nicknameFromState.trim() === "")) {
        toast({ title: "닉네임 필요", description: "이 엔드포인트에는 사용자 닉네임이 필요합니다.", variant: "destructive" });
@@ -274,16 +262,18 @@ export default function ApiTestPage() {
 
     setState(prev => ({ ...prev, loading: true, error: null, data: null, rateLimitLimit: null, rateLimitRemaining: null, rateLimitReset: null }));
 
-    let url = `https://api.chunirec.net${endpoint}?token=${apiToken}`;
+    // Use the proxy endpoint
+    const proxyEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    let url = `/api/chunirecApiProxy?proxyEndpoint=${proxyEndpoint}`;
+    
     if (requiresNickname && nicknameFromState) {
       url += `&region=jp2&user_name=${encodeURIComponent(nicknameFromState.trim())}`;
     } else if (endpoint === "/2.0/music/showall.json") {
       url += `&region=jp2`;
     }
 
-
     try {
-      const response = await fetch(url);
+      const response = await fetch(url); // Fetch from our proxy
       const responseData = await response.json().catch(() => ({ error: { message: "JSON 파싱 실패" } }));
 
       const limit = response.headers.get('X-Rate-Limit-Limit');
@@ -298,7 +288,6 @@ export default function ApiTestPage() {
            resetString = "Invalid Date";
         }
       }
-
 
       if (!response.ok) {
          const errorMsg = `API 오류 (상태: ${response.status}): ${responseData.error?.message || JSON.stringify(responseData)}`;
@@ -387,7 +376,7 @@ export default function ApiTestPage() {
 
     try {
         toast({ title: "N20 디버그 (1-2단계)", description: "전체 악곡 목록 (music/showall) 로드 중..." });
-        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType);
+        const globalMusicApiResponse = await fetchApiForDebug("music/showall.json" as FetchApiForDebugEndpointType);
         
         console.log("[N20_DEBUG_STEP_1.2_RAW_RESPONSE] Raw API response for music/showall:", globalMusicApiResponse);
 
@@ -567,7 +556,7 @@ export default function ApiTestPage() {
 
     try {
         toast({ title: "N20 디버그 (3-1단계)", description: `${nickname}님의 전체 곡 기록 (records/showall) 로드 중...` });
-        const userShowallApiResponse = await fetchApiForDebug("/2.0/records/showall.json" as FetchApiForDebugEndpointType, nickname);
+        const userShowallApiResponse = await fetchApiForDebug("records/showall.json" as FetchApiForDebugEndpointType, nickname);
         console.log(`[N20_DEBUG_STEP_3.1_RAW_RESPONSE] Raw API response for user records/showall (${nickname}):`, userShowallApiResponse);
 
         let rawUserRecords: any[] = [];
@@ -774,7 +763,7 @@ export default function ApiTestPage() {
   const handleFetchAndFilterByReleaseDate = async () => {
     setReleaseFilterTest(prev => ({ ...prev, loading: true, error: null, summary: "전체 악곡 목록 로드 중..." }));
     try {
-      const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType); 
+      const globalMusicApiResponse = await fetchApiForDebug("music/showall.json" as FetchApiForDebugEndpointType); 
       
       let rawApiRecords: any[] = [];
       if (Array.isArray(globalMusicApiResponse)) {
@@ -867,7 +856,7 @@ export default function ApiTestPage() {
     setSongByIdFetcher(prev => ({ ...prev, loading: true, error: null, fetchedSongData: null, rawMusicShowallRecords: null, outputSummary: "전체 악곡 목록 로드 중..."}));
     
     try {
-        const globalMusicApiResponse = await fetchApiForDebug("/2.0/music/showall.json" as FetchApiForDebugEndpointType);
+        const globalMusicApiResponse = await fetchApiForDebug("music/showall.json" as FetchApiForDebugEndpointType);
 
         let rawApiRecords: any[] = [];
         let apiFullResponseForDisplay: string | AppShowallApiSongEntry[] = "API 응답 없음";
@@ -1042,18 +1031,8 @@ export default function ApiTestPage() {
     );
   }
 
-  if (!isDeveloperMode) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
-        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
-        <h1 className="text-2xl font-bold mb-2">접근 제한</h1>
-        <p className="text-muted-foreground mb-6">이 페이지는 개발자 모드가 활성화된 경우에만 접근할 수 있습니다.</p>
-        <Button asChild>
-          <Link href="/"><ArrowLeft className="mr-2 h-4 w-4" />메인 페이지로 돌아가기</Link>
-        </Button>
-      </div>
-    );
-  }
+  // Removed developer mode check for rendering the page content
+  // if (!isDeveloperMode) { ... }
 
   const renderApiTestSection = (
     title: string,
@@ -1434,12 +1413,14 @@ export default function ApiTestPage() {
           {renderApiTestSection("사용자 코스 기록", "/2.0/records/course.json", courseState, setCourseState as React.Dispatch<React.SetStateAction<UserApiTestState>>, true, false)}
           {renderApiTestSection("전체 악곡 목록", "/2.0/music/showall.json", globalMusicState, setGlobalMusicState as React.Dispatch<React.SetStateAction<GlobalApiTestState>>, false, true)}
           
-          {isDeveloperMode && renderNew20DebugSection()}
-          {isDeveloperMode && renderReleaseDateFilterTestSection()}
-          {isDeveloperMode && renderSongByIdFetcherSection()}
+          {/* These sections will now always render if the page is accessed, as dev mode check is removed */}
+          {renderNew20DebugSection()}
+          {renderReleaseDateFilterTestSection()}
+          {renderSongByIdFetcherSection()}
         </div>
       </div>
     </main>
   );
 }
 
+    
