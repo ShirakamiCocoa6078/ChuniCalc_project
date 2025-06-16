@@ -65,7 +65,7 @@ export const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: stri
                         JSON.parse(currentBlock); 
                         if (currentBlock.length < smallestBlockLength) {
                             smallestValidBlock = currentBlock;
-                            getBlockLength = currentBlock.length;
+                            smallestBlockLength = currentBlock.length; // Corrected: assign to smallestBlockLength
                         }
                     } catch (e) { 
                         // console.warn("Skipping invalid JSON block snippet:", currentBlock.substring(0,100));
@@ -209,9 +209,9 @@ export const displayFilteredData = (
             if (itemStringForSearch.toLowerCase().includes(lowerSearchTerm)) {
                 const prettyItemString = JSON.stringify(item, null, 2);
                 const smallestBlock = findSmallestEnclosingBlockHelper(prettyItemString, lowerSearchTerm);
-                if (<y_bin_564> && smallestBlock.startsWith("{") && smallestBlock.endsWith("}")) { // Basic check
-                    matchedBlocks.push(<y_bin_564>);
-                } else if (<y_bin_564>) { // If it's an error message or partial
+                if (smallestBlock && smallestBlock.startsWith("{") && smallestBlock.endsWith("}")) { // Basic check
+                    matchedBlocks.push(smallestBlock);
+                } else if (smallestBlock) { // If it's an error message or partial
                     matchedBlocks.push(prettyItemString); // Fallback to full item
                 }
             }
@@ -295,3 +295,4 @@ export const fetchApiForDebug = async (
       throw error;
     }
   };
+
