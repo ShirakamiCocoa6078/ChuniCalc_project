@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import type { ProfileData, RatingApiResponse, ShowallApiSongEntry, UserShowallApiResponse } from '@/types/result-page';
 import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 
-const API_CALL_TIMEOUT_MS = 15000; // 15 seconds
+const API_CALL_TIMEOUT_MS = 30000; // Increased from 15 seconds to 30 seconds
 
 // General fetcher for SWR
 const fetcher = async (url: string, isUserData: boolean = false) => {
@@ -28,7 +28,7 @@ const fetcher = async (url: string, isUserData: boolean = false) => {
   } catch (error: any) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
-      console.warn(`[SWR_FETCHER_TIMEOUT] API call to ${url} timed out.`);
+      console.warn(`[SWR_FETCHER_TIMEOUT] API call to ${url} timed out after ${API_CALL_TIMEOUT_MS}ms.`);
       throw new Error(`API_TIMEOUT: Request to ${url.split('?')[0]} timed out.`);
     }
     console.error(`[SWR_FETCHER_ERROR] Network/fetch error for ${url}:`, error);
@@ -80,3 +80,4 @@ export function useGlobalMusicData() {
     // dedupingInterval: GLOBAL_MUSIC_CACHE_EXPIRY_MS, // SWR handles deduping
   });
 }
+
