@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, ChangeEvent, FormEvent, useEffect } from "react";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Gauge, Target, User, Search, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-// import { getApiToken } from "@/lib/get-api-token"; // No longer needed
+import { getLocalReferenceApiToken } from "@/lib/get-api-token";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { useLanguage } from "@/contexts/LanguageContext"; 
 import { getTranslation } from "@/lib/translations"; 
@@ -33,7 +34,6 @@ export default function ChuniCalcForm() {
 
   useEffect(() => {
     setIsClient(true);
-    // API token check is no longer relevant here as it's server-side
   }, []);
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -49,6 +49,20 @@ export default function ChuniCalcForm() {
         description: getTranslation(locale, 'toastErrorNicknameNeededDesc'),
         variant: "destructive",
       });
+      return;
+    }
+
+    const localRefToken = getLocalReferenceApiToken();
+    if (!localRefToken) {
+      toast({
+        title: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingTitle'),
+        description: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingDesc'),
+        variant: "default", // Informational, not destructive
+      });
+      // Removed setIsFetchingRating(false) here to allow the loading state to be set if the call proceeds.
+      // If we decide to prevent the call, then setIsFetchingRating(false) should be added before return.
+      // For now, let's prevent the call as it's a strong hint of misconfiguration.
+      setIsFetchingRating(false);
       return;
     }
     
@@ -73,7 +87,7 @@ export default function ChuniCalcForm() {
         setIsFetchingRating(false);
         return;
       }
-      if (response.status === 403 && data.error?.code === 40301) { // Check for specific "private user" code
+      if (response.status === 403 && data.error?.code === 40301) { 
         toast({
           title: getTranslation(locale, 'toastErrorAccessDenied'),
           description: getTranslation(locale, 'toastErrorAccessDeniedDesc', nickname, data.error?.code),
@@ -83,10 +97,12 @@ export default function ChuniCalcForm() {
         return;
       }
       if (!response.ok) {
-        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, data.error?.message || response.statusText));
+        // The proxy should return a structured error, but handle cases where it might not.
+        const errorMessage = data.error?.message || response.statusText || getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, "Unknown error from proxy");
+        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorMessage));
       }
       
-      if (data.error) { // Handle cases where API returns 200 OK but with an error payload
+      if (data.error) { 
          toast({
           title: getTranslation(locale, 'toastErrorApiLogicalError'),
           description: getTranslation(locale, 'toastErrorApiLogicalErrorDesc', data.error.message || "Unknown error from API."),
@@ -95,7 +111,6 @@ export default function ChuniCalcForm() {
         setIsFetchingRating(false);
         return;
       }
-
 
       setCachedData<ProfileData>(`${LOCAL_STORAGE_PREFIX}profile_${nickname}`, data);
 
@@ -111,7 +126,7 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        const newTargetRating = Math.min(ratingValue + 0.01, 17.50); // Max rating is 17.50
+        const newTargetRating = Math.min(ratingValue + 0.01, 17.50); 
         setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
           title: getTranslation(locale, 'toastSuccessRatingFetched'),

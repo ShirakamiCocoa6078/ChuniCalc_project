@@ -93,6 +93,8 @@ export const translations = {
     toastSuccessUserRecordsCachedDesc: (nickname: string) => `${nickname}님의 사용자 기록이 로컬 저장소에 캐시되었습니다.`,
     toastErrorUserRecordsCacheFailed: "캐싱 실패",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "사용자 기록 캐싱 중 오류 발생.",
+    toastInfoLocalApiKeyRefMissingTitle: "로컬 참조 API 키 확인",
+    toastInfoLocalApiKeyRefMissingDesc: "고급 설정에서 로컬 참조용 API 키가 설정되지 않았습니다. 실제 API 호출은 서버의 키를 사용하므로 이 설정이 필수는 아니지만, 설정 상태를 확인하는 것이 좋습니다. 문제가 발생하면 이 설정과 서버 API 키를 모두 확인해주세요.",
     // Result Page
     resultPageDefaultPlayerName: "플레이어",
     resultPageNotAvailable: "N/A",
@@ -217,6 +219,7 @@ export const translations = {
     toastErrorTargetRatingDesc: "目標レーティングは現在レーティングより高くする必要があります。",
     toastSuccessLocalApiKeySaved: "ローカル参照用APIキー保存完了",
     toastSuccessLocalApiKeyRemoved: "ローカル参照用 APIキー削除完了",
+    toastSuccessLocalApiKeyRemovedDesc: "ローカル参照用APIキーが空のため、ストレージから削除されました。",
     toastSuccessLocalDataCleared: "アプリキャッシュ削除完了",
     toastSuccessLocalDataClearedDesc: (count: number) => `${count}個のアプリ関連ローカルキャッシュデータが削除されました。`,
     toastInfoCachingStarted: "キャッシング開始",
@@ -229,6 +232,8 @@ export const translations = {
     toastSuccessUserRecordsCachedDesc: (nickname: string) => `${nickname}さんのユーザー記録がローカルストレージにキャッシュされました。`,
     toastErrorUserRecordsCacheFailed: "キャッシング失敗",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "ユーザー記録のキャッシング中にエラーが発生しました。",
+    toastInfoLocalApiKeyRefMissingTitle: "ローカル参照APIキー確認",
+    toastInfoLocalApiKeyRefMissingDesc: "詳細設定でローカル参照用APIキーが設定されていません。実際のAPI呼び出しはサーバーのキーを使用するため、この設定は必須ではありませんが、設定状態を確認することをお勧めします。問題が発生した場合は、この設定とサーバーAPIキーの両方を確認してください。",
     // Result Page
     resultPageDefaultPlayerName: "プレイヤー",
     resultPageNotAvailable: "N/A",
