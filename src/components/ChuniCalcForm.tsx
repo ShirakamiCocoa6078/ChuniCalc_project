@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Gauge, Target, User, Search, ArrowRight, Loader2, HelpCircle } from "lucide-react";
+// Tooltip components and HelpCircle are removed as per rollback request
+import { Gauge, Target, User, Search, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
@@ -277,16 +277,7 @@ export default function ChuniCalcForm() {
               <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
                 <User className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'nicknameLabel')}
               </Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="max-w-xs">{getTranslation(locale, 'tooltipChunirecNicknameContent')}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Tooltip for nickname removed */}
             </div>
             <div className="flex space-x-2">
               <Input
@@ -329,16 +320,7 @@ export default function ChuniCalcForm() {
               <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
                 <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
               </Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                     <p className="max-w-xs">{getTranslation(locale, 'tooltipTargetRatingContent')}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              {/* Tooltip for target rating removed */}
             </div>
             <Input
               id="targetRating"
@@ -363,4 +345,3 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
-

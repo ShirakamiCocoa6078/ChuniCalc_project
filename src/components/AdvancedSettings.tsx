@@ -7,11 +7,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+// Tooltip components and HelpCircle are removed as per rollback request
 import { useToast } from "@/hooks/use-toast";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn, HelpCircle } from "lucide-react";
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn } from "lucide-react"; // Removed HelpCircle
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
@@ -228,16 +228,7 @@ export default function AdvancedSettings() {
             <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
                 <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
             </Label>
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                        <p className="max-w-xs">{getTranslation(locale, 'tooltipLocalApiKeyContent')}</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
+            {/* Tooltip for local API key removed */}
           </div>
           <Input
             id="localApiTokenInput"
@@ -372,4 +363,3 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
-

@@ -152,15 +152,6 @@ export const translations = {
     toastErrorTargetRatingTooLow: (minValue: string | number) => `목표 레이팅은 ${minValue} 이상이어야 합니다.`,
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `목표 레이팅은 ${maxValue} 이하여야 합니다.`,
     toastErrorRatingInvalidStep: "레이팅은 0.01 단위로 입력해주세요.",
-    // Tooltip translations
-    tooltipChunirecNicknameContent: "https://chunirec.net/ 에서 등록한 데이터를 불러옵니다. 해당 사이트에서 데이터의 사전 등록이 필요합니다.",
-    tooltipTargetRatingContent: "자신이 도달하고 싶은 목표 레이팅을 입력합니다.",
-    tooltipCalcStrategyB30Focus: "Best 30 집중: Best 30 곡들만으로 목표 달성 경로를 계산합니다.",
-    tooltipCalcStrategyN20Focus: "New 20 집중: New 20 곡들만으로 목표 달성 경로를 계산합니다.",
-    tooltipCalcStrategyHybridFloor: "전체(저점우선): 모든 곡을 대상으로, 현재 레이팅이 낮은 곡부터 점수를 올리는 현실적인 경로를 계산합니다.",
-    tooltipCalcStrategyHybridPeak: "전체(고점우선): 모든 곡을 대상으로, 현재 레이팅이 높은 곡을 더 성장시키는 효율적인 경로를 계산합니다.",
-    tooltipResultTabsContent: "시뮬레이션 결과 목록에서 점수를 올리기 어렵거나 원치 않는 곡을 클릭하여 계산에서 제외할 수 있습니다. (최대 점수 미만 곡만 해당)",
-    tooltipLocalApiKeyContent: "https://developer.chunirec.net/manage/ 에서 발급받은 Chunirec API 액세스 토큰을 사용할 수 있습니다. 공식 API 오류 발생 시 대체 수단으로 활용 가능합니다.",
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -312,15 +303,6 @@ export const translations = {
     toastErrorTargetRatingTooLow: (minValue: string | number) => `目標レーティングは${minValue}以上である必要があります。`,
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `目標レーティングは${maxValue}以下である必要があります。`,
     toastErrorRatingInvalidStep: "レーティングは0.01単位で入力してください。",
-    // Tooltip translations
-    tooltipChunirecNicknameContent: "https://chunirec.net/ に登録されたデータを読み込みます。該当サイトでのデータの事前登録が必要です。",
-    tooltipTargetRatingContent: "自分が到達したい目標レーティングを入力します。",
-    tooltipCalcStrategyB30Focus: "Best 30 集中: Best 30 の曲だけで目標達成経路を計算します。",
-    tooltipCalcStrategyN20Focus: "New 20 集中: New 20 の曲だけで目標達成経路を計算します。",
-    tooltipCalcStrategyHybridFloor: "全体(低点優先): 全ての曲を対象に、現在レーティングが低い曲からスコアを上げる現実的な経路を計算します。",
-    tooltipCalcStrategyHybridPeak: "全体(高点優先): 全ての曲を対象に、現在レーティングが高い曲をさらに成長させる効率的な経路を計算します。",
-    tooltipResultTabsContent: "シミュレーション結果リストで、スコアを上げるのが難しい、または望まない曲をクリックして計算から除外できます。(最大スコア未満の曲のみ対象)",
-    tooltipLocalApiKeyContent: "https://developer.chunirec.net/manage/ で発行されたChunirec APIアクセストークンを使用できます。公式APIエラー発生時の代替手段として活用可能です。",
   }
 };
 
@@ -370,4 +352,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-
