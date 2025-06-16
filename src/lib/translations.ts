@@ -307,8 +307,8 @@ export const translations = {
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `目標達成！最終総合レーティング: ${overall} (B30: ${b30}, N20: ${n20})`,
     resultPageStuckBothBaseFmt: (overall: string) => `B30およびN20のどちらもこれ以上改善できません。最終総合: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30平均: ${b30Avg}${n20Avg ? `, N20平均: ${n20Avg}` : ''})`,
-    toastErrorCurrentRatingTooLow: (minValue: string | number) => `現在レーティングは${minValue}以上である必要があります。`,
-    toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `現在レーティングは${maxValue}以下である必要があります。`,
+    toastErrorCurrentRatingTooLow: (minValue: string | number) => `現在のレーティングは${minValue}以上である必要があります。`,
+    toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `現在のレーティングは${maxValue}以下である必要があります。`,
     toastErrorTargetRatingTooLow: (minValue: string | number) => `目標レーティングは${minValue}以上である必要があります。`,
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `目標レーティングは${maxValue}以下である必要があります。`,
     toastErrorRatingInvalidStep: "レーティングは0.01単位で入力してください。",
@@ -369,3 +369,4 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+
