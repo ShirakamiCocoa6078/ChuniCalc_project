@@ -19,7 +19,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useChuniResultData } from "@/hooks/useChuniResultData";
 import type { CalculationStrategy } from "@/types/result-page";
-import { getLocalReferenceApiToken } from '@/lib/get-api-token'; 
+import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 import { LOCAL_STORAGE_PREFIX } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
 
@@ -62,9 +62,9 @@ function ResultContent() {
     simulatedAverageNew20Rating,
     finalOverallSimulatedRating,
     simulationLog,
-    preComputationResult, 
-    excludedSongKeys, 
-    toggleExcludeSongKey, 
+    preComputationResult,
+    excludedSongKeys,
+    toggleExcludeSongKey,
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -85,12 +85,12 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        
+        // No need to remove global music key here, SWR handles it.
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     } else {
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     }
-    setCalculationStrategy("none");
+    setCalculationStrategy("none"); // Reset strategy on full refresh
     setRefreshNonce(prev => prev + 1);
   }, [userNameForApi, locale, toast]);
 
@@ -115,30 +115,33 @@ function ResultContent() {
         : getTranslation(locale, 'resultPageNotAvailable');
 
 
-    if (errorLoadingSongs) {
+    if (errorLoadingSongs && (currentPhase === 'error_data_fetch' || currentPhase === 'error_simulation_logic')) {
         statusText = getTranslation(locale, 'resultPageErrorLoadingTitle') + `: ${errorLoadingSongs}`;
         bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
-    } else if (isLoadingSongs) {
+    } else if (isLoadingSongs && (currentPhase === 'idle' || currentPhase === 'simulating')) { // Simplified loading check for general data/sim loading
       statusText = getTranslation(locale, 'resultPageLoadingSongsTitle');
       IconComponent = Loader2; iconShouldSpin = true;
     } else if (preComputationResult && currentPhase === 'target_unreachable_info' && preComputationResult.messageKey) {
         statusText = getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4));
         bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
-    } else if (calculationStrategy === "none") {
+    } else if (calculationStrategy === "none" && currentPhase !== 'error_data_fetch' && !isLoadingSongs) { // Show only if not loading and no error
         statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
         bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
-    } else {
+    } else { // Simulation outcomes or idle after load
         switch (currentPhase) {
-          case 'idle':
+          case 'idle': // Idle after successful load, strategy not "none" but no simulation triggered or finished
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
-                statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr); // Or a specific "already met/exceeded" message
+                statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr);
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
-            } else {
+            } else if (calculationStrategy !== "none") {
                  statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (전체: " + overallRatingStr + ")";
-                 IconComponent = PlaySquare;
+                 IconComponent = PlaySquare; // Ready to simulate or simulation just finished with this state
+            } else { // Should be caught by calculationStrategy === "none" above
+                 statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
+                 bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
             }
             break;
-          case 'simulating':
+          case 'simulating': // This case should be covered by isLoadingSongs already
              statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (로직 수행 중)";
              IconComponent = Activity; iconShouldSpin = true;
              break;
@@ -147,34 +150,30 @@ function ResultContent() {
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_b30_no_improvement':
-            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr); // Adapted for single list stuck
-            bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
-            break;
           case 'stuck_n20_no_improvement':
-            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr); // Adapted for single list stuck
-            bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
-            break;
           case 'stuck_both_no_improvement':
             statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr);
-            bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
+            bgColor = (currentPhase === 'stuck_both_no_improvement' ? "bg-orange-100 dark:bg-orange-900" : "bg-yellow-100 dark:bg-yellow-900");
+            textColor = (currentPhase === 'stuck_both_no_improvement' ? "text-orange-700 dark:text-orange-300" : "text-yellow-700 dark:text-yellow-300");
+            IconComponent = (currentPhase === 'stuck_both_no_improvement' ? XCircle : Replace);
             break;
-          case 'target_unreachable_info': 
-            statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined) 
-                ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4)) 
+          case 'target_unreachable_info': // Covered by preComputationResult check at the top
+            statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined)
+                ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4))
                 : getTranslation(locale, 'resultPageErrorSimulationGeneric', "목표 도달 불가 (사전 계산)");
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
-          case 'error_data_fetch':
-            statusText = `${getTranslation(locale, 'resultPageErrorLoadingTitle')}: ${errorLoadingSongs || getTranslation(locale, 'resultPageErrorSimulationGeneric', '데이터 가져오기 오류')}`;
-            bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
-            break;
-          case 'error_simulation_logic':
-            statusText = `${getTranslation(locale, 'resultPageErrorSimulationGeneric', '')}: ${simulationLog.find(log => log.toLowerCase().includes("error")) || getTranslation(locale, 'resultPageErrorSimulationGeneric', '시뮬레이션 로직 오류')}`;
-            bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
-            break;
+          // error_data_fetch and error_simulation_logic are handled by the top-level errorLoadingSongs check
           default:
-            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
-            IconComponent = AlertTriangle;
+            if (!isLoadingSongs && calculationStrategy !== "none") { // If not loading, no error, and strategy is selected, but phase is unknown
+              statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
+              IconComponent = AlertTriangle;
+            } else if (!isLoadingSongs && calculationStrategy === "none"){
+              // Default to prompt if idle, loaded, and no strategy.
+              statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
+              bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
+            }
+            // If isLoadingSongs is true, it's handled by the spinner logic.
         }
     }
 
@@ -317,20 +316,21 @@ function ResultContent() {
             </TooltipProvider>
           </div>
 
-          {(isLoadingSongs && calculationStrategy === "none" && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic') ? (
+          {/* Main content display logic */}
+          {(isLoadingSongs && (currentPhase === 'idle' || currentPhase === 'simulating' || (calculationStrategy === 'none' && currentPhase !== 'error_data_fetch'))) && !(errorLoadingSongs && (currentPhase === 'error_data_fetch' || currentPhase === 'error_simulation_logic')) ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted && userNameForApi && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName')
-                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`))
+                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`)) // Simplified check
                     ? getTranslation(locale, 'resultPageLoadingCacheCheck')
                     : getTranslation(locale, 'resultPageLoadingApiFetch'))
                   : getTranslation(locale, 'resultPageLoadingDataStateCheck')
                 }
               </p>
             </div>
-          ) : errorLoadingSongs && currentPhase === 'error_data_fetch' ? ( 
+          ) : errorLoadingSongs && (currentPhase === 'error_data_fetch' || currentPhase === 'error_simulation_logic') ? (
              <Card className="border-destructive/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <AlertTriangle className="w-6 h-6 text-destructive" />
@@ -341,7 +341,7 @@ function ResultContent() {
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && (currentPhase === 'idle' || currentPhase === 'target_unreachable_info') && !errorLoadingSongs) ? ( 
+          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && (currentPhase === 'idle' || currentPhase === 'target_unreachable_info') && !errorLoadingSongs) ? (
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
@@ -454,4 +454,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-
