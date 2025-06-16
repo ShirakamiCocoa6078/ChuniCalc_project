@@ -19,7 +19,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { useChuniResultData } from "@/hooks/useChuniResultData";
 import type { CalculationStrategy } from "@/types/result-page";
 import { getLocalReferenceApiToken } from '@/lib/get-api-token'; 
-import { LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_DATA_KEY } from '@/lib/cache';
+import { LOCAL_STORAGE_PREFIX } from '@/lib/cache'; // Removed GLOBAL_MUSIC_DATA_KEY
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -62,8 +62,8 @@ function ResultContent() {
     finalOverallSimulatedRating,
     simulationLog,
     preComputationResult, 
-    excludedSongKeys, // New
-    toggleExcludeSongKey, // New
+    excludedSongKeys, 
+    toggleExcludeSongKey, 
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -84,17 +84,16 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
+        // GLOBAL_MUSIC_DATA_KEY removal is no longer needed here as SWR handles global music cache.
+        // The refreshNonce will trigger SWR revalidation for all data, including global music, via useChuniResultData.
 
-        // console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data and global music cleared for refresh trigger.`);
+        // console.log(`[SWR_REVALIDATE_TRIGGER] User-specific (${userNameForApi}) localStorage cleared. SWR will revalidate all data.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
-        localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
-        // console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared (no specific user or default user).`);
-        toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: "글로벌 음악 목록 캐시를 삭제하고 새로고침을 시도합니다."});
+        // console.log(`[SWR_REVALIDATE_TRIGGER] Global music data revalidation will be triggered via SWR in useChuniResultData (no specific user or default user).`);
+        toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     }
     setCalculationStrategy("none");
-    // Do not reset excludedSongKeys here by design
     setRefreshNonce(prev => prev + 1);
   }, [userNameForApi, locale, toast]);
 
@@ -326,7 +325,7 @@ function ResultContent() {
                 }
               </p>
             </div>
-          ) : errorLoadingSongs && currentPhase === 'error_data_fetch' ? ( // Ensure error is relevant to data fetch phase
+          ) : errorLoadingSongs && currentPhase === 'error_data_fetch' ? ( 
              <Card className="border-destructive/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <AlertTriangle className="w-6 h-6 text-destructive" />
@@ -337,7 +336,7 @@ function ResultContent() {
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && (currentPhase === 'idle' || currentPhase === 'target_unreachable_info') && !errorLoadingSongs) ? ( // Error in simulation would be handled by renderSimulationStatus
+          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && (currentPhase === 'idle' || currentPhase === 'target_unreachable_info') && !errorLoadingSongs) ? ( 
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
@@ -450,4 +449,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-

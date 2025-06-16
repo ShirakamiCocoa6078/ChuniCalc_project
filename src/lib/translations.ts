@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.29",
+    appVersion: "ChuniCalc v1.0.30",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.",
@@ -104,6 +104,7 @@ export const translations = {
     resultPageErrorNicknameNotProvidedResult: "사용자 닉네임이 제공되지 않아 데이터를 가져올 수 없습니다.",
     resultPageToastRefreshingDataTitle: "데이터 새로고침 중",
     resultPageToastRefreshingDataDesc: "사용자 관련 캐시를 지우고 API에서 최신 데이터를 가져옵니다.",
+    resultPageToastSWRRefreshDesc: "최신 데이터를 가져오기 위해 SWR 캐시를 새로고침합니다.",
     resultPageSyncStatus: (timestamp: string) => `사용자 데이터 동기화: ${timestamp}`,
     resultPageSyncStatusNoCache: "캐시된 사용자 데이터가 없거나 만료되었습니다.",
     resultPageSyncStatusChecking: "동기화 상태 확인 중...",
@@ -188,7 +189,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.29",
+    appVersion: "ChuniCalc v1.0.30",
     // Toast Messages JP
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
@@ -246,6 +247,7 @@ export const translations = {
     resultPageErrorNicknameNotProvidedResult: "ユーザーニックネームが提供されていないため、データを取得できません。",
     resultPageToastRefreshingDataTitle: "データ更新中",
     resultPageToastRefreshingDataDesc: "ユーザー関連キャッシュをクリアし、APIから最新データを取得します。",
+    resultPageToastSWRRefreshDesc: "最新データを取得するためにSWRキャッシュを更新します。",
     resultPageSyncStatus: (timestamp: string) => `ユーザーデータ同期: ${timestamp}`,
     resultPageSyncStatusNoCache: "キャッシュされたユーザーデータがないか、期限切れです。",
     resultPageSyncStatusChecking: "同期状態確認中...",
@@ -333,6 +335,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-
-
-    
