@@ -8,7 +8,7 @@ import { getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_D
 import NewSongsData from '@/data/NewSongs.json';
 import constOverridesInternal from '@/data/const-overrides.json';
 import { getTranslation, type Locale } from '@/lib/translations';
-import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateAverageAndOverallRating, calculateTheoreticalMaxRatingsForList } from '@/lib/rating-utils';
+import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateAverageAndOverallRating, calculateTheoreticalMaxRatingsForList, deduplicateAndPrioritizeSongs } from '@/lib/rating-utils';
 import { runFullSimulation } from '@/lib/simulation-logic';
 import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 import type {
@@ -375,12 +375,14 @@ export function useChuniResultData({
       
 
       const initialB30ApiEntries = ratingData?.best?.entries?.filter((e: any): e is RatingApiSongEntry => e && typeof e.id === 'string' && e.id.trim() !== '' && typeof e.diff === 'string' && e.diff.trim() !== '' && typeof e.score === 'number' && (typeof e.rating === 'number' || typeof e.const === 'number') && typeof e.title === 'string' && e.title.trim() !== '') || [];
-      const processedOriginalB30 = sortSongsByRatingDesc(initialB30ApiEntries.map((entry, index) => {
+      const mappedOriginalB30 = initialB30ApiEntries.map((entry, index) => {
         const masterSongData = tempFlattenedGlobalMusicRecords.find(ms => ms.id === entry.id && ms.diff.toUpperCase() === entry.diff.toUpperCase());
         return mapApiSongToAppSong(entry, index, masterSongData?.const ?? entry.const);
-      }));
+      });
+      const uniqueMappedOriginalB30 = deduplicateAndPrioritizeSongs(mappedOriginalB30);
+      const processedOriginalB30 = sortSongsByRatingDesc(uniqueMappedOriginalB30);
       setOriginalB30SongsData(processedOriginalB30);
-      console.log(`[DATA_FETCH_HOOK] Original B30 songs mapped: ${processedOriginalB30.length}`);
+      console.log(`[DATA_FETCH_HOOK] Original B30 songs mapped and deduplicated: ${processedOriginalB30.length}`);
 
       const newSongTitlesRaw = NewSongsData.titles?.verse || [];
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
@@ -410,12 +412,13 @@ export function useChuniResultData({
       }, [] as ShowallApiSongEntry[]);
 
       const mappedPlayedNewSongs = playedNewSongsApi.map((entry, index) => mapApiSongToAppSong(entry, index, entry.const));
-      const sortedAllPlayedNewSongsPool = sortSongsByRatingDesc(mappedPlayedNewSongs);
+      const uniqueMappedPlayedNewSongs = deduplicateAndPrioritizeSongs(mappedPlayedNewSongs);
+      const sortedAllPlayedNewSongsPool = sortSongsByRatingDesc(uniqueMappedPlayedNewSongs);
       setAllPlayedNewSongsPool(sortedAllPlayedNewSongsPool);
 
       const processedOriginalNew20 = sortedAllPlayedNewSongsPool.slice(0, NEW_20_COUNT);
       setOriginalNew20SongsData(processedOriginalNew20);
-      console.log(`[DATA_FETCH_HOOK] Original N20 songs processed: ${processedOriginalNew20.length} (from pool of ${mappedPlayedNewSongs.length})`);
+      console.log(`[DATA_FETCH_HOOK] Original N20 songs processed and deduplicated: ${processedOriginalNew20.length} (from pool of ${uniqueMappedPlayedNewSongs.length})`);
 
       setIsLoadingInitialData(false);
       console.log("[DATA_FETCH_HOOK] fetchAndProcessInitialData finished.");

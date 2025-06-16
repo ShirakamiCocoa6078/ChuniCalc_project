@@ -176,7 +176,6 @@ export const getNextGradeBoundaryScore = (currentScore: number): number | null =
     return null;
 };
 
-// Renamed function: Calculates average of an existing list and can compute overall rating based on fixed B30/N20 averages
 export function calculateAverageAndOverallRating(
   songs: Song[],
   listLimit: number,
@@ -203,7 +202,7 @@ export function calculateAverageAndOverallRating(
   }
 
   const songsToConsider = songs.map(s => {
-    const songToConsider = { ...s }; // Shallow copy
+    const songToConsider = { ...s }; 
     const rating = songToConsider[propertyToConsiderForRating];
     return { ...songToConsider, ratingToUse: typeof rating === 'number' ? rating : 0 };
   });
@@ -217,8 +216,6 @@ export function calculateAverageAndOverallRating(
   return { list: topSongs, sum, average, overallAverage };
 }
 
-
-// New function: Calculates theoretical max ratings for a list of candidates
 export function calculateTheoreticalMaxRatingsForList(
   candidatePool: (Song | ShowallApiSongEntry)[],
   listLimit: number,
@@ -234,7 +231,6 @@ export function calculateTheoreticalMaxRatingsForList(
         return { ...songToConsider, targetScore: songToConsider.currentScore, targetRating: songToConsider.currentRating };
       }
 
-      // If current score is already at or above the scoreToAssume, keep current values for target
       if (songToConsider.currentScore >= scoreToAssume) {
         return {
           ...songToConsider,
@@ -243,7 +239,6 @@ export function calculateTheoreticalMaxRatingsForList(
         };
       }
 
-      // Otherwise, calculate based on scoreToAssume
       const maxRating = calculateChunithmSongRating(scoreToAssume, songToConsider.chartConstant);
       return {
         ...songToConsider,
@@ -265,3 +260,18 @@ export function calculateTheoreticalMaxRatingsForList(
   return { list: topSongs, average, sum };
 }
 
+export function deduplicateAndPrioritizeSongs(songs: Song[]): Song[] {
+  const songMap = new Map<string, Song>();
+  for (const song of songs) {
+    const key = `${song.id}_${song.diff}`;
+    const existingSong = songMap.get(key);
+    if (
+      !existingSong ||
+      song.currentRating > existingSong.currentRating ||
+      (song.currentRating === existingSong.currentRating && song.currentScore > existingSong.currentScore)
+    ) {
+      songMap.set(key, song);
+    }
+  }
+  return Array.from(songMap.values());
+}

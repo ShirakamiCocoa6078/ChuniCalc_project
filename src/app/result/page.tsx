@@ -18,7 +18,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useChuniResultData } from "@/hooks/useChuniResultData";
 import type { CalculationStrategy } from "@/types/result-page";
-import { getLocalReferenceApiToken } from '@/lib/get-api-token'; // Changed import
+import { getLocalReferenceApiToken } from '@/lib/get-api-token'; 
 import { LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_DATA_KEY } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
 
@@ -355,8 +355,8 @@ function ResultContent() {
                   <CardContent>
                     {best30SongsData.length > 0 ? (
                       <div className={cn("grid grid-cols-1 gap-4", best30GridCols)}>
-                        {best30SongsData.map((song) => (
-                          <SongCard key={`best30-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                        {best30SongsData.map((song, index) => (
+                          <SongCard key={`best30-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
                         ))}
                       </div>
                     ) : (
@@ -374,8 +374,8 @@ function ResultContent() {
                   <CardContent>
                        {new20SongsData.length > 0 ? (
                          <div className={cn("grid grid-cols-1 gap-4", best30GridCols )}>
-                           {new20SongsData.map((song) => (
-                             <SongCard key={`new20-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                           {new20SongsData.map((song, index) => (
+                             <SongCard key={`new20-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
                            ))}
                          </div>
                        ) : (
@@ -393,8 +393,8 @@ function ResultContent() {
                   <CardContent>
                     {combinedTopSongs.length > 0 ? (
                       <div className={cn("grid grid-cols-1 gap-4", best30GridCols)}>
-                        {combinedTopSongs.map((song) => (
-                          <SongCard key={`combined-${song.id}-${song.diff}`} song={song} calculationStrategy={calculationStrategy} />
+                        {combinedTopSongs.map((song, index) => (
+                          <SongCard key={`combined-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
                         ))}
                       </div>
                     ) : (
