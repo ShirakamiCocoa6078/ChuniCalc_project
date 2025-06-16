@@ -1,17 +1,22 @@
 [
   {
     "title": "example_song",
-    "diff": "MAS",
+    "diff" : "MAS",
     "const": 18.0
   },
   {
     "title": "MegiddØ",
-    "diff": "MAS",
+    "diff" : "MAS",
     "const": 15.6
   },
   {
     "title": "淵底のグレイ・ユークロニア",
-    "diff": "MAS",
+    "diff" : "MAS",
     "const": 15.0
+  },
+  {
+    "title": "Crossmythos Rhapsodia",
+    "diff" : "MAS",
+    "const": 15.7
   }
 ]
