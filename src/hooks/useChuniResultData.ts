@@ -2,7 +2,7 @@
 // src/hooks/useChuniResultData.ts
 "use client";
 
-import { useState, useEffect, useCallback, useReducer, useRef } from 'react';
+import { useState, useEffect, useCallback, useReducer, useRef, useMemo } from 'react'; // Ensure useMemo is imported
 import { useToast } from "@/hooks/use-toast";
 import NewSongsData from '@/data/NewSongs.json';
 import constOverridesInternal from '@/data/const-overrides.json';
@@ -486,4 +486,4 @@ export function useChuniResultData({
 }
 
 // Small helper for useMemo, might not be needed if state structure is flat for combinedTopSongs calculation.
-const { useMemo } = React;
+// Removed: const { useMemo } = React; // Now directly imported at the top
