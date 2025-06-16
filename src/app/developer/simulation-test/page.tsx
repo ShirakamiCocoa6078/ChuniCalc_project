@@ -11,8 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Play, Brain } from "lucide-react";
-import { getApiToken } from "@/lib/get-api-token";
-import { getCachedData, GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache"; // Removed USER_DATA_CACHE_EXPIRY_MS as it's not directly used here like this
+import { getLocalReferenceApiToken } from "@/lib/get-api-token"; // Changed import
+import { getCachedData, GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import { mapApiSongToAppSong, sortSongsByRatingDesc } from "@/lib/rating-utils";
 import { runFullSimulation } from "@/lib/simulation-logic";
 import type {
@@ -33,7 +33,6 @@ import { cn } from "@/lib/utils";
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
 
-// Helper function (duplicated from useChuniResultData for now, ideally move to a shared util)
 const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
     const flattenedEntries: ShowallApiSongEntry[] = [];
     if (rawEntry && rawEntry.meta && rawEntry.data && typeof rawEntry.data === 'object') {
@@ -72,14 +71,13 @@ export default function SimulationTestPage() {
   const [nickname, setNickname] = useState("cocoa");
   const [currentRatingStr, setCurrentRatingStr] = useState("17.28");
   const [targetRatingStr, setTargetRatingStr] = useState("17.29");
-  const [uiStrategy, setUiStrategy] = useState<CalculationStrategy>("hybrid_floor"); // Defaulting to a combined strategy for testing
+  const [uiStrategy, setUiStrategy] = useState<CalculationStrategy>("hybrid_floor");
 
   const [logDisplay, setLogDisplay] = useState<string>("");
-  const [clientHasMounted, setClientHasMounted] = useState(false); // Added for client-side checks
+  const [clientHasMounted, setClientHasMounted] = useState(false);
 
   useEffect(() => {
     setClientHasMounted(true);
-    // No developer mode check from localStorage needed here anymore
   }, []);
 
 
@@ -99,11 +97,15 @@ export default function SimulationTestPage() {
       return;
     }
     
-    // API Token is handled by the proxy
+    const localRefToken = getLocalReferenceApiToken(); // Changed function name
+    // This token isn't strictly needed here as proxy handles the real key, but kept for consistency if a local check is desired.
+    if (!localRefToken) {
+        appendLog("Warning: Local reference API token not found in Advanced Settings. API calls will rely solely on server-side key.");
+    }
+    
     appendLog("Fetching initial data via proxy...");
 
     try {
-      // Fetch all necessary data using the proxy
       const profileProxyEndpoint = `records/profile.json`;
       const profileDataResponse = await fetchApi<ProfileData>(profileProxyEndpoint, { region: 'jp2', user_name: nickname });
 
@@ -160,20 +162,20 @@ export default function SimulationTestPage() {
       const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10; 
       const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95; 
 
-      let simulationScope: SimulationInput['simulationScope'] = 'hybrid';
-      let improvementMethod: SimulationInput['improvementMethod'] = 'floor'; // default
+      let simulationScope: SimulationInput['simulationScope'] = 'hybrid'; // Changed from combined to hybrid
+      let improvementMethod: SimulationInput['improvementMethod'] = 'floor';
 
-      if (uiStrategy === 'b30_only') {
+      if (uiStrategy === 'b30_focus') { // Changed from b30_only
         simulationScope = 'b30_only';
-        improvementMethod = 'floor'; // Or let user choose for this too via UI later
-      } else if (uiStrategy === 'n20_only') {
+        improvementMethod = 'floor';
+      } else if (uiStrategy === 'n20_focus') { // Changed from n20_only
         simulationScope = 'n20_only';
-        improvementMethod = 'floor'; // Or let user choose
+        improvementMethod = 'floor';
       } else if (uiStrategy === 'hybrid_floor') {
-        simulationScope = 'hybrid';
+        simulationScope = 'hybrid'; // Changed from combined
         improvementMethod = 'floor';
       } else if (uiStrategy === 'hybrid_peak') {
-        simulationScope = 'hybrid';
+        simulationScope = 'hybrid'; // Changed from combined
         improvementMethod = 'peak';
       }
       
@@ -185,8 +187,8 @@ export default function SimulationTestPage() {
         userPlayHistory: userPlayHistoryRecords,
         currentRating: currentRatingNum,
         targetRating: targetRatingNum,
-        simulationScope,
-        improvementMethod,
+        simulationScope, // Renamed from simulationMode
+        improvementMethod, // Renamed from algorithmPreference
         isScoreLimitReleased,
         phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
       };
@@ -205,9 +207,6 @@ export default function SimulationTestPage() {
       if(result.error) {
         setError(`Simulation ended with error: ${result.error}`);
         appendLog(`Simulation ended with error: ${result.error}`);
-      } else if (result.unreachableMessage) {
-        setError(`Target Unreachable: ${result.unreachableMessage} (Max: ${result.reachableRating?.toFixed(4) || 'N/A'})`);
-        appendLog(`Target Unreachable: ${result.unreachableMessage} (Max: ${result.reachableRating?.toFixed(4) || 'N/A'})`);
       }
 
 
@@ -249,8 +248,6 @@ export default function SimulationTestPage() {
       </div>
     );
   }
-  // Removed developer mode check for rendering the page content
-  // if (!isDeveloperMode) { ... }
 
 
   const songListGridCols = "sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
@@ -292,12 +289,12 @@ export default function SimulationTestPage() {
               <Label>Calculation Strategy (UI Choice)</Label>
               <RadioGroup value={uiStrategy} onValueChange={(v) => setUiStrategy(v as CalculationStrategy)} className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="b30_only" id="strat-b30-only" />
-                  <Label htmlFor="strat-b30-only">B30 Only</Label>
+                  <RadioGroupItem value="b30_focus" id="strat-b30-focus" />
+                  <Label htmlFor="strat-b30-focus">B30 Focus</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="n20_only" id="strat-n20-only" />
-                  <Label htmlFor="strat-n20-only">N20 Only</Label>
+                  <RadioGroupItem value="n20_focus" id="strat-n20-focus" />
+                  <Label htmlFor="strat-n20-focus">N20 Focus</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="hybrid_floor" id="strat-hybrid-floor" />
@@ -401,5 +398,3 @@ export default function SimulationTestPage() {
     </main>
   );
 }
-
-    

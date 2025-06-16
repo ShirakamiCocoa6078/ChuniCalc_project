@@ -18,7 +18,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useChuniResultData } from "@/hooks/useChuniResultData";
 import type { CalculationStrategy } from "@/types/result-page";
-import { getApiToken } from '@/lib/get-api-token';
+import { getLocalReferenceApiToken } from '@/lib/get-api-token'; // Changed import
 import { LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_DATA_KEY } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
 
@@ -56,13 +56,12 @@ function ResultContent() {
     isLoadingSongs,
     errorLoadingSongs,
     lastRefreshed,
-    phaseTransitionPoint,
     currentPhase,
     simulatedAverageB30Rating,
     simulatedAverageNew20Rating,
     finalOverallSimulatedRating,
     simulationLog,
-    preCalculationMessage, // New state from hook for pre-calc messages
+    preComputationResult, 
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -123,9 +122,9 @@ function ResultContent() {
     } else if (isLoadingSongs) {
       statusText = getTranslation(locale, 'resultPageLoadingSongsTitle');
       IconComponent = Loader2; iconShouldSpin = true;
-    } else if (preCalculationMessage) { // Display pre-calculation message if available
-        statusText = preCalculationMessage;
-        bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Info;
+    } else if (preComputationResult && currentPhase === 'target_unreachable_info' && preComputationResult.messageKey) {
+        statusText = getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4));
+        bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
     } else if (calculationStrategy === "none") {
         statusText = getTranslation(locale, 'resultPageStrategyTitle') + "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.";
         bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
@@ -160,8 +159,10 @@ function ResultContent() {
             statusText = "B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: " + overallRatingStr;
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
-          case 'target_unreachable_info': // New phase from hook
-            statusText = preCalculationMessage || "사전 계산 결과, 목표 레이팅 도달이 불가능합니다."; // Should be set by preCalculationMessage
+          case 'target_unreachable_info': 
+            statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined) 
+                ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4)) 
+                : "사전 계산 결과, 목표 레이팅 도달이 불가능합니다.";
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
           case 'error_data_fetch':
@@ -178,7 +179,7 @@ function ResultContent() {
         }
     }
 
-    if (calculationStrategy !== "none" && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic' && !preCalculationMessage) {
+    if (calculationStrategy !== "none" && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic' && !(preComputationResult && currentPhase === 'target_unreachable_info')) {
         if (currentPhase !== 'idle' && currentPhase !== 'target_reached' && currentPhase !== 'target_unreachable_info') {
             let detailString = "";
             if (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating)) {
@@ -193,10 +194,6 @@ function ResultContent() {
              } else if (currentPhase !== 'target_reached') {
                 statusText += detailString;
              }
-        }
-
-        if (typeof phaseTransitionPoint === 'number' && !isNaN(phaseTransitionPoint) && currentPhase !== 'target_reached' && currentPhase !== 'target_unreachable_info') {
-            statusText += ` (미세조정 전환점: ${phaseTransitionPoint.toFixed(4)})`;
         }
     }
 
@@ -251,7 +248,7 @@ function ResultContent() {
                 onClick={handleRefreshData}
                 variant="outline"
                 size="sm"
-                disabled={isLoadingSongs || !userNameForApi || userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName') || !getApiToken()}
+                disabled={isLoadingSongs || !userNameForApi || userNameForApi === getTranslation(locale, 'resultPageDefaultPlayerName') || !getLocalReferenceApiToken()}
             >
                 <RefreshCw className={cn("w-4 h-4 mr-2", isLoadingSongs && "animate-spin")} />
                 {getTranslation(locale, 'resultPageRefreshButton')}
@@ -273,31 +270,31 @@ function ResultContent() {
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="b30_focus" id="r-b30-focus" />
                 <Label htmlFor="r-b30-focus" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <Focus className="w-4 h-4 mr-1 sm:mr-2 text-sky-600" /> B30 집중
+                  <Focus className="w-4 h-4 mr-1 sm:mr-2 text-sky-600" /> {getTranslation(locale, 'resultPageStrategyB30Focus')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="n20_focus" id="r-n20-focus" />
                 <Label htmlFor="r-n20-focus" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <Focus className="w-4 h-4 mr-1 sm:mr-2 text-lime-600" /> N20 집중
+                  <Focus className="w-4 h-4 mr-1 sm:mr-2 text-lime-600" /> {getTranslation(locale, 'resultPageStrategyN20Focus')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="hybrid_floor" id="r-hybrid-floor" />
                 <Label htmlFor="r-hybrid-floor" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <TrendingDown className="w-4 h-4 mr-1 sm:mr-2 text-green-600" /> 전체 (저점)
+                  <TrendingDown className="w-4 h-4 mr-1 sm:mr-2 text-green-600" /> {getTranslation(locale, 'resultPageStrategyCombinedFloor')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="hybrid_peak" id="r-hybrid-peak" />
                 <Label htmlFor="r-hybrid-peak" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <TrendingUp className="w-4 h-4 mr-1 sm:mr-2 text-destructive" /> 전체 (고점)
+                  <TrendingUp className="w-4 h-4 mr-1 sm:mr-2 text-destructive" /> {getTranslation(locale, 'resultPageStrategyCombinedPeak')}
                 </Label>
               </div>
               <div className="flex items-center space-x-2 p-3 bg-muted/50 rounded-md hover:bg-muted transition-colors flex-1">
                 <RadioGroupItem value="none" id="r-none" />
                 <Label htmlFor="r-none" className="flex items-center cursor-pointer w-full text-xs sm:text-sm">
-                  <X className="w-4 h-4 mr-1 sm:mr-2 text-muted-foreground" /> 선택 안함
+                  <X className="w-4 h-4 mr-1 sm:mr-2 text-muted-foreground" /> {getTranslation(locale, 'resultPageStrategyNone')}
                 </Label>
               </div>
             </RadioGroup>
@@ -326,7 +323,7 @@ function ResultContent() {
                 }
               </p>
             </div>
-          ) : errorLoadingSongs ? (
+          ) : errorLoadingSongs && currentPhase === 'error_data_fetch' ? ( // Ensure error is relevant to data fetch phase
              <Card className="border-destructive/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <AlertTriangle className="w-6 h-6 text-destructive" />
@@ -337,7 +334,7 @@ function ResultContent() {
                     <p className="text-sm text-muted-foreground mt-2">{getTranslation(locale, 'resultPageErrorLoadingDesc')}</p>
                 </CardContent>
             </Card>
-          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && currentPhase === 'idle' && !preCalculationMessage) ? (
+          ) : (!isLoadingSongs && best30SongsData.length === 0 && new20SongsData.length === 0 && calculationStrategy !== "none" && (currentPhase === 'idle' || currentPhase === 'target_unreachable_info') && !errorLoadingSongs) ? ( // Error in simulation would be handled by renderSimulationStatus
              <Card className="border-orange-500/50 shadow-lg">
                 <CardHeader className="flex flex-row items-center space-x-2">
                     <Info className="w-6 h-6 text-orange-500" />
