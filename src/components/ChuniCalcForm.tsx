@@ -63,12 +63,6 @@ export default function ChuniCalcForm() {
       console.log("[ChuniCalcForm] Using local reference API token for profile fetch.");
     } else {
       console.log("[ChuniCalcForm] No local reference API token found, relying on server-side key for profile fetch.");
-      // Optionally show the informational toast if desired, but it's less critical here as proxy handles fallback
-      // toast({
-      //   title: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingTitle'),
-      //   description: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingDesc'),
-      //   variant: "default",
-      // });
     }
 
 
@@ -170,10 +164,7 @@ export default function ChuniCalcForm() {
   const handleCalculateAndNavigate = (e: FormEvent) => {
     e.preventDefault();
 
-    const current = parseFloat(currentRatingStr);
-    const target = parseFloat(targetRatingStr);
-
-    if (currentRatingStr === "" || targetRatingStr === "") {
+    if (currentRatingStr.trim() === "" || targetRatingStr.trim() === "") {
         toast({
             title: getTranslation(locale, 'toastErrorMissingInfo'),
             description: getTranslation(locale, 'toastErrorMissingInfoDesc'),
@@ -181,6 +172,9 @@ export default function ChuniCalcForm() {
         });
         return;
     }
+
+    const current = parseFloat(currentRatingStr);
+    const target = parseFloat(targetRatingStr);
 
     if (isNaN(current) || isNaN(target)) {
       toast({
@@ -190,8 +184,35 @@ export default function ChuniCalcForm() {
       });
       return;
     }
-
-    if (current >= 17.50) {
+    
+    // Check for 0.01 step for current rating
+    if (currentRatingStr.includes('.') && currentRatingStr.split('.')[1].length > 2) {
+        toast({
+            title: getTranslation(locale, 'toastErrorInvalidInput'),
+            description: getTranslation(locale, 'toastErrorRatingInvalidStep'),
+            variant: "destructive",
+        });
+        return;
+    }
+    // Check for 0.01 step for target rating
+    if (targetRatingStr.includes('.') && targetRatingStr.split('.')[1].length > 2) {
+        toast({
+            title: getTranslation(locale, 'toastErrorInvalidInput'),
+            description: getTranslation(locale, 'toastErrorRatingInvalidStep'),
+            variant: "destructive",
+        });
+        return;
+    }
+    
+    if (current < 0) {
+        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorCurrentRatingTooLow', 0), variant: "destructive" });
+        return;
+    }
+    if (current > 17.49) { // Max for current rating input is 17.49
+        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorCurrentRatingTooHighForm', 17.49), variant: "destructive" });
+        return;
+    }
+     if (current >= 17.50) { // This is the general logic check post-parsing
       toast({
         title: getTranslation(locale, 'toastErrorCurrentRatingTooHigh'),
         description: getTranslation(locale, 'toastErrorCurrentRatingTooHighDesc'),
@@ -200,12 +221,12 @@ export default function ChuniCalcForm() {
       return;
     }
 
-    if (current < 0 || current >= 17.50 || target < 0 || target > 17.50) {
-        toast({
-          title: getTranslation(locale, 'toastErrorInvalidRatingRange'),
-          description: getTranslation(locale, 'toastErrorInvalidRatingRangeDesc'),
-          variant: "destructive",
-        });
+    if (target < 0) {
+        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooLow', 0), variant: "destructive" });
+        return;
+    }
+    if (target > 17.50) { // Max for target rating input is 17.50
+        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooHighForm', 17.50), variant: "destructive" });
         return;
     }
 
@@ -319,3 +340,4 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
+

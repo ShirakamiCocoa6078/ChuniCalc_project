@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.33",
+    appVersion: "ChuniCalc v1.0.34",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.",
@@ -72,9 +72,9 @@ export const translations = {
     toastErrorMissingInfoDesc: "현재 레이팅(조회 필요)과 목표 레이팅을 모두 입력해주세요.",
     toastErrorInvalidInput: "잘못된 입력",
     toastErrorInvalidInputDesc: "레이팅은 숫자로 입력해야 합니다.",
-    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음",
+    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음", // This one seems to be a general logic check, not directly from form input min/max
     toastErrorCurrentRatingTooHighDesc: "현재 레이팅이 17.50 이상입니다. 이 계산기에서는 더 이상 성장을 예측할 수 없습니다.",
-    toastErrorInvalidRatingRange: "잘못된 레이팅 범위",
+    toastErrorInvalidRatingRange: "잘못된 레이팅 범위", // This is a general check
     toastErrorInvalidRatingRangeDesc: "현재 레이팅은 0.00-17.49, 목표 레이팅은 0.00-17.50 사이여야 합니다.",
     toastErrorTargetRating: "목표 레이팅 오류",
     toastErrorTargetRatingDesc: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
@@ -139,16 +139,21 @@ export const translations = {
     resultPageHeaderTarget: "목표:",
     resultPageNoCombinedData: "Best 30 및 New 20 곡 데이터가 모두 없습니다.",
     resultPageErrorInvalidRatingsInput: "무효한 레이팅 입력값입니다. 현재 또는 목표 레이팅을 확인해주세요.",
-    resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.", // Kept for other potential uses, but specific prompt is now separate
+    resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
+    resultPagePromptSelectStrategySuffix: "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.",
     resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
     reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 집중 모드] 현재 New 20 곡을 유지할 경우, Best 30 곡만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
     reachableRatingN20OnlyMessage: (rating: string) => `[New 20 집중 모드] 현재 Best 30 곡을 유지할 경우, New 20 곡만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
-    resultPagePromptSelectStrategySuffix: "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.",
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `목표 달성! 최종 전체 레이팅: ${overall} (B30: ${b30}, N20: ${n20})`,
     resultPageStuckBothBaseFmt: (overall: string) => `B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30 평균: ${b30Avg}${n20Avg ? `, N20 평균: ${n20Avg}` : ''})`,
-
+    // New keys for form validation
+    toastErrorCurrentRatingTooLow: (minValue: string | number) => `현재 레이팅은 ${minValue} 이상이어야 합니다.`,
+    toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `현재 레이팅은 ${maxValue} 이하여야 합니다.`,
+    toastErrorTargetRatingTooLow: (minValue: string | number) => `목표 레이팅은 ${minValue} 이상이어야 합니다.`,
+    toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `목표 레이팅은 ${maxValue} 이하여야 합니다.`,
+    toastErrorRatingInvalidStep: "레이팅은 0.01 단위로 입력해주세요.",
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -194,7 +199,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.33",
+    appVersion: "ChuniCalc v1.0.34",
     // Toast Messages JP
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
@@ -288,14 +293,20 @@ export const translations = {
     resultPageNoCombinedData: "Best 30 および New 20 曲データが両方ともありません。",
     resultPageErrorInvalidRatingsInput: "無効なレーティング入力値です。現在または目標レーティングを確認してください。",
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
+    resultPagePromptSelectStrategySuffix: "で計算基準を選択してシミュレーションを開始してください。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
     reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在のNew 20曲を維持する場合、Best 30曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
     reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在のBest 30曲を維持する場合、New 20曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
-    resultPagePromptSelectStrategySuffix: "で計算基準を選択してシミュレーションを開始してください。",
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `目標達成！最終総合レーティング: ${overall} (B30: ${b30}, N20: ${n20})`,
     resultPageStuckBothBaseFmt: (overall: string) => `B30およびN20のどちらもこれ以上改善できません。最終総合: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30平均: ${b30Avg}${n20Avg ? `, N20平均: ${n20Avg}` : ''})`,
+    // New keys for form validation
+    toastErrorCurrentRatingTooLow: (minValue: string | number) => `現在レーティングは${minValue}以上である必要があります。`,
+    toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `現在レーティングは${maxValue}以下である必要があります。`,
+    toastErrorTargetRatingTooLow: (minValue: string | number) => `目標レーティングは${minValue}以上である必要があります。`,
+    toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `目標レーティングは${maxValue}以下である必要があります。`,
+    toastErrorRatingInvalidStep: "レーティングは0.01単位で入力してください。",
   }
 };
 
