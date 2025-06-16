@@ -13,7 +13,7 @@ export type RatingApiSongEntry = {
   score: number;
   rating: number;
   genre?: string;
-  const?: number; // chartConstant in API, can be null or number
+  const?: number; 
   updated_at?: string;
 };
 
@@ -25,25 +25,24 @@ export type ShowallApiSongEntry = {
   const: number | null;
   level: number | string;
   release?: string;
-  score?: number; // User's score if played
-  rating?: number | null; // User's calculated rating for this song, or internal rating from API
+  score?: number; 
+  rating?: number | null; 
   is_played?: boolean;
   updated_at?: string;
   is_clear?: boolean;
   is_fullcombo?: boolean;
   is_alljustice?: boolean;
   is_fullchain?: boolean;
-  is_const_unknown?: boolean; // Important for const fallback
+  is_const_unknown?: boolean; 
 };
 
-// Defines the strategy selected by the user in the UI
 export type CalculationStrategy =
-  | "b30_focus"         // Focus on B30, N20 fixed (uses floor-like algorithm internally for now)
-  | "n20_focus"         // Focus on N20, B30 fixed (uses floor-like algorithm internally for now)
-  | "hybrid_floor"      // Full simulation using floor-preference algorithm
-  | "hybrid_peak"       // Full simulation using peak-preference algorithm
-  | "none"              // No simulation, show current state
-  | null;               // Initial state
+  | "b30_focus"
+  | "n20_focus"
+  | "hybrid_floor"
+  | "hybrid_peak"
+  | "none"
+  | null;
 
 export type Song = {
   id: string;
@@ -54,7 +53,6 @@ export type Song = {
   currentRating: number;
   targetScore: number;
   targetRating: number;
-  // Optional fields that might be useful from ShowallApiSongEntry or RatingApiSongEntry
   genre?: string;
   level?: number | string;
   release?: string;
@@ -63,13 +61,8 @@ export type Song = {
   is_fullcombo?: boolean;
   is_alljustice?: boolean;
   is_const_unknown?: boolean;
-  // Fields for simulation tracking if needed outside the pure function
-  sim_isNewInB30?: boolean;
-  sim_originalB30Rating?: number;
-  sim_timesImproved?: number;
-  isExcludedFromImprovement?: boolean; // Added for exclude feature
+  isExcludedFromImprovement?: boolean;
 };
-
 
 export type GlobalMusicApiResponse = {
     records?: ShowallApiSongEntry[];
@@ -92,7 +85,7 @@ export type SimulationPhase =
   | 'stuck_both_no_improvement'
   | 'error_data_fetch'
   | 'error_simulation_logic'
-  | 'target_unreachable_info'; // New phase for pre-calculation check
+  | 'target_unreachable_info';
 
 export type CachedSimulationResult = {
   timestamp: number;
@@ -104,21 +97,21 @@ export type CachedSimulationResult = {
   finalPhase: SimulationPhase;
 };
 
-
-// Types for the pure simulation logic
 export interface SimulationInput {
   originalB30Songs: Song[];
   originalNew20Songs: Song[];
   allPlayedNewSongsPool: Song[];
   allMusicData: ShowallApiSongEntry[];
   userPlayHistory: ShowallApiSongEntry[];
+  newSongsDataTitlesVerse: string[]; // Added for worker
+  constOverrides: ConstOverride[]; // Added for worker
   currentRating: number;
   targetRating: number;
   algorithmPreference: "floor" | "peak";
   simulationMode: "b30_only" | "n20_only" | "hybrid";
   isScoreLimitReleased: boolean;
   phaseTransitionPoint: number | null;
-  excludedSongKeys: Set<string>; // Added for exclude feature
+  excludedSongKeys: Set<string>;
 }
 
 export interface SimulationOutput {
@@ -132,16 +125,13 @@ export interface SimulationOutput {
   error?: string;
 }
 
-// Type for pre-calculation result
 export type TheoreticalMaxInfo = {
   reachableRating: number;
-  message: string | null; // Message to display if target is unreachable
+  message: string | null;
 };
 
-// Type for Const Overrides
 export type ConstOverride = {
   title: string;
   diff: string;
   const: number;
 };
-

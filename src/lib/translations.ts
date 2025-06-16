@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.27",
+    appVersion: "ChuniCalc v1.0.28",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.",
@@ -130,8 +130,8 @@ export const translations = {
     resultPageNoBest30Data: "Best 30 곡 데이터가 없습니다. (Chunirec API의 `rating_data.json` 응답을 확인해주세요)",
     resultPageNoNew20Data: "New 20 곡 데이터가 없습니다. 사용자가 NewSongs.json에 포함된 곡을 플레이하지 않았거나, 관련 API 데이터 로딩에 실패했을 수 있습니다. (콘솔 로그 확인)",
     resultPageSuspenseFallback: "결과 로딩 중...",
-    resultPageToastApiLoadSuccessTitle: "데이터 로드 완료 (API)",
-    resultPageToastApiLoadSuccessDesc: (timestamp: string) => `API에서 최신 데이터를 성공적으로 불러와 캐시했습니다. (${timestamp})`,
+    resultPageToastApiLoadSuccessTitle: "데이터 로드 완료 (SWR)",
+    resultPageToastApiLoadSuccessDesc: "SWR을 통해 최신 데이터를 성공적으로 불러왔습니다.",
     resultPageToastCacheLoadSuccessDesc: "로컬 캐시에서 데이터를 성공적으로 불러왔습니다。",
     resultPageToastCacheLoadSuccessTitle: "데이터 로드 완료 (캐시)",
     resultPageHeaderCurrent: "현재:",
@@ -188,7 +188,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.27",
+    appVersion: "ChuniCalc v1.0.28",
     // Toast Messages JP
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
@@ -272,8 +272,8 @@ export const translations = {
     resultPageNoBest30Data: "Best 30 曲データがありません。(Chunirec APIの`rating_data.json`応答を確認してください)",
     resultPageNoNew20Data: "New 20 曲データがありません。ユーザーがNewSongs.jsonに含まれる曲をプレイしていないか、関連APIデータの読み込みに失敗した可能性があります。(コンソールログ確認)",
     resultPageSuspenseFallback: "結果読み込み中...",
-    resultPageToastApiLoadSuccessTitle: "データロード完了 (API)",
-    resultPageToastApiLoadSuccessDesc: (timestamp: string) => `APIから最新データを正常にロードしキャッシュしました。(${timestamp})`,
+    resultPageToastApiLoadSuccessTitle: "データロード完了 (SWR)",
+    resultPageToastApiLoadSuccessDesc: "SWRを通じて最新データを正常にロードしました。",
     resultPageToastCacheLoadSuccessDesc: "ローカルキャッシュからデータを正常にロードしました。",
     resultPageToastCacheLoadSuccessTitle: "データロード完了 (キャッシュ)",
     resultPageHeaderCurrent: "現在:",
@@ -318,7 +318,6 @@ export function getTranslation<L extends Locale, K extends keyof typeof translat
 
   if (messageOrFn === undefined) {
     const defaultText = args.length > 0 && typeof args[args.length -1] === 'string' && !Object.keys(primaryTranslations).includes(args[args.length -1] as K) ? args[args.length -1] as string : String(key);
-    // console.warn(`[Translation] Key "${String(key)}" not found in locale "${locale}" or fallback "KR". Using default: "${defaultText}"`);
     return defaultText;
   }
 
@@ -334,4 +333,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-

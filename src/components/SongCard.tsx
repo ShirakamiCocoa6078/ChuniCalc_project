@@ -1,30 +1,27 @@
 
 "use client";
 
+import React from "react"; // Import React
 import type { CalculationStrategy, Song } from "@/types/result-page";
 import { Card, CardContent } from "@/components/ui/card";
-import { Music2, Star, Target as TargetIcon, ArrowUpCircle, XCircle } from "lucide-react"; // Added XCircle
+import { Music2, Star, Target as TargetIcon, ArrowUpCircle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MAX_SCORE_FOR_EXCLUDE_TOGGLE = 1009000 -1; // Max normal SSS+ score minus 1 to allow toggle
+const MAX_SCORE_FOR_EXCLUDE_TOGGLE = 1009000 -1; 
 
 const difficultyColors: { [key: string]: string } = {
-  ULT: "text-[#9F5D67]", 
-  MAS: "text-[#CE12CE]", 
-  EXP: "text-[#F10B0B]", 
-  ADV: "text-[#EF9F00]", 
-  BAS: "text-[#40C540]", 
-  UNKNOWN: "text-muted-foreground",
+  ULT: "text-[#9F5D67]", MAS: "text-[#CE12CE]", EXP: "text-[#F10B0B]", 
+  ADV: "text-[#EF9F00]", BAS: "text-[#40C540]", UNKNOWN: "text-muted-foreground",
 };
 
 type SongCardProps = {
   song: Song;
   calculationStrategy: CalculationStrategy | null;
-  isExcluded: boolean; // New prop
-  onExcludeToggle: () => void; // New prop
+  isExcluded: boolean;
+  onExcludeToggle: () => void;
 };
 
-export default function SongCard({ song, calculationStrategy, isExcluded, onExcludeToggle }: SongCardProps) {
+function SongCard({ song, calculationStrategy, isExcluded, onExcludeToggle }: SongCardProps) {
   const inSimulationMode = !!calculationStrategy && calculationStrategy !== "none";
 
   const scoreDifference = song.targetScore - song.currentScore;
@@ -35,33 +32,19 @@ export default function SongCard({ song, calculationStrategy, isExcluded, onExcl
 
   const isSimulatedAndChanged = inSimulationMode && (scoreActuallyChanged || ratingActuallyChanged) && !isExcluded;
 
-  // For debugging specific songs
-  // if (song.title.includes("MarbleBlue.") || song.title.includes("Random") || song.title.includes("Makear") || song.title.includes("VERSE")) {
-  //   console.log(
-  //     `[SongCard] ${song.title} (${song.diff}): currentS: ${song.currentScore}, targetS: ${song.targetScore}, currentR: ${song.currentRating.toFixed(4)}, targetR: ${song.targetRating.toFixed(4)}, inSim: ${inSimulationMode}, isExcluded: ${isExcluded}, isSimAndChanged: ${isSimulatedAndChanged}, scoreDiff: ${scoreDifference}, ratingDiffVal: ${ratingDifferenceValue.toFixed(4)}, scoreActuallyChanged: ${scoreActuallyChanged}, ratingActuallyChanged: ${ratingActuallyChanged}`
-  //   );
-  // }
-
   const getDifficultyColorClass = (diff: string) => {
     const upperDiff = diff.toUpperCase();
     return difficultyColors[upperDiff] || difficultyColors.UNKNOWN;
   };
 
   let borderColorClass = "border-border"; 
-
-  if (song.currentScore >= 1009000) { // SSS+ or higher, considered "maxed" for normal play
-    borderColorClass = "border-red-500"; 
-  } else if (inSimulationMode && song.targetScore >= 1009000 && !isExcluded) { // Will be SSS+ after simulation
-    borderColorClass = "border-purple-400"; 
-  } else if (isExcluded) { // Explicitly excluded
-    borderColorClass = "border-gray-500";
-  }
-  else { // Normal, improvable song
-    borderColorClass = "border-green-500"; 
-  }
+  if (song.currentScore >= 1009000) borderColorClass = "border-red-500"; 
+  else if (inSimulationMode && song.targetScore >= 1009000 && !isExcluded) borderColorClass = "border-purple-400"; 
+  else if (isExcluded) borderColorClass = "border-gray-500";
+  else borderColorClass = "border-green-500"; 
   
   const handleCardClick = () => {
-    if (song.currentScore <= MAX_SCORE_FOR_EXCLUDE_TOGGLE) { // Only allow toggle if not already SSS+
+    if (song.currentScore <= MAX_SCORE_FOR_EXCLUDE_TOGGLE && calculationStrategy !== "none") {
         onExcludeToggle();
     }
   };
@@ -69,16 +52,14 @@ export default function SongCard({ song, calculationStrategy, isExcluded, onExcl
   return (
     <Card 
       className={cn(
-        "overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full border-2 relative", // Added relative for overlay
+        "overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full border-2 relative",
         borderColorClass,
         (song.currentScore <= MAX_SCORE_FOR_EXCLUDE_TOGGLE && calculationStrategy !== "none") ? "cursor-pointer" : "cursor-default"
       )}
       onClick={handleCardClick}
     >
       <CardContent className="p-0 flex h-full">
-        {/* Consistent gray background for jacket placeholder */}
         <div className="w-1/3 relative h-full flex items-center justify-center min-h-[70px] bg-muted">
-             {/* Intentionally empty or add a generic icon like <Music2 className="w-8 h-8 text-muted-foreground/50" /> */}
         </div>
         <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
           <div>
@@ -141,7 +122,7 @@ export default function SongCard({ song, calculationStrategy, isExcluded, onExcl
         <div className="absolute inset-0 bg-gray-800 bg-opacity-80 z-10 pointer-events-none">
           <div 
             className="absolute top-1/2 left-0 w-full h-[2px] bg-red-500 bg-opacity-70 transform -translate-y-1/2 origin-center z-20"
-            style={{ transform: 'translateY(-50%) rotate(-30deg) scale(1.2)' }} // Adjusted rotation and scale for better diagonal
+            style={{ transform: 'translateY(-50%) rotate(-30deg) scale(1.2)' }}
           />
         </div>
       )}
@@ -149,3 +130,4 @@ export default function SongCard({ song, calculationStrategy, isExcluded, onExcl
   );
 }
 
+export default React.memo(SongCard);
