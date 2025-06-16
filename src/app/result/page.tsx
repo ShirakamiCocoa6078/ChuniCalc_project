@@ -10,7 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass, X, Focus } from "lucide-react";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass, X, Focus, HelpCircle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
@@ -85,7 +86,7 @@ function ResultContent() {
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
         
-        toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
+        toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     } else {
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     }
@@ -130,15 +131,15 @@ function ResultContent() {
         switch (currentPhase) {
           case 'idle':
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
-                statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다."; // TODO: Translate if needed
+                statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr); // Or a specific "already met/exceeded" message
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
             } else {
-                 statusText = "시뮬레이션 대기 중 또는 완료. 전체 레이팅: " + overallRatingStr;  // TODO: Translate if needed
+                 statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (전체: " + overallRatingStr + ")";
                  IconComponent = PlaySquare;
             }
             break;
           case 'simulating':
-             statusText = "시뮬레이션 실행 중... (로직 수행 중)"; // TODO: Translate if needed
+             statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (로직 수행 중)";
              IconComponent = Activity; iconShouldSpin = true;
              break;
           case 'target_reached':
@@ -146,52 +147,36 @@ function ResultContent() {
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_b30_no_improvement':
-            statusText = "B30 개선 불가. N20 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr; // TODO: Translate if needed
+            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr); // Adapted for single list stuck
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'stuck_n20_no_improvement':
-            statusText = "N20 개선 불가. B30 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr; // TODO: Translate if needed
+            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr); // Adapted for single list stuck
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'stuck_both_no_improvement':
-            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr);
+            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr) + getTranslation(locale, 'resultPageDetailRatingsAvgFmt', b30AvgStr, n20AvgStr);
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
           case 'target_unreachable_info': 
             statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined) 
                 ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4)) 
-                : "사전 계산 결과, 목표 레이팅 도달이 불가능합니다."; // TODO: Translate if needed
+                : getTranslation(locale, 'resultPageErrorSimulationGeneric', "목표 도달 불가 (사전 계산)");
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
           case 'error_data_fetch':
-            statusText = `${getTranslation(locale, 'resultPageErrorLoadingTitle')}: ${errorLoadingSongs || getTranslation(locale, 'resultPageErrorUnknown')}`; // Added resultPageErrorUnknown
+            statusText = `${getTranslation(locale, 'resultPageErrorLoadingTitle')}: ${errorLoadingSongs || getTranslation(locale, 'resultPageErrorSimulationGeneric', '데이터 가져오기 오류')}`;
             bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
           case 'error_simulation_logic':
-            statusText = `${getTranslation(locale, 'resultPageErrorSimulationGeneric', '')}: ${simulationLog.find(log => log.toLowerCase().includes("error")) || getTranslation(locale, 'resultPageErrorUnknown')}`; // Added resultPageErrorUnknown
+            statusText = `${getTranslation(locale, 'resultPageErrorSimulationGeneric', '')}: ${simulationLog.find(log => log.toLowerCase().includes("error")) || getTranslation(locale, 'resultPageErrorSimulationGeneric', '시뮬레이션 로직 오류')}`;
             bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
           default:
-            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`; // TODO: Translate if needed
+            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
             IconComponent = AlertTriangle;
         }
     }
-
-    if (calculationStrategy !== "none" && !isLoadingSongs && !errorLoadingSongs && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic' && !(preComputationResult && currentPhase === 'target_unreachable_info')) {
-        if (currentPhase !== 'idle' && currentPhase !== 'target_reached' && currentPhase !== 'target_unreachable_info') {
-            let detailString = "";
-            if (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating)) {
-                const n20AvgForDetail = (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating) && new20SongsData.length > 0) ? simulatedAverageNew20Rating.toFixed(4) : undefined;
-                detailString = getTranslation(locale, 'resultPageDetailRatingsAvgFmt', simulatedAverageB30Rating.toFixed(4), n20AvgForDetail);
-            }
-             if (statusText.includes("...")) { // Placeholder for detail string
-                statusText = statusText.replace("...", detailString + "...");
-             } else if (currentPhase !== 'target_reached') {
-                statusText += detailString;
-             }
-        }
-    }
-
 
     return (
       <div className={cn("p-3 my-4 rounded-md text-sm flex items-center shadow-md", bgColor, textColor)}>
@@ -252,7 +237,22 @@ function ResultContent() {
 
         <Card className="mb-6 shadow-md">
           <CardHeader>
-            <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
+            <div className="flex items-center">
+                <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <HelpCircle className="ml-2 h-4 w-4 text-muted-foreground cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-sm" side="top">
+                            <p>{getTranslation(locale, 'tooltipCalcStrategyB30Focus')}</p>
+                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyN20Focus')}</p>
+                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyHybridFloor')}</p>
+                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyHybridPeak')}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -299,11 +299,23 @@ function ResultContent() {
         {renderSimulationStatus()}
 
         <Tabs defaultValue="best30" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 gap-1 mb-6 bg-muted p-1 rounded-lg shadow-inner">
-            <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabBest30')}</TabsTrigger>
-            <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabNew20')}</TabsTrigger>
-            <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
-          </TabsList>
+          <div className="flex items-start justify-between mb-6">
+            <TabsList className="grid w-full max-w-lg grid-cols-3 gap-1 bg-muted p-1 rounded-lg shadow-inner">
+              <TabsTrigger value="best30" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabBest30')}</TabsTrigger>
+              <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabNew20')}</TabsTrigger>
+              <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
+            </TabsList>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <HelpCircle className="ml-2 mt-1.5 h-5 w-5 text-muted-foreground cursor-help shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent side="left" className="max-w-xs">
+                        <p>{getTranslation(locale, 'tooltipResultTabsContent')}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+          </div>
 
           {(isLoadingSongs && calculationStrategy === "none" && currentPhase !== 'error_data_fetch' && currentPhase !== 'error_simulation_logic') ? (
             <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -442,4 +454,3 @@ export default function ResultPage() {
     </Suspense>
   );
 }
-

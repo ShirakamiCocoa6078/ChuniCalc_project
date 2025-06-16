@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Gauge, Target, User, Search, ArrowRight, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Gauge, Target, User, Search, ArrowRight, Loader2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
@@ -185,7 +186,6 @@ export default function ChuniCalcForm() {
       return;
     }
     
-    // Check for 0.01 step for current rating
     if (currentRatingStr.includes('.') && currentRatingStr.split('.')[1].length > 2) {
         toast({
             title: getTranslation(locale, 'toastErrorInvalidInput'),
@@ -194,7 +194,6 @@ export default function ChuniCalcForm() {
         });
         return;
     }
-    // Check for 0.01 step for target rating
     if (targetRatingStr.includes('.') && targetRatingStr.split('.')[1].length > 2) {
         toast({
             title: getTranslation(locale, 'toastErrorInvalidInput'),
@@ -208,11 +207,11 @@ export default function ChuniCalcForm() {
         toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorCurrentRatingTooLow', 0), variant: "destructive" });
         return;
     }
-    if (current > 17.49) { // Max for current rating input is 17.49
+    if (current > 17.49) { 
         toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorCurrentRatingTooHighForm', 17.49), variant: "destructive" });
         return;
     }
-     if (current >= 17.50) { // This is the general logic check post-parsing
+     if (current >= 17.50) { 
       toast({
         title: getTranslation(locale, 'toastErrorCurrentRatingTooHigh'),
         description: getTranslation(locale, 'toastErrorCurrentRatingTooHighDesc'),
@@ -225,7 +224,7 @@ export default function ChuniCalcForm() {
         toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooLow', 0), variant: "destructive" });
         return;
     }
-    if (target > 17.50) { // Max for target rating input is 17.50
+    if (target > 17.50) { 
         toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooHighForm', 17.50), variant: "destructive" });
         return;
     }
@@ -274,9 +273,21 @@ export default function ChuniCalcForm() {
       <CardContent>
         <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
-              <User className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'nicknameLabel')}
-            </Label>
+            <div className="flex items-center">
+              <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
+                <User className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'nicknameLabel')}
+              </Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="max-w-xs">{getTranslation(locale, 'tooltipChunirecNicknameContent')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <div className="flex space-x-2">
               <Input
                 id="nickname"
@@ -314,9 +325,21 @@ export default function ChuniCalcForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
-              <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
-            </Label>
+             <div className="flex items-center">
+              <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
+                <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
+              </Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                     <p className="max-w-xs">{getTranslation(locale, 'tooltipTargetRatingContent')}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <Input
               id="targetRating"
               type="number"
@@ -340,4 +363,3 @@ export default function ChuniCalcForm() {
     </Card>
   );
 }
-

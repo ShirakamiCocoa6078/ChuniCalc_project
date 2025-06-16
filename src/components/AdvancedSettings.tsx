@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
-import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn } from "lucide-react";
+import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn, HelpCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
 
@@ -137,7 +138,6 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
       const data = await response.json();
-      // Use MANUAL_CACHE_EXPIRY_MS for manual caching action
       setCachedData<any[]>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, Array.isArray(data) ? data : (data?.records || []), MANUAL_CACHE_EXPIRY_MS);
       toast({
           title: getTranslation(locale, 'toastSuccessGlobalMusicCached'),
@@ -176,7 +176,6 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
       const data = await response.json();
-      // For user records, we can use the same manual cache expiry or a different one if needed
       setCachedData<any>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data, MANUAL_CACHE_EXPIRY_MS);
       toast({
           title: getTranslation(locale, 'toastSuccessUserRecordsCached'),
@@ -225,9 +224,21 @@ export default function AdvancedSettings() {
       
       <CardContent className="space-y-6 pt-6">
         <div className="space-y-2">
-          <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
-            <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
-          </Label>
+          <div className="flex items-center">
+            <Label htmlFor="localApiTokenInput" className="flex items-center font-medium">
+                <KeyRound className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'localApiKeyLabel')}
+            </Label>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                        <p className="max-w-xs">{getTranslation(locale, 'tooltipLocalApiKeyContent')}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+          </div>
           <Input
             id="localApiTokenInput"
             type="text"
@@ -361,6 +372,3 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
-
-
-    

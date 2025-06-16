@@ -72,9 +72,9 @@ export const translations = {
     toastErrorMissingInfoDesc: "현재 레이팅(조회 필요)과 목표 레이팅을 모두 입력해주세요.",
     toastErrorInvalidInput: "잘못된 입력",
     toastErrorInvalidInputDesc: "레이팅은 숫자로 입력해야 합니다.",
-    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음", // This one seems to be a general logic check, not directly from form input min/max
+    toastErrorCurrentRatingTooHigh: "현재 레이팅 너무 높음",
     toastErrorCurrentRatingTooHighDesc: "현재 레이팅이 17.50 이상입니다. 이 계산기에서는 더 이상 성장을 예측할 수 없습니다.",
-    toastErrorInvalidRatingRange: "잘못된 레이팅 범위", // This is a general check
+    toastErrorInvalidRatingRange: "잘못된 레이팅 범위",
     toastErrorInvalidRatingRangeDesc: "현재 레이팅은 0.00-17.49, 목표 레이팅은 0.00-17.50 사이여야 합니다.",
     toastErrorTargetRating: "목표 레이팅 오류",
     toastErrorTargetRatingDesc: "목표 레이팅은 현재 레이팅보다 높아야 합니다.",
@@ -97,7 +97,6 @@ export const translations = {
     toastInfoLocalApiKeyRefMissingTitle: "로컬 참조 API 키 확인 (정보)",
     toastInfoLocalApiKeyRefMissingDesc: "고급 설정에 로컬 참조용 API 키가 저장되어 있지 않습니다. 이 경우 서버의 기본 API 키를 사용하며, 문제가 발생하면 서버 관리자에게 문의해주세요. (만약 로컬 키를 직접 입력하셨다면, 해당 키가 우선 사용됩니다.)",
     toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} 요청 시간이 초과되었습니다. (15초)`,
-    // Result Page
     resultPageDefaultPlayerName: "플레이어",
     resultPageNotAvailable: "N/A",
     resultPageErrorApiTokenNotSetResult: "API 토큰이 설정되지 않았습니다. 곡 정보를 가져올 수 없습니다. 고급 설정에서 로컬 토큰을 입력하거나 환경 변수를 확인해주세요.",
@@ -148,12 +147,20 @@ export const translations = {
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `목표 달성! 최종 전체 레이팅: ${overall} (B30: ${b30}, N20: ${n20})`,
     resultPageStuckBothBaseFmt: (overall: string) => `B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30 평균: ${b30Avg}${n20Avg ? `, N20 평균: ${n20Avg}` : ''})`,
-    // New keys for form validation
     toastErrorCurrentRatingTooLow: (minValue: string | number) => `현재 레이팅은 ${minValue} 이상이어야 합니다.`,
     toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `현재 레이팅은 ${maxValue} 이하여야 합니다.`,
     toastErrorTargetRatingTooLow: (minValue: string | number) => `목표 레이팅은 ${minValue} 이상이어야 합니다.`,
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `목표 레이팅은 ${maxValue} 이하여야 합니다.`,
     toastErrorRatingInvalidStep: "레이팅은 0.01 단위로 입력해주세요.",
+    // Tooltip translations
+    tooltipChunirecNicknameContent: "https://chunirec.net/ 에서 등록한 데이터를 불러옵니다. 해당 사이트에서 데이터의 사전 등록이 필요합니다.",
+    tooltipTargetRatingContent: "자신이 도달하고 싶은 목표 레이팅을 입력합니다.",
+    tooltipCalcStrategyB30Focus: "Best 30 집중: Best 30 곡들만으로 목표 달성 경로를 계산합니다.",
+    tooltipCalcStrategyN20Focus: "New 20 집중: New 20 곡들만으로 목표 달성 경로를 계산합니다.",
+    tooltipCalcStrategyHybridFloor: "전체(저점우선): 모든 곡을 대상으로, 현재 레이팅이 낮은 곡부터 점수를 올리는 현실적인 경로를 계산합니다.",
+    tooltipCalcStrategyHybridPeak: "전체(고점우선): 모든 곡을 대상으로, 현재 레이팅이 높은 곡을 더 성장시키는 효율적인 경로를 계산합니다.",
+    tooltipResultTabsContent: "시뮬레이션 결과 목록에서 점수를 올리기 어렵거나 원치 않는 곡을 클릭하여 계산에서 제외할 수 있습니다. (최대 점수 미만 곡만 해당)",
+    tooltipLocalApiKeyContent: "https://developer.chunirec.net/manage/ 에서 발급받은 Chunirec API 액세스 토큰을 사용할 수 있습니다. 공식 API 오류 발생 시 대체 수단으로 활용 가능합니다.",
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -250,7 +257,6 @@ export const translations = {
     toastInfoLocalApiKeyRefMissingTitle: "ローカル参照APIキー確認 (情報)",
     toastInfoLocalApiKeyRefMissingDesc: "高度な設定にローカル参照用APIキーが保存されていません。この場合、サーバーのデフォルトAPIキーを使用し、問題が発生した場合はサーバー管理者に問い合わせてください。(ローカルキーを直接入力した場合は、そのキーが優先使用されます。)",
     toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} リクエストがタイムアウトしました。(15秒)`,
-    // Result Page
     resultPageDefaultPlayerName: "プレイヤー",
     resultPageNotAvailable: "N/A",
     resultPageErrorApiTokenNotSetResult: "APIトークンが設定されていません。曲情報を取得できません。高度な設定でローカルトークンを入力するか、環境変数を確認してください。",
@@ -301,12 +307,20 @@ export const translations = {
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `目標達成！最終総合レーティング: ${overall} (B30: ${b30}, N20: ${n20})`,
     resultPageStuckBothBaseFmt: (overall: string) => `B30およびN20のどちらもこれ以上改善できません。最終総合: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30平均: ${b30Avg}${n20Avg ? `, N20平均: ${n20Avg}` : ''})`,
-    // New keys for form validation
     toastErrorCurrentRatingTooLow: (minValue: string | number) => `現在レーティングは${minValue}以上である必要があります。`,
     toastErrorCurrentRatingTooHighForm: (maxValue: string | number) => `現在レーティングは${maxValue}以下である必要があります。`,
     toastErrorTargetRatingTooLow: (minValue: string | number) => `目標レーティングは${minValue}以上である必要があります。`,
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `目標レーティングは${maxValue}以下である必要があります。`,
     toastErrorRatingInvalidStep: "レーティングは0.01単位で入力してください。",
+    // Tooltip translations
+    tooltipChunirecNicknameContent: "https://chunirec.net/ で登録したデータを読み込みます。該当サイトでのデータ事前登録が必要です。",
+    tooltipTargetRatingContent: "自分が到達したい目標レーティングを入力します。",
+    tooltipCalcStrategyB30Focus: "Best 30 集中: Best 30 曲のみで目標達成経路を計算します。",
+    tooltipCalcStrategyN20Focus: "New 20 集中: New 20 曲のみで目標達成経路を計算します。",
+    tooltipCalcStrategyHybridFloor: "全体(低点優先): 全ての曲を対象に、現在レーティングが低い曲からスコアを上げる現実的な経路を計算します。",
+    tooltipCalcStrategyHybridPeak: "全体(高点優先): 全ての曲を対象に、現在レーティングが高い曲をさらに成長させる効率的な経路を計算します。",
+    tooltipResultTabsContent: "シミュレーション結果リストで、スコアを上げるのが難しい、または望まない曲をクリックして計算から除外できます。(最大スコア未満の曲のみ対象)",
+    tooltipLocalApiKeyContent: "https://developer.chunirec.net/manage/ で発行されたChunirec APIアクセストークンを使用できます。公式APIエラー発生時の代替手段として活用可能です。",
   }
 };
 
@@ -355,4 +369,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-
