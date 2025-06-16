@@ -146,7 +146,7 @@ export function useChuniResultData({
 
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null); 
+  const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SimulationPhase>('idle');
   
@@ -161,10 +161,10 @@ export function useChuniResultData({
       console.log("[DATA_FETCH_HOOK] Starting fetchAndProcessInitialData...");
       const defaultPlayerName = getTranslation(locale, 'resultPageDefaultPlayerName');
       
-      if (!userNameForApi || userNameForApi === defaultPlayerName) { 
-        setErrorLoadingData(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult')); 
-        setApiPlayerName(defaultPlayerName); 
-        setIsLoadingInitialData(false); return; 
+      if (!userNameForApi || userNameForApi === defaultPlayerName) {
+        setErrorLoadingData(getTranslation(locale, 'resultPageErrorNicknameNotProvidedResult'));
+        setApiPlayerName(defaultPlayerName);
+        setIsLoadingInitialData(false); return;
       }
 
       setIsLoadingInitialData(true); setErrorLoadingData(null); setApiPlayerName(userNameForApi);
@@ -237,10 +237,10 @@ export function useChuniResultData({
             let fetchedUserShowallForCache: UserShowallApiResponse | undefined = undefined;
 
             for (const res of responses) {
-              if (!res.ok) { 
-                const errorMsg = `${res.type} data API failed (status: ${res.status}): ${res.data?.error?.message || 'Unknown API error from proxy'}`; 
-                if (!criticalError) criticalError = errorMsg; 
-                console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue; 
+              if (!res.ok) {
+                const errorMsg = `${res.type} data API failed (status: ${res.status}): ${res.data?.error?.message || 'Unknown API error from proxy'}`;
+                if (!criticalError) criticalError = errorMsg;
+                console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue;
               }
               if (res.data.error && res.type !== 'profile') { // Profile errors (like 40301) have specific handling
                  const errorMsg = `${res.type} data API returned error: ${res.data.error.message || 'Unknown error structure'}`;
@@ -249,12 +249,12 @@ export function useChuniResultData({
               }
 
               if (res.type === 'profile') {
-                if (res.status === 403 && res.data?.error?.code === 40301) { 
+                if (res.status === 403 && res.data?.error?.code === 40301) {
                     criticalError = getTranslation(locale, 'toastErrorAccessDeniedDesc', userNameForApi, res.data.error.code);
                 } else if (res.ok && !res.data.error) { // Check !profileData here too
                     if(!profileData) { // Only update if it wasn't already set from cache
-                        setApiPlayerName(res.data.player_name || userNameForApi); 
-                        setCachedData<ProfileData>(profileKey, res.data); 
+                        setApiPlayerName(res.data.player_name || userNameForApi);
+                        setCachedData<ProfileData>(profileKey, res.data);
                         profileData = res.data;
                     }
                 } else if (!res.ok) { // Catch other non-ok profile responses
@@ -283,7 +283,7 @@ export function useChuniResultData({
                 setErrorLoadingData(getTranslation(locale, 'resultPageErrorLoadingTitle') + `: ${criticalError}`);
                 setOriginalB30SongsData([]); setOriginalNew20SongsData([]); setAllMusicData([]); setUserPlayHistory([]);
                 console.error(`[DATA_FETCH_HOOK] Critical error during API fetch: ${criticalError}. Bailing out of data processing.`);
-                return; 
+                return;
             }
             setUserPlayHistory(tempUserShowallRecords); // Set final user history after potential API fetch
 
@@ -345,11 +345,11 @@ export function useChuniResultData({
       }
       setAllMusicData(tempFlattenedGlobalMusicRecords);
 
-      if (!ratingData) { 
-        setIsLoadingInitialData(false); 
-        setErrorLoadingData("Rating data missing after fetch/cache attempt."); 
+      if (!ratingData) {
+        setIsLoadingInitialData(false);
+        setErrorLoadingData("Rating data missing after fetch/cache attempt.");
         setOriginalB30SongsData([]); setOriginalNew20SongsData([]);
-        return; 
+        return;
       }
       if (!Array.isArray(tempFlattenedGlobalMusicRecords)) {
         console.error("[DATA_FETCH_HOOK_ERROR] tempFlattenedGlobalMusicRecords is NOT an array before .filter call! Value:", tempFlattenedGlobalMusicRecords);
@@ -358,11 +358,11 @@ export function useChuniResultData({
         setOriginalB30SongsData([]); setOriginalNew20SongsData([]); setAllMusicData([]);
         return;
       }
-      if (tempFlattenedGlobalMusicRecords.length === 0) { 
-        setIsLoadingInitialData(false); 
-        setErrorLoadingData("Global music data missing or empty after fetch/cache attempt."); 
+      if (tempFlattenedGlobalMusicRecords.length === 0) {
+        setIsLoadingInitialData(false);
+        setErrorLoadingData("Global music data missing or empty after fetch/cache attempt.");
         setOriginalB30SongsData([]); setOriginalNew20SongsData([]);
-        return; 
+        return;
       }
       
 
@@ -429,8 +429,8 @@ export function useChuniResultData({
       return;
     }
     
-    setErrorLoadingData(null); 
-    setPreComputationResult(null); 
+    setErrorLoadingData(null);
+    setPreComputationResult(null);
 
     const currentRatingNum = parseFloat(currentRatingDisplay || "0");
     const targetRatingNum = parseFloat(targetRatingDisplay || "0");
@@ -441,21 +441,21 @@ export function useChuniResultData({
       return;
     }
 
-    let simScope: SimulationInput['simulationScope'] = 'combined';
-    let improveMethod: SimulationInput['improvementMethod'] = 'floor'; 
+    let simulationModeToUse: SimulationInput['simulationMode'];
+    let algorithmPreferenceToUse: SimulationInput['algorithmPreference'];
 
-    if (calculationStrategy === 'b30_only') {
-      simScope = 'b30_only';
-      improveMethod = 'floor'; 
-    } else if (calculationStrategy === 'n20_only') {
-      simScope = 'n20_only';
-      improveMethod = 'floor'; 
-    } else if (calculationStrategy === 'combined_floor') {
-      simScope = 'combined';
-      improveMethod = 'floor';
-    } else if (calculationStrategy === 'combined_peak') {
-      simScope = 'combined';
-      improveMethod = 'peak';
+    if (calculationStrategy === 'b30_focus') {
+      simulationModeToUse = 'b30_only';
+      algorithmPreferenceToUse = 'floor';
+    } else if (calculationStrategy === 'n20_focus') {
+      simulationModeToUse = 'n20_only';
+      algorithmPreferenceToUse = 'floor';
+    } else if (calculationStrategy === 'hybrid_floor') {
+      simulationModeToUse = 'hybrid';
+      algorithmPreferenceToUse = 'floor';
+    } else if (calculationStrategy === 'hybrid_peak') {
+      simulationModeToUse = 'hybrid';
+      algorithmPreferenceToUse = 'peak';
     } else if (calculationStrategy === 'none' || calculationStrategy === null) {
       console.log("[SIM_STRATEGY_EFFECT] No strategy selected. Displaying original data.");
       const initialDisplayB30 = originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
@@ -473,9 +473,16 @@ export function useChuniResultData({
       setCurrentPhase('idle');
       setSimulationLog([getTranslation(locale, 'resultPageLogNoStrategy')]);
       return;
+    } else {
+      // Should not happen if calculationStrategy is one of the defined enum values
+      console.error(`[SIM_STRATEGY_EFFECT] Unknown calculationStrategy: ${calculationStrategy}`);
+      setErrorLoadingData(`Internal error: Unknown calculation strategy.`);
+      setCurrentPhase('error_simulation_logic');
+      return;
     }
 
-    if (simScope === 'b30_only' || simScope === 'n20_only') {
+
+    if (simulationModeToUse === 'b30_only' || simulationModeToUse === 'n20_only') {
       let fixedListRatingSum = 0;
       let fixedListCount = 0;
       let fixedListSongs: Song[] = [];
@@ -489,7 +496,7 @@ export function useChuniResultData({
       const b30AvgForFixed = calculateAverageAndOverallRating(currentB30ForPreCalc, BEST_COUNT, 'ratingToUse').average;
       const n20AvgForFixed = calculateAverageAndOverallRating(currentN20ForPreCalc, NEW_20_COUNT, 'ratingToUse').average;
 
-      if (simScope === 'b30_only') {
+      if (simulationModeToUse === 'b30_only') {
         messageKey = 'reachableRatingB30OnlyMessage';
         fixedListSongs = originalNew20SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
         fixedListRatingSum = (n20AvgForFixed || 0) * Math.min(NEW_20_COUNT, currentN20ForPreCalc.length);
@@ -498,7 +505,7 @@ export function useChuniResultData({
         const b30PreCalcCandidates = allMusicData.filter(ms => {
             const isNewSong = NewSongsData.titles.verse.some(title => title.trim().toLowerCase() === ms.title.trim().toLowerCase());
             const isInFixedN20 = originalNew20SongsData.some(n20s => n20s.id === ms.id && n20s.diff.toUpperCase() === ms.diff.toUpperCase());
-            return !isNewSong && !isInFixedN20; 
+            return !isNewSong && !isInFixedN20;
         });
         variableListCandidatePool = [...originalB30SongsData, ...b30PreCalcCandidates];
         variableListLimit = BEST_COUNT;
@@ -523,16 +530,16 @@ export function useChuniResultData({
 
       if (targetRatingNum > reachableRating) {
         setErrorLoadingData(getTranslation(locale, messageKey, reachableRating.toFixed(4)));
-        setCurrentPhase('target_unreachable_info'); 
-        setPreComputationResult({ reachableRating, messageKey, theoreticalMaxSongsB30: simScope === 'b30_only' ? maxedVariableList : fixedListSongs, theoreticalMaxSongsN20: simScope === 'n20_only' ? maxedVariableList : fixedListSongs });
+        setCurrentPhase('target_unreachable_info');
+        setPreComputationResult({ reachableRating, messageKey, theoreticalMaxSongsB30: simulationModeToUse === 'b30_only' ? maxedVariableList : fixedListSongs, theoreticalMaxSongsN20: simulationModeToUse === 'n20_only' ? maxedVariableList : fixedListSongs });
         
-        if (simScope === 'b30_only') {
+        if (simulationModeToUse === 'b30_only') {
           setSimulatedB30Songs(maxedVariableList);
-          setSimulatedNew20Songs(fixedListSongs); 
+          setSimulatedNew20Songs(fixedListSongs);
           setSimulatedAverageB30Rating(avgVariableAtMax);
           setSimulatedAverageNew20Rating(n20AvgForFixed);
-        } else { 
-          setSimulatedB30Songs(fixedListSongs); 
+        } else {
+          setSimulatedB30Songs(fixedListSongs);
           setSimulatedNew20Songs(maxedVariableList);
           setSimulatedAverageB30Rating(b30AvgForFixed);
           setSimulatedAverageNew20Rating(avgVariableAtMax);
@@ -561,13 +568,13 @@ export function useChuniResultData({
         userPlayHistory: JSON.parse(JSON.stringify(userPlayHistory)),
         currentRating: currentRatingNum,
         targetRating: targetRatingNum,
-        simulationScope: simScope,
-        improvementMethod: improveMethod,
-        isScoreLimitReleased: (targetRatingNum - currentRatingNum) * 50 > 10, 
-        phaseTransitionPoint: parseFloat((currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95).toFixed(4)), 
+        simulationMode: simulationModeToUse,
+        algorithmPreference: algorithmPreferenceToUse,
+        isScoreLimitReleased: (targetRatingNum - currentRatingNum) * 50 > 10,
+        phaseTransitionPoint: parseFloat((currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95).toFixed(4)),
       };
 
-      console.log(`[SIM_STRATEGY_EFFECT] Calling runFullSimulation. Scope: ${simulationInput.simulationScope}, Method: ${simulationInput.improvementMethod}`);
+      console.log(`[SIM_STRATEGY_EFFECT] Calling runFullSimulation. Mode: ${simulationInput.simulationMode}, Preference: ${simulationInput.algorithmPreference}`);
       try {
         const result: SimulationOutput = runFullSimulation(simulationInput);
         console.log("[SIM_STRATEGY_EFFECT] SimulationOutput received:", result);
@@ -577,7 +584,7 @@ export function useChuniResultData({
         setSimulatedAverageB30Rating(result.finalAverageB30Rating);
         setSimulatedAverageNew20Rating(result.finalAverageNew20Rating);
         setFinalOverallSimulatedRating(result.finalOverallRating);
-        setCurrentPhase(result.finalPhase); 
+        setCurrentPhase(result.finalPhase);
         setSimulationLog(prev => [...prev, ...result.simulationLog, `Simulation Ended. Final Phase: ${result.finalPhase}`]);
 
         if (result.error) {
@@ -585,7 +592,7 @@ export function useChuniResultData({
           setCurrentPhase('error_simulation_logic');
         } else if (result.unreachableMessage && result.reachableRating !== undefined) {
             setErrorLoadingData(result.unreachableMessage);
-            setCurrentPhase(result.finalPhase); 
+            setCurrentPhase(result.finalPhase);
         }
 
       } catch (e: any) {
@@ -645,7 +652,7 @@ export function useChuniResultData({
       const songsToCombineN20 = baseN20.map(song => ({ ...song, displayRating: song.targetRating }));
       songsToCombineN20.forEach(song => {
         const key = `${song.id}_${song.diff}`;
-        const new20EffectiveRating = song.targetRating; 
+        const new20EffectiveRating = song.targetRating;
         const existingEntry = songMap.get(key);
         if (!existingEntry || new20EffectiveRating > existingEntry.displayRating) {
           songMap.set(key, { ...song, displayRating: new20EffectiveRating });
@@ -680,6 +687,7 @@ export function useChuniResultData({
     simulatedAverageNew20Rating,
     finalOverallSimulatedRating,
     simulationLog,
-    preComputationResult, 
+    preComputationResult,
   };
 }
+
