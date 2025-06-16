@@ -32,37 +32,37 @@ const isSongHighConstantForFloor = (song: Song, currentOverallAverageRatingForLi
 // Main orchestrator function
 export function runFullSimulation(input: SimulationInput): SimulationOutput {
   const log: string[] = [];
-  log.push(`[RUN_SIMULATION_START] Target: ${input.targetRating.toFixed(4)}, Scope: ${input.simulationScope}, Method: ${input.improvementMethod}, Current Rating: ${input.currentRating.toFixed(4)}`);
+  log.push(`[RUN_SIMULATION_START] Target: ${input.targetRating.toFixed(4)}, Mode: ${input.simulationMode}, Preference: ${input.algorithmPreference}, Current Rating: ${input.currentRating.toFixed(4)}`);
 
   let currentSimulatedB30Songs: Song[];
   let currentSimulatedNew20Songs: Song[];
 
-  if (input.simulationScope === "b30_only") {
+  if (input.simulationMode === "b30_only") {
     currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs));
     currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))));
     log.push(`[INIT] B30_ONLY mode. Original B30 count: ${currentSimulatedB30Songs.length}, Fixed N20 count: ${currentSimulatedNew20Songs.length}`);
-  } else if (input.simulationScope === "n20_only") {
+  } else if (input.simulationMode === "n20_only") {
     currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))));
     currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs));
     log.push(`[INIT] N20_ONLY mode. Fixed B30 count: ${currentSimulatedB30Songs.length}, Original N20 count: ${currentSimulatedNew20Songs.length}`);
-  } else { // hybrid mode
+  } else { // hybrid mode (input.simulationMode === "hybrid")
     currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs));
     currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs));
     log.push(`[INIT] HYBRID mode. Original B30 count: ${currentSimulatedB30Songs.length}, Original N20 count: ${currentSimulatedNew20Songs.length}`);
   }
 
-  let currentAverageB30Rating = calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, input.simulationScope === "b30_only" || input.simulationScope === "hybrid");
-  let currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, input.simulationScope === "n20_only" || input.simulationScope === "hybrid");
+  let currentAverageB30Rating = calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, input.simulationMode === "b30_only" || input.simulationMode === "hybrid");
+  let currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, input.simulationMode === "n20_only" || input.simulationMode === "hybrid");
   let currentOverallRating = calculateOverallRating(currentAverageB30Rating, currentAverageNew20Rating, currentSimulatedB30Songs.length, currentSimulatedNew20Songs.length);
 
   log.push(`[INITIAL_STATE] B30 Avg: ${currentAverageB30Rating?.toFixed(4) || 'N/A'}, N20 Avg: ${currentAverageNew20Rating?.toFixed(4) || 'N/A'}, Overall: ${currentOverallRating.toFixed(4)}`);
 
   let finalOutcomePhase: SimulationPhase = 'simulating';
   
-  let b30Stuck = input.simulationScope === "n20_only"; 
+  let b30Stuck = input.simulationMode === "n20_only"; 
   let b30Iterations = 0;
 
-  if ((input.simulationScope === "b30_only" || input.simulationScope === "hybrid") && currentOverallRating < input.targetRating) {
+  if ((input.simulationMode === "b30_only" || input.simulationMode === "hybrid") && currentOverallRating < input.targetRating) {
     log.push("--- Starting B30 Simulation Cycle ---");
     while (currentOverallRating < input.targetRating && !b30Stuck && b30Iterations < MAX_ITERATIONS_PER_LIST) {
       b30Iterations++;
@@ -112,10 +112,10 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
     }
   }
 
-  let n20Stuck = input.simulationScope === "b30_only"; 
+  let n20Stuck = input.simulationMode === "b30_only"; 
   let n20Iterations = 0;
 
-  if ((input.simulationScope === "n20_only" || input.simulationScope === "hybrid") && finalOutcomePhase !== 'target_reached' && currentOverallRating < input.targetRating) {
+  if ((input.simulationMode === "n20_only" || input.simulationMode === "hybrid") && finalOutcomePhase !== 'target_reached' && currentOverallRating < input.targetRating) {
     log.push("--- Starting N20 Simulation Cycle ---");
     while (currentOverallRating < input.targetRating && !n20Stuck && n20Iterations < MAX_ITERATIONS_PER_LIST) {
       n20Iterations++;
@@ -166,13 +166,13 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
   }
 
   if (finalOutcomePhase !== 'target_reached') {
-    if (b30Stuck && (input.simulationScope === 'b30_only' || (input.simulationScope === 'hybrid' && (n20Stuck || input.simulationScope !== 'n20_only')))) {
+    if (b30Stuck && (input.simulationMode === 'b30_only' || (input.simulationMode === 'hybrid' && (n20Stuck || input.simulationMode !== 'n20_only')))) {
       finalOutcomePhase = 'stuck_b30_no_improvement';
     }
-    if (n20Stuck && (input.simulationScope === 'n20_only' || (input.simulationScope === 'hybrid' && (b30Stuck || input.simulationScope !== 'b30_only')))) {
+    if (n20Stuck && (input.simulationMode === 'n20_only' || (input.simulationMode === 'hybrid' && (b30Stuck || input.simulationMode !== 'b30_only')))) {
        finalOutcomePhase = (finalOutcomePhase === 'stuck_b30_no_improvement') ? 'stuck_both_no_improvement' : 'stuck_n20_no_improvement';
     }
-     if (finalOutcomePhase === 'simulating' && b30Stuck && n20Stuck && input.simulationScope === 'hybrid') {
+     if (finalOutcomePhase === 'simulating' && b30Stuck && n20Stuck && input.simulationMode === 'hybrid') {
       finalOutcomePhase = 'stuck_both_no_improvement';
     }
   }
@@ -241,7 +241,7 @@ function _performListSimulationPhase(
 
   const listName = listType === 'b30' ? "B30" : "N20";
   const listLimit = listType === 'b30' ? BEST_COUNT : NEW_20_COUNT;
-  log.push(`[${listName}_PHASE_${phaseType.toUpperCase()}_START] Current avg for list: ${currentAverageForList?.toFixed(4) || 'N/A'}. Algo: ${input.improvementMethod}. Songs in list: ${updatedSongs.length}`);
+  log.push(`[${listName}_PHASE_${phaseType.toUpperCase()}_START] Current avg for list: ${currentAverageForList?.toFixed(4) || 'N/A'}. Algo: ${input.algorithmPreference}. Songs in list: ${updatedSongs.length}`);
 
   const scoreCap = input.isScoreLimitReleased ? 1010000 : MAX_SCORE_NORMAL;
 
@@ -254,7 +254,7 @@ function _performListSimulationPhase(
   }
 
   let sortedCandidates: Song[] = [];
-  if (input.improvementMethod === 'floor') {
+  if (input.algorithmPreference === 'floor') {
     sortedCandidates = [...updatableSongs].sort((a, b) => {
       const aIsHighConst = isSongHighConstantForFloor(a, currentAverageForList);
       const bIsHighConst = isSongHighConstantForFloor(b, currentAverageForList);
@@ -265,7 +265,7 @@ function _performListSimulationPhase(
       if (a.targetRating !== b.targetRating) return a.targetRating - b.targetRating; 
       return a.targetScore - b.targetScore; 
     });
-  } else { // peak strategy
+  } else { // peak strategy (input.algorithmPreference === 'peak')
     sortedCandidates = [...updatableSongs].sort((a, b) => {
       if (b.targetRating !== a.targetRating) return b.targetRating - a.targetRating; // Higher rating first
       return b.targetScore - a.targetScore; // Higher score first
@@ -357,13 +357,13 @@ function _performListSimulationPhase(
     const currentSimulatedIdsAndDiffs = new Set(updatedSongs.map(s => `${s.id}_${s.diff}`));
 
     if (listType === 'b30') {
-      const fixedN20Ids = input.simulationScope === "b30_only" ? new Set(input.originalNew20Songs.map(s => `${s.id}_${s.diff}`)) : new Set<string>();
+      const fixedN20Ids = input.simulationMode === "b30_only" ? new Set(input.originalNew20Songs.map(s => `${s.id}_${s.diff}`)) : new Set<string>();
       replacementSource = input.allMusicData
         .filter(globalSong => {
           if (!globalSong.id || !globalSong.diff || !globalSong.title) return false;
           const globalSongKey = `${globalSong.id}_${globalSong.diff.toUpperCase()}`;
           if (currentSimulatedIdsAndDiffs.has(globalSongKey)) return false; // Already in B30
-          if (input.simulationScope === "b30_only" && fixedN20Ids.has(globalSongKey)) return false; // In fixed N20 for B30_only mode
+          if (input.simulationMode === "b30_only" && fixedN20Ids.has(globalSongKey)) return false; // In fixed N20 for B30_only mode
 
           const tempSongObj = mapApiSongToAppSong(globalSong, 0, globalSong.const);
           if (!tempSongObj.chartConstant) return false; // Must have a constant
