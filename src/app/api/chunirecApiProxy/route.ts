@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
   const proxyEndpoint = searchParams.get('proxyEndpoint');
   const clientProvidedToken = searchParams.get('localApiToken');
   
-  // Flexible server API key checking
   const serverApiKeySetting1 = process.env.CHUNIREC_API_KEY;
   const serverApiKeySetting2 = process.env.CHUNIREC_API_TOKEN;
   let serverApiKey = "";
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
     apiKeyToUse = clientProvidedToken.trim();
     usingKeySource = "client-provided localApiToken";
   } else if (serverApiKey && serverApiKey.trim() !== "") {
-    apiKeyToUse = serverApiKey; // Already trimmed
+    apiKeyToUse = serverApiKey;
     usingKeySource = `server-side environment variable (${serverApiKeySetting1 ? 'CHUNIREC_API_KEY' : 'CHUNIREC_API_TOKEN'})`;
   }
 
@@ -62,9 +61,7 @@ export async function GET(request: NextRequest) {
     console.log(`[PROXY_INFO] Fetching from Chunirec using ${usingKeySource}: ${targetUrl.toString().replace(apiKeyToUse, "REDACTED_API_KEY")}`);
     chunirecResponse = await fetch(targetUrl.toString(), {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: { 'Accept': 'application/json' },
       signal: controller.signal,
     });
   } catch (error) {
@@ -75,36 +72,12 @@ export async function GET(request: NextRequest) {
     }
     console.error(`[PROXY_FATAL_ERROR] Network/fetch error during operation to Chunirec API (${proxyEndpoint}) using key from ${usingKeySource}:`, error);
     let errorMessage = 'Failed to fetch data from Chunirec API via proxy due to a network or unexpected error.';
-    if (error instanceof Error) {
-        errorMessage = error.message;
-    }
+    if (error instanceof Error) errorMessage = error.message;
     return NextResponse.json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined }, { status: 503 }); // Service Unavailable
   } finally {
     clearTimeout(timeoutId);
   }
 
-  // Process the response
-  let responseData;
-  try {
-    responseData = await chunirecResponse.json();
-  } catch (jsonError) {
-    console.warn(`[PROXY_WARN] Failed to parse JSON from Chunirec for ${proxyEndpoint} (Status: ${chunirecResponse.status}): ${(jsonError as Error).message}. Attempting to read as text.`);
-    try {
-      const textResponse = await chunirecResponse.text();
-      console.warn(`[PROXY_WARN] Chunirec non-JSON response text for ${proxyEndpoint}: ${textResponse.substring(0, 200)}...`);
-      return NextResponse.json({ 
-          error: `Chunirec API Error: Non-JSON response received or JSON parsing failed.`,
-          details: `Original status: ${chunirecResponse.status}. Response starts with: ${textResponse.substring(0, 100)}...`
-      }, { status: chunirecResponse.status === 200 ? 502 : chunirecResponse.status }); // 502 Bad Gateway if Chunirec sent 200 OK but malformed JSON
-    } catch (textError) {
-      console.error(`[PROXY_ERROR] Failed to parse JSON and also failed to read as text from Chunirec for ${proxyEndpoint}: ${(textError as Error).message}`);
-      return NextResponse.json({ 
-          error: 'Chunirec API Error: Failed to process response (neither JSON nor text).',
-          details: `Original status: ${chunirecResponse.status}.`
-      }, { status: 502 }); // Bad Gateway
-    }
-  }
-  
   const responseHeaders = new Headers();
   const rateLimitLimit = chunirecResponse.headers.get('X-Rate-Limit-Limit');
   const rateLimitRemaining = chunirecResponse.headers.get('X-Rate-Limit-Remaining');
@@ -115,8 +88,48 @@ export async function GET(request: NextRequest) {
   if (rateLimitReset) responseHeaders.set('X-Rate-Limit-Reset', rateLimitReset);
   responseHeaders.set('Content-Type', 'application/json');
 
-  return NextResponse.json(responseData, {
-    status: chunirecResponse.status,
-    headers: responseHeaders,
-  });
+  if (!chunirecResponse.ok) {
+    console.error(`[PROXY_ERROR] Chunirec API returned non-OK status: ${chunirecResponse.status} for ${proxyEndpoint}. Key source: ${usingKeySource}.`);
+    let errorBodyText = `Raw error response from Chunirec API (status ${chunirecResponse.status}) was not readable.`;
+    let errorJsonDetails: any = null;
+    try {
+        const clonedResponseForText = chunirecResponse.clone();
+        errorBodyText = await clonedResponseForText.text();
+        console.error(`[PROXY_ERROR_DETAIL] Chunirec raw error body for ${proxyEndpoint}: ${errorBodyText.substring(0, 500)}...`);
+        try {
+            errorJsonDetails = JSON.parse(errorBodyText); // Try to parse the read text
+        } catch (e) {
+            // Not JSON, text is already captured
+        }
+    } catch (textReadError) {
+        console.error(`[PROXY_ERROR_DETAIL] Failed to read Chunirec error response body as text for ${proxyEndpoint}:`, textReadError);
+    }
+
+    const upstreamErrorMessage = errorJsonDetails?.message || errorJsonDetails?.error?.message || errorJsonDetails?.error || errorBodyText.substring(0,200);
+    return NextResponse.json({
+        error: `Chunirec API Error (status ${chunirecResponse.status}): ${upstreamErrorMessage}`
+    }, { status: chunirecResponse.status, headers: responseHeaders });
+  }
+
+  // If chunirecResponse.ok is true
+  try {
+    const responseData = await chunirecResponse.json();
+    return NextResponse.json(responseData, {
+      status: chunirecResponse.status, // Should be 200-299 here
+      headers: responseHeaders,
+    });
+  } catch (jsonError) {
+    console.error(`[PROXY_ERROR] Failed to parse JSON from Chunirec for ${proxyEndpoint} (Status: ${chunirecResponse.status}, which was OK, but body invalid): ${(jsonError as Error).message}. Key source: ${usingKeySource}.`);
+    // This indicates Chunirec sent a 2xx status but malformed JSON.
+    let responseTextForDebug = "Could not read response text after JSON parse failure.";
+    try {
+        const clonedResponseForText = chunirecResponse.clone(); // Clone again if needed, or ensure original is readable
+        responseTextForDebug = await clonedResponseForText.text();
+    } catch (e) { /* ignore */ }
+
+    return NextResponse.json({ 
+        error: `Chunirec API Error: Successfully connected but received malformed JSON response.`,
+        details: `Original status: ${chunirecResponse.status}. Response starts with: ${responseTextForDebug.substring(0, 100)}...`
+    }, { status: 502, headers: responseHeaders }); // 502 Bad Gateway
+  }
 }
