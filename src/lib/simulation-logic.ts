@@ -1,3 +1,4 @@
+
 // src/lib/simulation-logic.ts
 import type {
   Song,
@@ -11,7 +12,7 @@ import {
   findMinScoreForTargetRating,
   getNextGradeBoundaryScore,
   mapApiSongToAppSong,
-  difficultyOrder, // Added import
+  difficultyOrder,
 } from './rating-utils';
 import NewSongsData from '@/data/NewSongs.json';
 
@@ -46,25 +47,43 @@ function deduplicateSongList(songs: Song[]): Song[] {
 
 export function runFullSimulation(input: SimulationInput): SimulationOutput {
   const log: string[] = [];
-  log.push(`[RUN_SIMULATION_START] Target: ${input.targetRating.toFixed(4)}, Mode: ${input.simulationMode}, Preference: ${input.algorithmPreference}, Current Rating: ${input.currentRating.toFixed(4)}`);
+  log.push(`[RUN_SIMULATION_START] Target: ${input.targetRating.toFixed(4)}, Mode: ${input.simulationMode}, Preference: ${input.algorithmPreference}, Current Rating: ${input.currentRating.toFixed(4)}, Excluded: ${input.excludedSongKeys.size}`);
 
   let currentSimulatedB30Songs: Song[];
   let currentSimulatedNew20Songs: Song[];
   const scoreCap = input.isScoreLimitReleased ? 1010000 : MAX_SCORE_NORMAL;
 
+  // Initialize songs and apply exclusions
+  const initializeSongList = (songs: Song[], listName: string): Song[] => {
+    return JSON.parse(JSON.stringify(songs)).map((s: Song) => {
+      const songKey = `${s.id}_${s.diff}`;
+      if (input.excludedSongKeys.has(songKey)) {
+        log.push(`[INIT_EXCLUDE] Song ${s.title} (${s.diff}) in ${listName} is excluded. Fixing score to ${s.currentScore}.`);
+        return {
+          ...s,
+          targetScore: s.currentScore,
+          targetRating: s.currentRating,
+          isExcludedFromImprovement: true,
+        };
+      }
+      return { ...s, isExcludedFromImprovement: false };
+    });
+  };
+
   if (input.simulationMode === "b30_only") {
-    currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs));
-    currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))));
+    currentSimulatedB30Songs = initializeSongList(input.originalB30Songs, "B30");
+    currentSimulatedNew20Songs = initializeSongList(input.originalNew20Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })), "N20 (fixed)");
     log.push(`[INIT] B30_ONLY mode. Original B30 count: ${currentSimulatedB30Songs.length}, Fixed N20 count: ${currentSimulatedNew20Songs.length}`);
   } else if (input.simulationMode === "n20_only") {
-    currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating }))));
-    currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs));
+    currentSimulatedB30Songs = initializeSongList(input.originalB30Songs.map(s => ({...s, targetScore: s.currentScore, targetRating: s.currentRating })), "B30 (fixed)");
+    currentSimulatedNew20Songs = initializeSongList(input.originalNew20Songs, "N20");
     log.push(`[INIT] N20_ONLY mode. Fixed B30 count: ${currentSimulatedB30Songs.length}, Original N20 count: ${currentSimulatedNew20Songs.length}`);
   } else { // hybrid mode
-    currentSimulatedB30Songs = JSON.parse(JSON.stringify(input.originalB30Songs));
-    currentSimulatedNew20Songs = JSON.parse(JSON.stringify(input.originalNew20Songs));
+    currentSimulatedB30Songs = initializeSongList(input.originalB30Songs, "B30");
+    currentSimulatedNew20Songs = initializeSongList(input.originalNew20Songs, "N20");
     log.push(`[INIT] HYBRID mode. Original B30 count: ${currentSimulatedB30Songs.length}, Original N20 count: ${currentSimulatedNew20Songs.length}`);
   }
+
 
   let currentAverageB30Rating = calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, input.simulationMode !== "n20_only");
   let currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, input.simulationMode !== "b30_only");
@@ -81,15 +100,15 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
     while (currentOverallRating < input.targetRating && !b30Stuck && b30Iterations < MAX_ITERATIONS_PER_LIST) {
       b30Iterations++;
       const previousOverallRatingForCycle = currentOverallRating;
-      log.push(`[B30_ITERATION ${b30Iterations}/${MAX_ITERATIONS_PER_LIST}] Current Overall: ${currentOverallRating.toFixed(4)}, AvgB30: ${currentAverageB30Rating?.toFixed(4) || 'N/A'}`);
+      // log.push(`[B30_ITERATION ${b30Iterations}/${MAX_ITERATIONS_PER_LIST}] Current Overall: ${currentOverallRating.toFixed(4)}, AvgB30: ${currentAverageB30Rating?.toFixed(4) || 'N/A'}`);
 
       const result = _performListSimulationPhase(currentSimulatedB30Songs, input, log, 'b30', currentAverageB30Rating, currentSimulatedNew20Songs);
-      currentSimulatedB30Songs = result.updatedSongs; // Already deduplicated and sorted/sliced by _performListSimulationPhase
+      currentSimulatedB30Songs = result.updatedSongs; 
       b30Stuck = result.stuck;
 
       currentAverageB30Rating = calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, true);
       currentOverallRating = calculateOverallRating(currentAverageB30Rating, currentAverageNew20Rating, currentSimulatedB30Songs.length, currentSimulatedNew20Songs.length);
-      log.push(`[B30_ITER ${b30Iterations} POST_PHASE] Overall: ${currentOverallRating.toFixed(4)}, Stuck: ${b30Stuck}`);
+      // log.push(`[B30_ITER ${b30Iterations} POST_PHASE] Overall: ${currentOverallRating.toFixed(4)}, Stuck: ${b30Stuck}`);
 
       if (currentOverallRating >= input.targetRating) { finalOutcomePhase = 'target_reached'; break; }
       if (b30Stuck || Math.abs(currentOverallRating - previousOverallRatingForCycle) < 0.00001) {
@@ -101,7 +120,7 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
       log.push(`[B30_MAX_ITER] Reached max B30 iterations. Current Overall: ${currentOverallRating.toFixed(4)}`);
       b30Stuck = true;
     }
-    if (finalOutcomePhase !== 'target_reached') finalOutcomePhase = b30Stuck ? 'stuck_b30_no_improvement' : 'simulating';
+    if (finalOutcomePhase !== 'target_reached') finalOutcomePhase = b30Stuck ? 'stuck_b30_no_improvement' : 'simulating'; // Should be stuck if not reached
     log.push(`[B30_ONLY_CYCLE_END] Phase: ${finalOutcomePhase}. Overall: ${currentOverallRating.toFixed(4)}`);
   }
   else if (input.simulationMode === "n20_only") {
@@ -111,15 +130,15 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
     while (currentOverallRating < input.targetRating && !n20Stuck && n20Iterations < MAX_ITERATIONS_PER_LIST) {
       n20Iterations++;
       const previousOverallRatingForCycle = currentOverallRating;
-      log.push(`[N20_ITERATION ${n20Iterations}/${MAX_ITERATIONS_PER_LIST}] Current Overall: ${currentOverallRating.toFixed(4)}, AvgN20: ${currentAverageNew20Rating?.toFixed(4) || 'N/A'}`);
+      // log.push(`[N20_ITERATION ${n20Iterations}/${MAX_ITERATIONS_PER_LIST}] Current Overall: ${currentOverallRating.toFixed(4)}, AvgN20: ${currentAverageNew20Rating?.toFixed(4) || 'N/A'}`);
 
       const result = _performListSimulationPhase(currentSimulatedNew20Songs, input, log, 'n20', currentAverageNew20Rating, currentSimulatedB30Songs);
-      currentSimulatedNew20Songs = result.updatedSongs; // Already deduplicated and sorted/sliced
+      currentSimulatedNew20Songs = result.updatedSongs; 
       n20Stuck = result.stuck;
 
       currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, true);
       currentOverallRating = calculateOverallRating(currentAverageB30Rating, currentAverageNew20Rating, currentSimulatedB30Songs.length, currentSimulatedNew20Songs.length);
-      log.push(`[N20_ITER ${n20Iterations} POST_PHASE] Overall: ${currentOverallRating.toFixed(4)}, Stuck: ${n20Stuck}`);
+      // log.push(`[N20_ITER ${n20Iterations} POST_PHASE] Overall: ${currentOverallRating.toFixed(4)}, Stuck: ${n20Stuck}`);
 
       if (currentOverallRating >= input.targetRating) { finalOutcomePhase = 'target_reached'; break; }
       if (n20Stuck || Math.abs(currentOverallRating - previousOverallRatingForCycle) < 0.00001) {
@@ -131,7 +150,7 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
       log.push(`[N20_MAX_ITER] Reached max N20 iterations. Current Overall: ${currentOverallRating.toFixed(4)}`);
       n20Stuck = true;
     }
-    if (finalOutcomePhase !== 'target_reached') finalOutcomePhase = n20Stuck ? 'stuck_n20_no_improvement' : 'simulating';
+    if (finalOutcomePhase !== 'target_reached') finalOutcomePhase = n20Stuck ? 'stuck_n20_no_improvement' : 'simulating'; // Should be stuck if not reached
     log.push(`[N20_ONLY_CYCLE_END] Phase: ${finalOutcomePhase}. Overall: ${currentOverallRating.toFixed(4)}`);
   }
   else if (input.simulationMode === "hybrid" && finalOutcomePhase !== 'target_reached' && currentOverallRating < input.targetRating) {
@@ -142,23 +161,24 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
     while (currentOverallRating < input.targetRating && !hybridStuck && hybridIterations < MAX_ITERATIONS_HYBRID) {
         hybridIterations++;
         const previousOverallRatingForHybridCycle = currentOverallRating;
-        log.push(`[HYBRID_ITER ${hybridIterations}/${MAX_ITERATIONS_HYBRID}] Overall: ${currentOverallRating.toFixed(4)}, B30 Avg: ${currentAverageB30Rating?.toFixed(4) || 'N/A'}, N20 Avg: ${currentAverageNew20Rating?.toFixed(4) || 'N/A'}`);
+        // log.push(`[HYBRID_ITER ${hybridIterations}/${MAX_ITERATIONS_HYBRID}] Overall: ${currentOverallRating.toFixed(4)}, B30 Avg: ${currentAverageB30Rating?.toFixed(4) || 'N/A'}, N20 Avg: ${currentAverageNew20Rating?.toFixed(4) || 'N/A'}`);
 
         let songsChangedThisIteration = false;
         let globalCandidates: (Song & { listOrigin: 'b30' | 'n20' })[] = [];
+        
         currentSimulatedB30Songs.forEach(s => {
-            if (s.targetScore < scoreCap && s.chartConstant && s.chartConstant > 0) {
+            if (s.targetScore < scoreCap && s.chartConstant && s.chartConstant > 0 && !s.isExcludedFromImprovement) {
                 globalCandidates.push({ ...JSON.parse(JSON.stringify(s)), listOrigin: 'b30' });
             }
         });
         currentSimulatedNew20Songs.forEach(s => {
-            if (s.targetScore < scoreCap && s.chartConstant && s.chartConstant > 0) {
+            if (s.targetScore < scoreCap && s.chartConstant && s.chartConstant > 0 && !s.isExcludedFromImprovement) {
                 globalCandidates.push({ ...JSON.parse(JSON.stringify(s)), listOrigin: 'n20' });
             }
         });
-        log.push(`[HYBRID_ITER ${hybridIterations}] Found ${globalCandidates.length} total improvable songs (before filtering for actual improvement).`);
+        // log.push(`[HYBRID_ITER ${hybridIterations}] Found ${globalCandidates.length} total improvable (non-excluded) songs before actual improvement check.`);
 
-        globalCandidates = globalCandidates.filter(c => {
+        globalCandidates = globalCandidates.filter(c => { // Filter for actual improvability
             const nextPossibleScore = getNextGradeBoundaryScore(c.targetScore);
             if (nextPossibleScore && c.chartConstant && nextPossibleScore <= scoreCap) {
                  const potentialRating = calculateChunithmSongRating(nextPossibleScore, c.chartConstant);
@@ -168,7 +188,7 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
             if (fineTunePotential.possible && fineTunePotential.score > c.targetScore && fineTunePotential.score <= scoreCap) return true;
             return false;
         });
-        log.push(`[HYBRID_ITER ${hybridIterations}] Found ${globalCandidates.length} actually improvable songs.`);
+        // log.push(`[HYBRID_ITER ${hybridIterations}] Found ${globalCandidates.length} actually improvable songs.`);
 
         if (globalCandidates.length > 0) {
             if (input.algorithmPreference === 'floor') {
@@ -189,9 +209,9 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
                     return constB - constA;
                 });
             }
-            if (globalCandidates.length > 0) {
-                log.push(`[HYBRID_ITER ${hybridIterations}] Top global candidate: ${globalCandidates[0].title} (${globalCandidates[0].listOrigin}), Const: ${globalCandidates[0].chartConstant}, TgtRating: ${globalCandidates[0].targetRating.toFixed(4)}`);
-            }
+            // if (globalCandidates.length > 0) {
+            //     log.push(`[HYBRID_ITER ${hybridIterations}] Top global candidate: ${globalCandidates[0].title} (${globalCandidates[0].listOrigin}), Const: ${globalCandidates[0].chartConstant}, TgtRating: ${globalCandidates[0].targetRating.toFixed(4)}`);
+            // }
 
             const topCandidate = globalCandidates[0];
             if (topCandidate) {
@@ -205,7 +225,7 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
                                 currentSimulatedB30Songs[songIndex].targetScore = nextGradeScore;
                                 currentSimulatedB30Songs[songIndex].targetRating = parseFloat(potentialRatingAtNextGrade.toFixed(4));
                                 songsChangedThisIteration = true;
-                                log.push(`[HYBRID_LEAP_B30] Leaped ${topCandidate.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
+                                // log.push(`[HYBRID_LEAP_B30] Leaped ${topCandidate.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
                             }
                         } else {
                             const songIndex = currentSimulatedNew20Songs.findIndex(s => s.id === topCandidate.id && s.diff === topCandidate.diff);
@@ -213,7 +233,7 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
                                 currentSimulatedNew20Songs[songIndex].targetScore = nextGradeScore;
                                 currentSimulatedNew20Songs[songIndex].targetRating = parseFloat(potentialRatingAtNextGrade.toFixed(4));
                                 songsChangedThisIteration = true;
-                                log.push(`[HYBRID_LEAP_N20] Leaped ${topCandidate.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
+                                // log.push(`[HYBRID_LEAP_N20] Leaped ${topCandidate.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
                             }
                         }
                     }
@@ -223,20 +243,20 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
 
         if (!songsChangedThisIteration && globalCandidates.length > 0) {
             const candidateForFineTune = globalCandidates[0];
-            log.push(`[HYBRID_FINETUNE_ATTEMPT] Attempting fine-tune for: ${candidateForFineTune.title} (${candidateForFineTune.listOrigin}), Current TgtScore: ${candidateForFineTune.targetScore}, TgtRating: ${candidateForFineTune.targetRating.toFixed(4)}`);
+            // log.push(`[HYBRID_FINETUNE_ATTEMPT] Attempting fine-tune for: ${candidateForFineTune.title} (${candidateForFineTune.listOrigin}), Current TgtScore: ${candidateForFineTune.targetScore}, TgtRating: ${candidateForFineTune.targetRating.toFixed(4)}`);
             if (candidateForFineTune.targetScore < scoreCap && candidateForFineTune.chartConstant) {
                 const targetMicroTuneRating = candidateForFineTune.targetRating + 0.0001;
                 const minScoreInfo = findMinScoreForTargetRating(candidateForFineTune, targetMicroTuneRating, input.isScoreLimitReleased);
 
                 if (minScoreInfo.possible && minScoreInfo.score > candidateForFineTune.targetScore && minScoreInfo.score <= scoreCap) {
-                    log.push(`[HYBRID_FINETUNE_POTENTIAL] For ${candidateForFineTune.title}: Possible to reach ${minScoreInfo.rating.toFixed(4)} with score ${minScoreInfo.score}`);
+                    // log.push(`[HYBRID_FINETUNE_POTENTIAL] For ${candidateForFineTune.title}: Possible to reach ${minScoreInfo.rating.toFixed(4)} with score ${minScoreInfo.score}`);
                     if (candidateForFineTune.listOrigin === 'b30') {
                         const songIndex = currentSimulatedB30Songs.findIndex(s => s.id === candidateForFineTune.id && s.diff === candidateForFineTune.diff);
                         if (songIndex !== -1) {
                             currentSimulatedB30Songs[songIndex].targetScore = minScoreInfo.score;
                             currentSimulatedB30Songs[songIndex].targetRating = parseFloat(minScoreInfo.rating.toFixed(4));
                             songsChangedThisIteration = true;
-                            log.push(`[HYBRID_FINETUNE_B30] Tuned ${candidateForFineTune.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
+                            // log.push(`[HYBRID_FINETUNE_B30] Tuned ${candidateForFineTune.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
                         }
                     } else {
                         const songIndex = currentSimulatedNew20Songs.findIndex(s => s.id === candidateForFineTune.id && s.diff === candidateForFineTune.diff);
@@ -244,14 +264,14 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
                             currentSimulatedNew20Songs[songIndex].targetScore = minScoreInfo.score;
                             currentSimulatedNew20Songs[songIndex].targetRating = parseFloat(minScoreInfo.rating.toFixed(4));
                             songsChangedThisIteration = true;
-                            log.push(`[HYBRID_FINETUNE_N20] Tuned ${candidateForFineTune.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
+                            // log.push(`[HYBRID_FINETUNE_N20] Tuned ${candidateForFineTune.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
                         }
                     }
                 } else {
-                    log.push(`[HYBRID_FINETUNE_NOPOSSIBLE] For ${candidateForFineTune.title}: No improvement possible or score already maxed/too high for micro-tune.`);
+                    // log.push(`[HYBRID_FINETUNE_NOPOSSIBLE] For ${candidateForFineTune.title}: No improvement possible or score already maxed/too high for micro-tune.`);
                 }
             } else {
-                 log.push(`[HYBRID_FINETUNE_SKIP] For ${candidateForFineTune.title}: Already at score cap or no chart constant.`);
+                //  log.push(`[HYBRID_FINETUNE_SKIP] For ${candidateForFineTune.title}: Already at score cap or no chart constant.`);
             }
         }
 
@@ -261,28 +281,28 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
         currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, true);
         currentOverallRating = calculateOverallRating(currentAverageB30Rating, currentAverageNew20Rating, currentSimulatedB30Songs.length, currentSimulatedNew20Songs.length);
 
-        log.push(`[HYBRID_ITER ${hybridIterations} POST_LEAP_FINETUNE] Overall: ${currentOverallRating.toFixed(4)}, Changed: ${songsChangedThisIteration}`);
+        // log.push(`[HYBRID_ITER ${hybridIterations} POST_LEAP_FINETUNE] Overall: ${currentOverallRating.toFixed(4)}, Changed: ${songsChangedThisIteration}`);
         if (currentOverallRating >= input.targetRating) { finalOutcomePhase = 'target_reached'; break; }
 
         if (!songsChangedThisIteration || Math.abs(currentOverallRating - previousOverallRatingForHybridCycle) < 0.00001) {
-            log.push(`[HYBRID_ITER ${hybridIterations}] No change from leap/finetune or no overall rating progress. Attempting replacement.`);
+            // log.push(`[HYBRID_ITER ${hybridIterations}] No change from leap/finetune or no overall rating progress. Attempting replacement.`);
             let replacedInB30 = false;
             let replacedInN20 = false;
 
             const b30ReplaceResult = _performListSimulationPhase(currentSimulatedB30Songs, input, log, 'b30', currentAverageB30Rating, currentSimulatedNew20Songs, true);
             if (b30ReplaceResult.songsChangedCount > 0) {
-                currentSimulatedB30Songs = b30ReplaceResult.updatedSongs; // Already deduplicated and sorted/sliced
+                currentSimulatedB30Songs = b30ReplaceResult.updatedSongs; 
                 replacedInB30 = true;
-                songsChangedThisIteration = true;
-                log.push(`[HYBRID_REPLACE_B30_ATTEMPT] B30 replacement phase changed songs. New B30 Avg: ${calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, true)?.toFixed(4)}`);
+                songsChangedThisIteration = true; // Mark that a change happened overall in this iteration
+                // log.push(`[HYBRID_REPLACE_B30_ATTEMPT] B30 replacement phase changed songs. New B30 Avg: ${calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, true)?.toFixed(4)}`);
             }
 
             const n20ReplaceResult = _performListSimulationPhase(currentSimulatedNew20Songs, input, log, 'n20', currentAverageNew20Rating, currentSimulatedB30Songs, true);
             if (n20ReplaceResult.songsChangedCount > 0) {
-                currentSimulatedNew20Songs = n20ReplaceResult.updatedSongs; // Already deduplicated and sorted/sliced
+                currentSimulatedNew20Songs = n20ReplaceResult.updatedSongs; 
                 replacedInN20 = true;
-                songsChangedThisIteration = true;
-                log.push(`[HYBRID_REPLACE_N20_ATTEMPT] N20 replacement phase changed songs. New N20 Avg: ${calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, true)?.toFixed(4)}`);
+                songsChangedThisIteration = true; // Mark that a change happened overall in this iteration
+                // log.push(`[HYBRID_REPLACE_N20_ATTEMPT] N20 replacement phase changed songs. New N20 Avg: ${calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, true)?.toFixed(4)}`);
             }
 
             currentSimulatedB30Songs = sortAndSlice(deduplicateSongList(currentSimulatedB30Songs), BEST_COUNT);
@@ -290,16 +310,16 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
             currentAverageB30Rating = calculateAverageRating(currentSimulatedB30Songs, BEST_COUNT, true);
             currentAverageNew20Rating = calculateAverageRating(currentSimulatedNew20Songs, NEW_20_COUNT, true);
             currentOverallRating = calculateOverallRating(currentAverageB30Rating, currentAverageNew20Rating, currentSimulatedB30Songs.length, currentSimulatedNew20Songs.length);
-            log.push(`[HYBRID_ITER ${hybridIterations} POST_REPLACE] Overall: ${currentOverallRating.toFixed(4)}, B30 Replaced: ${replacedInB30}, N20 Replaced: ${replacedInN20}`);
+            // log.push(`[HYBRID_ITER ${hybridIterations} POST_REPLACE] Overall: ${currentOverallRating.toFixed(4)}, B30 Replaced: ${replacedInB30}, N20 Replaced: ${replacedInN20}`);
 
             if (currentOverallRating >= input.targetRating) { finalOutcomePhase = 'target_reached'; break; }
-            if (!replacedInB30 && !replacedInN20) {
-                log.push(`[HYBRID_STUCK] Hybrid replacement did not yield improvement in either list.`);
+            if (!replacedInB30 && !replacedInN20) { // If neither list had a replacement
+                // log.push(`[HYBRID_STUCK] Hybrid replacement did not yield improvement in either list.`);
                 hybridStuck = true;
             }
         }
         if (Math.abs(currentOverallRating - previousOverallRatingForHybridCycle) < 0.00001 && !songsChangedThisIteration) {
-             log.push(`[HYBRID_STUCK] Hybrid simulation made no overall rating progress despite potential song changes. Delta: ${(currentOverallRating - previousOverallRatingForHybridCycle).toFixed(6)}`);
+            //  log.push(`[HYBRID_STUCK] Hybrid simulation made no overall rating progress despite potential song changes. Delta: ${(currentOverallRating - previousOverallRatingForHybridCycle).toFixed(6)}`);
              hybridStuck = true;
         }
     }
@@ -309,10 +329,10 @@ export function runFullSimulation(input: SimulationInput): SimulationOutput {
         hybridStuck = true;
     }
     if (finalOutcomePhase !== 'target_reached') {
-         log.push(`[HYBRID_CYCLE_END] Hybrid cycle finished. Stuck: ${hybridStuck}. Overall: ${currentOverallRating.toFixed(4)}`);
+        //  log.push(`[HYBRID_CYCLE_END] Hybrid cycle finished. Stuck: ${hybridStuck}. Overall: ${currentOverallRating.toFixed(4)}`);
          if (hybridStuck) {
              finalOutcomePhase = 'stuck_both_no_improvement';
-         } else if (currentOverallRating < input.targetRating) {
+         } else if (currentOverallRating < input.targetRating) { // If not stuck but target not reached, implies stuck
              finalOutcomePhase = 'stuck_both_no_improvement';
          }
     }
@@ -393,9 +413,9 @@ function _performListSimulationPhase(
   const listLimit = listType === 'b30' ? BEST_COUNT : NEW_20_COUNT;
   const scoreCap = input.isScoreLimitReleased ? 1010000 : MAX_SCORE_NORMAL;
 
-  log.push(`[${listName}_PHASE_MGMT_START] SimMode: ${input.simulationMode}, AlgoPref: ${input.algorithmPreference}, SongsInList: ${updatedSongs.length}, ListAvg: ${currentAverageForList?.toFixed(4) || 'N/A'}, HybridContext: ${isHybridReplaceContext}`);
+  // log.push(`[${listName}_PHASE_MGMT_START] SimMode: ${input.simulationMode}, AlgoPref: ${input.algorithmPreference}, SongsInList: ${updatedSongs.length}, ListAvg: ${currentAverageForList?.toFixed(4) || 'N/A'}, HybridContext: ${isHybridReplaceContext}`);
 
-  let updatableSongsForLeap = updatedSongs.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
+  let updatableSongsForLeap = updatedSongs.filter(song => !song.isExcludedFromImprovement && song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
   if (input.algorithmPreference === 'floor') {
     updatableSongsForLeap.sort((a, b) => {
       const aIsHighConst = isSongHighConstantForFloor(a, currentAverageForList);
@@ -423,15 +443,15 @@ function _performListSimulationPhase(
         if (songIndex !== -1) {
           updatedSongs[songIndex] = { ...songToAttemptLeap, targetScore: nextGradeScore, targetRating: parseFloat(potentialRatingAtNextGrade.toFixed(4)) };
           songsChangedCount++; phaseIsStuck = false;
-          log.push(`[${listName}_LEAP_SUCCESS] Leaped ${songToAttemptLeap.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
+          // log.push(`[${listName}_LEAP_SUCCESS] Leaped ${songToAttemptLeap.title} to score ${nextGradeScore}, new target rating ${potentialRatingAtNextGrade.toFixed(4)}`);
           return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
         }
       }
     }
   }
-  log.push(`[${listName}_LEAP_NO_CHANGE] No leap improvement found or applied.`);
+  // log.push(`[${listName}_LEAP_NO_CHANGE] No leap improvement found or applied.`);
 
-  let updatableSongsForFineTune = updatedSongs.filter(song => song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
+  let updatableSongsForFineTune = updatedSongs.filter(song => !song.isExcludedFromImprovement && song.targetScore < scoreCap && song.chartConstant !== null && song.chartConstant > 0);
     if (input.algorithmPreference === 'floor') {
         updatableSongsForFineTune.sort((a, b) => {
             const aIsHighConst = isSongHighConstantForFloor(a, currentAverageForList);
@@ -460,13 +480,13 @@ function _performListSimulationPhase(
             if (minScoreInfo.possible && minScoreInfo.score > currentSongInSim.targetScore && minScoreInfo.score <= scoreCap) {
                 updatedSongs[songIndex] = { ...currentSongInSim, targetScore: minScoreInfo.score, targetRating: parseFloat(minScoreInfo.rating.toFixed(4)) };
                 songsChangedCount++; phaseIsStuck = false;
-                log.push(`[${listName}_FINETUNE_SUCCESS] Tuned ${currentSongInSim.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
+                // log.push(`[${listName}_FINETUNE_SUCCESS] Tuned ${currentSongInSim.title} to score ${minScoreInfo.score}, rating ${minScoreInfo.rating.toFixed(4)}`);
                 return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
             }
         }
     }
   }
-  log.push(`[${listName}_FINETUNE_NO_CHANGE] No fine-tune improvement found or applied.`);
+  // log.push(`[${listName}_FINETUNE_NO_CHANGE] No fine-tune improvement found or applied.`);
 
   let songToReplace: Song | undefined = undefined;
   if (updatedSongs.length >= listLimit) {
@@ -474,25 +494,29 @@ function _performListSimulationPhase(
   } else if (listType === 'n20' && updatedSongs.length < listLimit) {
       const currentN20IdsAndDiffs = new Set(updatedSongs.map(s => `${s.id}_${s.diff}`));
       const potentialAdditions = input.allPlayedNewSongsPool
-          .filter(poolSong => !currentN20IdsAndDiffs.has(`${poolSong.id}_${poolSong.diff.toUpperCase()}`))
-          .filter(poolSong => !otherListSongs.some(ols => ols.id === poolSong.id && ols.diff.toUpperCase() === poolSong.diff.toUpperCase()))
+          .filter(poolSong => {
+            const songKey = `${poolSong.id}_${poolSong.diff.toUpperCase()}`;
+            return !currentN20IdsAndDiffs.has(songKey) && 
+                   !otherListSongs.some(ols => ols.id === poolSong.id && ols.diff.toUpperCase() === poolSong.diff.toUpperCase()) &&
+                   !input.excludedSongKeys.has(songKey);
+          })
           .sort((a,b) => b.currentRating - a.currentRating);
       if (potentialAdditions.length > 0) {
           const songToAdd = potentialAdditions[0];
           if (!songToReplace || songToAdd.currentRating > songToReplace.targetRating) {
-            updatedSongs.push({...songToAdd, targetScore: songToAdd.currentScore, targetRating: songToAdd.currentRating });
+            updatedSongs.push({...songToAdd, targetScore: songToAdd.currentScore, targetRating: songToAdd.currentRating, isExcludedFromImprovement: false });
             songsChangedCount++; phaseIsStuck = false;
-            log.push(`[${listName}_REPLACE_ADD_SUCCESS] Added ${songToAdd.title} (Rating: ${songToAdd.currentRating.toFixed(4)}). New ${listName} count: ${updatedSongs.length}`);
+            // log.push(`[${listName}_REPLACE_ADD_SUCCESS] Added ${songToAdd.title} (Rating: ${songToAdd.currentRating.toFixed(4)}). New ${listName} count: ${updatedSongs.length}`);
             return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
           }
       }
   }
 
   if (!songToReplace) {
-      log.push(`[${listName}_REPLACE_NO_TARGET] No song to replace or add for ${listName}. Phase might be stuck.`);
+      // log.push(`[${listName}_REPLACE_NO_TARGET] No song to replace or add for ${listName}. Phase might be stuck.`);
       return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
   }
-  log.push(`[${listName}_REPLACE_SEARCH] Attempting to replace ${songToReplace.title} (TgtRating: ${songToReplace.targetRating.toFixed(4)}) in ${listName}`);
+  // log.push(`[${listName}_REPLACE_SEARCH] Attempting to replace ${songToReplace.title} (TgtRating: ${songToReplace.targetRating.toFixed(4)}) in ${listName}`);
 
   let replacementSourcePool: (Song | ShowallApiSongEntry)[] = [];
   const currentSimulatedIdsAndDiffs = new Set(updatedSongs.map(s => `${s.id}_${s.diff.toUpperCase()}`));
@@ -503,6 +527,7 @@ function _performListSimulationPhase(
       .filter(globalSong => {
         if (!globalSong.id || !globalSong.diff || !globalSong.title) return false;
         const globalSongKey = `${globalSong.id}_${globalSong.diff.toUpperCase()}`;
+        if (input.excludedSongKeys.has(globalSongKey)) return false; // Excluded songs cannot be chosen as replacements
         if (currentSimulatedIdsAndDiffs.has(globalSongKey)) return false;
         if (isHybridReplaceContext && otherListIdsAndDiffs.has(globalSongKey)) return false;
         const isNewSongByName = NewSongsData.titles.verse.some(title => title.trim().toLowerCase() === globalSong.title.trim().toLowerCase());
@@ -517,10 +542,11 @@ function _performListSimulationPhase(
         return mapApiSongToAppSong(playedVersion || { ...apiEntry, score: 0, rating: 0 }, 0, apiEntry.const);
       })
       .filter(song => song.chartConstant !== null);
-  } else {
+  } else { // listType === 'n20'
     replacementSourcePool = input.allPlayedNewSongsPool
       .filter(poolSong => {
           const poolSongKey = `${poolSong.id}_${poolSong.diff.toUpperCase()}`;
+          if (input.excludedSongKeys.has(poolSongKey)) return false; // Excluded songs cannot be chosen
           if (currentSimulatedIdsAndDiffs.has(poolSongKey)) return false;
           if (isHybridReplaceContext && otherListIdsAndDiffs.has(poolSongKey)) return false;
           if (!poolSong.chartConstant) return false;
@@ -528,7 +554,7 @@ function _performListSimulationPhase(
           return Math.max(poolSong.currentRating, potentialMaxRating) > songToReplace!.targetRating + 0.00005;
       });
   }
-  log.push(`[${listName}_REPLACE_CANDIDATES] Found ${replacementSourcePool.length} potential replacement candidates for ${songToReplace.title}.`);
+  // log.push(`[${listName}_REPLACE_CANDIDATES] Found ${replacementSourcePool.length} potential replacement candidates for ${songToReplace.title}.`);
 
   let bestCandidateForReplacement: (Song & { neededScore: number; resultingRating: number }) | null = null;
   let minEffort = Infinity;
@@ -538,14 +564,14 @@ function _performListSimulationPhase(
     const targetRatingForCandidate = songToReplace.targetRating + 0.0001;
     const minScoreInfo = findMinScoreForTargetRating(candidate, targetRatingForCandidate, input.isScoreLimitReleased);
     if (minScoreInfo.possible && minScoreInfo.score <= scoreCap) {
-      const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : (minScoreInfo.score + 1000000);
+      const effort = candidate.currentScore > 0 ? (minScoreInfo.score - candidate.currentScore) : (minScoreInfo.score + 1000000); // Heuristic for unplayed
       let updateBestCandidate = false;
       if (bestCandidateForReplacement === null || effort < minEffort) {
         updateBestCandidate = true;
       } else if (effort === minEffort) {
         if (input.algorithmPreference === 'floor') {
           if ((candidate.chartConstant ?? Infinity) < (bestCandidateForReplacement.chartConstant ?? Infinity)) updateBestCandidate = true;
-        } else {
+        } else { // peak
           if (minScoreInfo.rating > bestCandidateForReplacement.resultingRating) updateBestCandidate = true;
         }
       }
@@ -562,18 +588,19 @@ function _performListSimulationPhase(
       ...bestCandidateForReplacement,
       targetScore: bestCandidateForReplacement.neededScore,
       targetRating: bestCandidateForReplacement.resultingRating,
+      isExcludedFromImprovement: false, // New replacement is not excluded by default
     });
     songsChangedCount++; phaseIsStuck = false;
-    log.push(`[${listName}_REPLACE_SUCCESS] Replaced ${songToReplace!.title} (Rating ${songToReplace!.targetRating.toFixed(4)}) with ${bestCandidateForReplacement.title} (Target Rating ${bestCandidateForReplacement.resultingRating.toFixed(4)} at score ${bestCandidateForReplacement.neededScore}).`);
+    // log.push(`[${listName}_REPLACE_SUCCESS] Replaced ${songToReplace!.title} (Rating ${songToReplace!.targetRating.toFixed(4)}) with ${bestCandidateForReplacement.title} (Target Rating ${bestCandidateForReplacement.resultingRating.toFixed(4)} at score ${bestCandidateForReplacement.neededScore}).`);
     return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
   }
 
-  log.push(`[${listName}_PHASE_MGMT_END] No changes in this pass. Stuck: ${phaseIsStuck}`);
+  // log.push(`[${listName}_PHASE_MGMT_END] No changes in this pass. Stuck: ${phaseIsStuck}`);
   return { updatedSongs: sortAndSlice(deduplicateSongList(updatedSongs), listLimit), songsChangedCount, stuck: phaseIsStuck };
 }
 
 function sortAndSlice(songs: Song[], limit: number): Song[] {
-    const songsToSort = songs.map(s => ({ ...s }));
+    const songsToSort = songs.map(s => ({ ...s })); // Create shallow copies
     songsToSort.sort((a, b) => {
         if (b.targetRating !== a.targetRating) {
             return b.targetRating - a.targetRating;
@@ -590,3 +617,4 @@ function sortAndSlice(songs: Song[], limit: number): Song[] {
     });
     return songsToSort.slice(0, limit);
 }
+

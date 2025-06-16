@@ -3,8 +3,10 @@
 
 import type { CalculationStrategy, Song } from "@/types/result-page";
 import { Card, CardContent } from "@/components/ui/card";
-import { Music2, Star, Target as TargetIcon, ArrowUpCircle } from "lucide-react";
+import { Music2, Star, Target as TargetIcon, ArrowUpCircle, XCircle } from "lucide-react"; // Added XCircle
 import { cn } from "@/lib/utils";
+
+const MAX_SCORE_FOR_EXCLUDE_TOGGLE = 1009000 -1; // Max normal SSS+ score minus 1 to allow toggle
 
 const difficultyColors: { [key: string]: string } = {
   ULT: "text-[#9F5D67]", 
@@ -18,26 +20,27 @@ const difficultyColors: { [key: string]: string } = {
 type SongCardProps = {
   song: Song;
   calculationStrategy: CalculationStrategy | null;
+  isExcluded: boolean; // New prop
+  onExcludeToggle: () => void; // New prop
 };
 
-export default function SongCard({ song, calculationStrategy }: SongCardProps) {
-  const inSimulationMode = !!calculationStrategy;
+export default function SongCard({ song, calculationStrategy, isExcluded, onExcludeToggle }: SongCardProps) {
+  const inSimulationMode = !!calculationStrategy && calculationStrategy !== "none";
 
   const scoreDifference = song.targetScore - song.currentScore;
   const ratingDifferenceValue = song.targetRating - song.currentRating;
   
-  // Use a small epsilon for floating point comparison for ratings
   const ratingActuallyChanged = Math.abs(ratingDifferenceValue) > 0.00005; 
   const scoreActuallyChanged = song.targetScore !== song.currentScore;
 
-  const isSimulatedAndChanged = inSimulationMode && (scoreActuallyChanged || ratingActuallyChanged);
+  const isSimulatedAndChanged = inSimulationMode && (scoreActuallyChanged || ratingActuallyChanged) && !isExcluded;
 
   // For debugging specific songs
-  if (song.title.includes("MarbleBlue.") || song.title.includes("Random") || song.title.includes("Makear") || song.title.includes("VERSE")) {
-    console.log(
-      `[SongCard] ${song.title} (${song.diff}): currentS: ${song.currentScore}, targetS: ${song.targetScore}, currentR: ${song.currentRating.toFixed(4)}, targetR: ${song.targetRating.toFixed(4)}, inSim: ${inSimulationMode}, isSimAndChanged: ${isSimulatedAndChanged}, scoreDiff: ${scoreDifference}, ratingDiffVal: ${ratingDifferenceValue.toFixed(4)}, scoreActuallyChanged: ${scoreActuallyChanged}, ratingActuallyChanged: ${ratingActuallyChanged}`
-    );
-  }
+  // if (song.title.includes("MarbleBlue.") || song.title.includes("Random") || song.title.includes("Makear") || song.title.includes("VERSE")) {
+  //   console.log(
+  //     `[SongCard] ${song.title} (${song.diff}): currentS: ${song.currentScore}, targetS: ${song.targetScore}, currentR: ${song.currentRating.toFixed(4)}, targetR: ${song.targetRating.toFixed(4)}, inSim: ${inSimulationMode}, isExcluded: ${isExcluded}, isSimAndChanged: ${isSimulatedAndChanged}, scoreDiff: ${scoreDifference}, ratingDiffVal: ${ratingDifferenceValue.toFixed(4)}, scoreActuallyChanged: ${scoreActuallyChanged}, ratingActuallyChanged: ${ratingActuallyChanged}`
+  //   );
+  // }
 
   const getDifficultyColorClass = (diff: string) => {
     const upperDiff = diff.toUpperCase();
@@ -46,19 +49,31 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
 
   let borderColorClass = "border-border"; 
 
-  if (song.currentScore >= 1009000) {
+  if (song.currentScore >= 1009000) { // SSS+ or higher, considered "maxed" for normal play
     borderColorClass = "border-red-500"; 
-  } else if (inSimulationMode && song.currentScore <= 1008999 && song.targetScore >= 1009000) {
+  } else if (inSimulationMode && song.targetScore >= 1009000 && !isExcluded) { // Will be SSS+ after simulation
     borderColorClass = "border-purple-400"; 
-  } else if (song.currentScore <= 1008999 && song.targetScore <= 1008999) {
+  } else if (isExcluded) { // Explicitly excluded
+    borderColorClass = "border-gray-500";
+  }
+  else { // Normal, improvable song
     borderColorClass = "border-green-500"; 
   }
   
+  const handleCardClick = () => {
+    if (song.currentScore <= MAX_SCORE_FOR_EXCLUDE_TOGGLE) { // Only allow toggle if not already SSS+
+        onExcludeToggle();
+    }
+  };
+
   return (
-    <Card className={cn(
-        "overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full border-2",
-        borderColorClass
+    <Card 
+      className={cn(
+        "overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 w-full border-2 relative", // Added relative for overlay
+        borderColorClass,
+        (song.currentScore <= MAX_SCORE_FOR_EXCLUDE_TOGGLE && calculationStrategy !== "none") ? "cursor-pointer" : "cursor-default"
       )}
+      onClick={handleCardClick}
     >
       <CardContent className="p-0 flex h-full">
         {/* Consistent gray background for jacket placeholder */}
@@ -78,10 +93,12 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
             <span className="text-xs font-bold ml-1 text-muted-foreground">
               {song.diff.toUpperCase()}
             </span>
+             {isExcluded && (
+                <XCircle className="w-3 h-3 ml-1 text-red-500 inline-block" title="Excluded from calculation"/>
+             )}
           </div>
 
           <div className="space-y-0.5 text-xs mt-1 text-right">
-            {/* Display delta if in simulation and changed */}
             {isSimulatedAndChanged && (
               <div className="flex items-center justify-end text-green-600 dark:text-green-400">
                 <ArrowUpCircle className="w-3 h-3 mr-1" />
@@ -93,7 +110,6 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
               </div>
             )}
 
-            {/* Main score/rating line */}
             <div className="flex items-center justify-end text-muted-foreground">
               <span className="flex items-center mr-1">
                 {isSimulatedAndChanged ? (
@@ -103,7 +119,7 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
                 )}
               </span>
               <span className="font-medium text-foreground">
-                {isSimulatedAndChanged ? (
+                {isSimulatedAndChanged || isExcluded ? (
                   <>
                     {(song.targetScore > 0 ? song.targetScore : song.currentScore).toLocaleString()}
                     {' / '}
@@ -121,6 +137,15 @@ export default function SongCard({ song, calculationStrategy }: SongCardProps) {
           </div>
         </div>
       </CardContent>
+      {isExcluded && (
+        <div className="absolute inset-0 bg-gray-800 bg-opacity-80 z-10 pointer-events-none">
+          <div 
+            className="absolute top-1/2 left-0 w-full h-[2px] bg-red-500 bg-opacity-70 transform -translate-y-1/2 origin-center z-20"
+            style={{ transform: 'translateY(-50%) rotate(-30deg) scale(1.2)' }} // Adjusted rotation and scale for better diagonal
+          />
+        </div>
+      )}
     </Card>
   );
 }
+

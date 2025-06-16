@@ -67,6 +67,7 @@ export type Song = {
   sim_isNewInB30?: boolean;
   sim_originalB30Rating?: number;
   sim_timesImproved?: number;
+  isExcludedFromImprovement?: boolean; // Added for exclude feature
 };
 
 
@@ -113,12 +114,11 @@ export interface SimulationInput {
   userPlayHistory: ShowallApiSongEntry[];
   currentRating: number;
   targetRating: number;
-  // algorithmPreference tells the engine how to prioritize improvements (e.g., floor or peak logic)
   algorithmPreference: "floor" | "peak";
-  // simulationMode tells the engine which lists are subject to change
   simulationMode: "b30_only" | "n20_only" | "hybrid";
   isScoreLimitReleased: boolean;
   phaseTransitionPoint: number | null;
+  excludedSongKeys: Set<string>; // Added for exclude feature
 }
 
 export interface SimulationOutput {
@@ -137,3 +137,11 @@ export type TheoreticalMaxInfo = {
   reachableRating: number;
   message: string | null; // Message to display if target is unreachable
 };
+
+// Type for Const Overrides
+export type ConstOverride = {
+  title: string;
+  diff: string;
+  const: number;
+};
+

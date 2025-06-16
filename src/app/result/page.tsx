@@ -62,6 +62,8 @@ function ResultContent() {
     finalOverallSimulatedRating,
     simulationLog,
     preComputationResult, 
+    excludedSongKeys, // New
+    toggleExcludeSongKey, // New
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -84,14 +86,15 @@ function ResultContent() {
         localStorage.removeItem(userShowallKey);
         localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
 
-        console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data and global music cleared for refresh trigger.`);
+        // console.log(`[CACHE_CLEAR_ON_REFRESH] User-specific (${userNameForApi}) data and global music cleared for refresh trigger.`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
         localStorage.removeItem(GLOBAL_MUSIC_DATA_KEY);
-        console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared (no specific user or default user).`);
+        // console.log(`[CACHE_CLEAR_ON_REFRESH] Global music cache cleared (no specific user or default user).`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: "글로벌 음악 목록 캐시를 삭제하고 새로고침을 시도합니다."});
     }
     setCalculationStrategy("none");
+    // Do not reset excludedSongKeys here by design
     setRefreshNonce(prev => prev + 1);
   }, [userNameForApi, locale, toast]);
 
@@ -355,9 +358,18 @@ function ResultContent() {
                   <CardContent>
                     {best30SongsData.length > 0 ? (
                       <div className={cn("grid grid-cols-1 gap-4", best30GridCols)}>
-                        {best30SongsData.map((song, index) => (
-                          <SongCard key={`best30-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
-                        ))}
+                        {best30SongsData.map((song, index) => {
+                          const songKey = `${song.id}_${song.diff}`;
+                          return (
+                            <SongCard
+                              key={`best30-${songKey}-${index}`}
+                              song={song}
+                              calculationStrategy={calculationStrategy}
+                              isExcluded={excludedSongKeys.has(songKey)}
+                              onExcludeToggle={() => toggleExcludeSongKey(songKey)}
+                            />
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoBest30Data')}</p>
@@ -374,9 +386,18 @@ function ResultContent() {
                   <CardContent>
                        {new20SongsData.length > 0 ? (
                          <div className={cn("grid grid-cols-1 gap-4", best30GridCols )}>
-                           {new20SongsData.map((song, index) => (
-                             <SongCard key={`new20-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
-                           ))}
+                           {new20SongsData.map((song, index) => {
+                             const songKey = `${song.id}_${song.diff}`;
+                             return (
+                               <SongCard
+                                 key={`new20-${songKey}-${index}`}
+                                 song={song}
+                                 calculationStrategy={calculationStrategy}
+                                 isExcluded={excludedSongKeys.has(songKey)}
+                                 onExcludeToggle={() => toggleExcludeSongKey(songKey)}
+                               />
+                             );
+                           })}
                          </div>
                        ) : (
                          <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoNew20Data')}</p>
@@ -393,9 +414,18 @@ function ResultContent() {
                   <CardContent>
                     {combinedTopSongs.length > 0 ? (
                       <div className={cn("grid grid-cols-1 gap-4", best30GridCols)}>
-                        {combinedTopSongs.map((song, index) => (
-                          <SongCard key={`combined-${song.id}-${song.diff}-${index}`} song={song} calculationStrategy={calculationStrategy} />
-                        ))}
+                        {combinedTopSongs.map((song, index) => {
+                           const songKey = `${song.id}_${song.diff}`;
+                           return (
+                             <SongCard
+                               key={`combined-${songKey}-${index}`}
+                               song={song}
+                               calculationStrategy={calculationStrategy}
+                               isExcluded={excludedSongKeys.has(songKey)}
+                               onExcludeToggle={() => toggleExcludeSongKey(songKey)}
+                             />
+                           );
+                        })}
                       </div>
                     ) : (
                       <p className="text-muted-foreground">{getTranslation(locale, 'resultPageNoCombinedData')}</p>
@@ -420,3 +450,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
