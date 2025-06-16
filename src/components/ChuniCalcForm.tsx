@@ -7,8 +7,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-// Tooltip components and HelpCircle are removed as per rollback request
-import { Gauge, Target, User, Search, ArrowRight, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Gauge, Target, User, Search, ArrowRight, Loader2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
@@ -263,85 +263,97 @@ export default function ChuniCalcForm() {
   }
 
   return (
-    <Card className="w-full max-w-md shadow-2xl">
-      <CardHeader className="text-center">
-        <CardTitle className="font-headline text-4xl tracking-tight">{getTranslation(locale, 'formTitle')}</CardTitle>
-        <CardDescription className="font-body text-md">
-         {getTranslation(locale, 'formDescription')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
-          <div className="space-y-2">
-            <div className="flex items-center">
+    <TooltipProvider delayDuration={300}>
+      <Card className="w-full max-w-md shadow-2xl">
+        <CardHeader className="text-center">
+          <CardTitle className="font-headline text-4xl tracking-tight">{getTranslation(locale, 'formTitle')}</CardTitle>
+          <CardDescription className="font-body text-md">
+           {getTranslation(locale, 'formDescription')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCalculateAndNavigate} className="space-y-6">
+            <div className="space-y-2">
               <Label htmlFor="nickname" className="flex items-center text-lg font-medium">
                 <User className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'nicknameLabel')}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{getTranslation(locale, 'tooltipChunirecNicknameContent')}</p>
+                  </TooltipContent>
+                </Tooltip>
               </Label>
-              {/* Tooltip for nickname removed */}
+              <div className="flex space-x-2">
+                <Input
+                  id="nickname"
+                  type="text"
+                  placeholder={getTranslation(locale, 'nicknamePlaceholder')}
+                  value={nickname}
+                  onChange={handleNicknameChange}
+                  className="text-lg"
+                  aria-describedby="nicknameHelp"
+                />
+                <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating}>
+                  {isFetchingRating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
+                  <span className="ml-2">{getTranslation(locale, 'fetchRatingButton')}</span>
+                </Button>
+              </div>
+              <p id="nicknameHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'nicknameHelp')}</p>
             </div>
-            <div className="flex space-x-2">
+
+            <div className="space-y-2">
+              <Label htmlFor="currentRating" className="flex items-center text-lg font-medium">
+                <Gauge className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'currentRatingLabel')}
+              </Label>
               <Input
-                id="nickname"
-                type="text"
-                placeholder={getTranslation(locale, 'nicknamePlaceholder')}
-                value={nickname}
-                onChange={handleNicknameChange}
-                className="text-lg"
-                aria-describedby="nicknameHelp"
+                id="currentRating"
+                type="number"
+                step="0.01"
+                min="0"
+                max="17.49"
+                placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
+                value={currentRatingStr}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
+                className="text-lg bg-muted/50"
+                disabled
               />
-              <Button type="button" onClick={handleFetchRating} className="px-3" disabled={isFetchingRating}>
-                {isFetchingRating ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />}
-                <span className="ml-2">{getTranslation(locale, 'fetchRatingButton')}</span>
-              </Button>
             </div>
-            <p id="nicknameHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'nicknameHelp')}</p>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="currentRating" className="flex items-center text-lg font-medium">
-              <Gauge className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'currentRatingLabel')}
-            </Label>
-            <Input
-              id="currentRating"
-              type="number"
-              step="0.01"
-              min="0"
-              max="17.49"
-              placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
-              value={currentRatingStr}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
-              className="text-lg bg-muted/50"
-              disabled
-            />
-          </div>
-
-          <div className="space-y-2">
-             <div className="flex items-center">
-              <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
-                <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
-              </Label>
-              {/* Tooltip for target rating removed */}
+            <div className="space-y-2">
+               <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
+                  <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{getTranslation(locale, 'tooltipTargetRatingContent')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+              <Input
+                id="targetRating"
+                type="number"
+                step="0.01"
+                min="0"
+                max="17.50"
+                placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
+                value={targetRatingStr}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetRatingStr(e.target.value)}
+                className="text-lg"
+                aria-describedby="targetRatingHelp"
+              />
+               <p id="targetRatingHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'targetRatingHelp')}</p>
             </div>
-            <Input
-              id="targetRating"
-              type="number"
-              step="0.01"
-              min="0"
-              max="17.50"
-              placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
-              value={targetRatingStr}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetRatingStr(e.target.value)}
-              className="text-lg"
-              aria-describedby="targetRatingHelp"
-            />
-             <p id="targetRatingHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'targetRatingHelp')}</p>
-          </div>
 
-          <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
-            {getTranslation(locale, 'calculateButton')} <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+            <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
+              {getTranslation(locale, 'calculateButton')} <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </TooltipProvider>
   );
 }
