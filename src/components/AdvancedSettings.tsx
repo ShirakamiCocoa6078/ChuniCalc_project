@@ -20,7 +20,7 @@ export default function AdvancedSettings() {
   const [isCachingUser, setIsCachingUser] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
 
-  const [nameInput, setNameInput] = useState(""); // Added for admin name
+  const [nameInput, setNameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [isDeveloperAuthenticated, setIsDeveloperAuthenticated] = useState(false);
   const [showDeveloperToolsDetails, setShowDeveloperToolsDetails] = useState(false);
@@ -50,7 +50,7 @@ export default function AdvancedSettings() {
         localStorage.setItem('chuniCalcData_userApiToken', localApiTokenInput.trim());
         toast({
             title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'),
-            description: getTranslation(locale, 'localApiKeyHelpUpdated')
+            description: getTranslation(locale, 'toastSuccessLocalApiKeyActuallySavedDesc') // Changed translation key
         });
       }
     }
@@ -60,7 +60,7 @@ export default function AdvancedSettings() {
     setPasswordInput(e.target.value);
   };
 
-  const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => { // Added
+  const handleNameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNameInput(e.target.value);
   };
 
@@ -70,12 +70,12 @@ export default function AdvancedSettings() {
 
     if (adminName && nameInput === adminName && adminPassword && passwordInput === adminPassword) {
       setIsDeveloperAuthenticated(true);
-      setNameInput(""); // Clear name input
-      setPasswordInput(""); // Clear password input
+      setNameInput(""); 
+      setPasswordInput(""); 
       toast({ title: getTranslation(locale, 'authenticationSuccessToast') });
     } else {
       toast({
-        title: getTranslation(locale, 'authenticationFailedToast'), // Consider changing this to a more generic "Name or Password incorrect"
+        title: getTranslation(locale, 'authenticationFailedToast'), 
         variant: "destructive"
       });
       setNameInput(""); 
@@ -238,8 +238,8 @@ export default function AdvancedSettings() {
         <CardFooter className="border-t pt-6 flex-col space-y-3">
           <div className="w-full space-y-1">
             <Label htmlFor="adminNameInput" className="flex items-center font-medium">
-              <UserCircle className="mr-2 h-5 w-5 text-orange-500" /> {/* Changed Icon */}
-              {getTranslation(locale, 'adminNameLabel', "Admin Name")} {/* Added translation key or default */}
+              <UserCircle className="mr-2 h-5 w-5 text-orange-500" /> 
+              {getTranslation(locale, 'adminNameLabel', "Admin Name")} 
             </Label>
             <Input
               id="adminNameInput"
@@ -343,5 +343,4 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
-
     
