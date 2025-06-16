@@ -52,26 +52,28 @@ export default function ChuniCalcForm() {
       return;
     }
 
-    const localRefToken = getLocalReferenceApiToken();
-    if (!localRefToken) {
-      toast({
-        title: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingTitle'),
-        description: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingDesc'),
-        variant: "default", // Informational, not destructive
-      });
-      // Do NOT return here. Allow the API call to proceed.
-      // The proxy will handle the actual API key.
-    }
-
     setIsFetchingRating(true);
     setCurrentRatingStr("");
     setTargetRatingStr("");
 
-    try {
-      const response = await fetch(
-        `/api/chunirecApiProxy?proxyEndpoint=records/profile.json&user_name=${encodeURIComponent(nickname)}&region=jp2`
-      );
+    const localToken = getLocalReferenceApiToken();
+    let proxyUrl = `/api/chunirecApiProxy?proxyEndpoint=records/profile.json&user_name=${encodeURIComponent(nickname)}&region=jp2`;
+    if (localToken) {
+      proxyUrl += `&localApiToken=${encodeURIComponent(localToken)}`;
+      console.log("[ChuniCalcForm] Using local reference API token for profile fetch.");
+    } else {
+      console.log("[ChuniCalcForm] No local reference API token found, relying on server-side key for profile fetch.");
+      // Optionally show the informational toast if desired, but it's less critical here as proxy handles fallback
+      // toast({
+      //   title: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingTitle'),
+      //   description: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingDesc'),
+      //   variant: "default",
+      // });
+    }
 
+
+    try {
+      const response = await fetch(proxyUrl);
       const data: ProfileData & { error?: { message?: string; code?: number } } = await response.json();
       console.log("Chunirec profile.json API Response (via Proxy):", data);
 
@@ -95,11 +97,10 @@ export default function ChuniCalcForm() {
       }
       if (!response.ok) {
         const errorMessageFromServer = data.error?.message || response.statusText || getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, "Unknown error from proxy");
-        // Check if the error message from server already indicates a server-side key issue.
         if (errorMessageFromServer.includes("API key for Chunirec is missing")) {
             toast({
-                title: getTranslation(locale, 'toastErrorApiKeyNotSet'), // Or a more specific "Server API Key Error"
-                description: errorMessageFromServer, // Display the detailed error from server
+                title: getTranslation(locale, 'toastErrorApiKeyNotSet'), 
+                description: errorMessageFromServer, 
                 variant: "destructive",
             });
         } else {

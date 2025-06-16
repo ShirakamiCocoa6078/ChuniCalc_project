@@ -10,6 +10,7 @@ import constOverridesInternal from '@/data/const-overrides.json';
 import { getTranslation, type Locale } from '@/lib/translations';
 import { mapApiSongToAppSong, sortSongsByRatingDesc, calculateAverageAndOverallRating, calculateTheoreticalMaxRatingsForList } from '@/lib/rating-utils';
 import { runFullSimulation } from '@/lib/simulation-logic';
+import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 import type {
   Song,
   ProfileData,
@@ -79,6 +80,14 @@ async function fetchApiViaProxy<T>(
   url.searchParams.append('proxyEndpoint', proxyEndpoint);
   for (const key in params) {
     url.searchParams.append(key, params[key]);
+  }
+  
+  const localToken = getLocalReferenceApiToken();
+  if (localToken) {
+    url.searchParams.append('localApiToken', localToken);
+    console.log(`[fetchApiViaProxy] Using local reference API token for endpoint: ${proxyEndpoint}`);
+  } else {
+    console.log(`[fetchApiViaProxy] No local reference API token found for endpoint: ${proxyEndpoint}, relying on server-side key.`);
   }
 
   const controller = new AbortController();
@@ -218,7 +227,7 @@ export function useChuniResultData({
       } else {
           console.log("[DATA_FETCH_HOOK] User showall cache miss or empty.");
       }
-      setUserPlayHistory(tempUserShowallRecords); // Set even if empty from cache, API will overwrite if fetched
+      setUserPlayHistory(tempUserShowallRecords); 
 
       if (!profileData || !ratingData || !globalMusicCacheRaw || tempFlattenedGlobalMusicRecords.length === 0 || !userShowallCache || tempUserShowallRecords.length === 0) {
         const apiRequestsMap = new Map<string, Promise<any>>();
@@ -242,7 +251,7 @@ export function useChuniResultData({
                 if (!criticalError) criticalError = errorMsg;
                 console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue;
               }
-              if (res.data.error && res.type !== 'profile') { // Profile errors (like 40301) have specific handling
+              if (res.data.error && res.type !== 'profile') { 
                  const errorMsg = `${res.type} data API returned error: ${res.data.error.message || 'Unknown error structure'}`;
                  if (!criticalError) criticalError = errorMsg;
                  console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue;
@@ -251,13 +260,13 @@ export function useChuniResultData({
               if (res.type === 'profile') {
                 if (res.status === 403 && res.data?.error?.code === 40301) {
                     criticalError = getTranslation(locale, 'toastErrorAccessDeniedDesc', userNameForApi, res.data.error.code);
-                } else if (res.ok && !res.data.error) { // Check !profileData here too
-                    if(!profileData) { // Only update if it wasn't already set from cache
+                } else if (res.ok && !res.data.error) { 
+                    if(!profileData) { 
                         setApiPlayerName(res.data.player_name || userNameForApi);
                         setCachedData<ProfileData>(profileKey, res.data);
                         profileData = res.data;
                     }
-                } else if (!res.ok) { // Catch other non-ok profile responses
+                } else if (!res.ok) { 
                     criticalError = `${res.type} data API failed (status: ${res.status}): ${res.data?.error?.message || 'Unknown API error from proxy'}`;
                 }
               }
@@ -265,7 +274,7 @@ export function useChuniResultData({
               if (res.type === 'globalMusic' && (!globalMusicCacheRaw || tempFlattenedGlobalMusicRecords.length === 0) && res.ok && !res.data.error) {
                 const apiGlobalMusicData = Array.isArray(res.data) ? res.data : (res.data?.records || []);
                 fetchedGlobalMusicApiForCache = apiGlobalMusicData;
-                tempFlattenedGlobalMusicRecords = []; // Reset before filling
+                tempFlattenedGlobalMusicRecords = []; 
                 apiGlobalMusicData.forEach(rawEntry => { tempFlattenedGlobalMusicRecords.push(...flattenGlobalMusicEntry(rawEntry)); });
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempFlattenedGlobalMusicRecords.length} flattened global music entries from API.`);
               }
@@ -273,7 +282,6 @@ export function useChuniResultData({
                 const records = res.data?.records || [];
                 fetchedUserShowallForCache = { records };
                 tempUserShowallRecords = records.filter((e: any): e is ShowallApiSongEntry => e && typeof e.id === 'string' && typeof e.diff === 'string');
-                // setUserPlayHistory is called later with the final tempUserShowallRecords
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempUserShowallRecords.length} user play history entries from API.`);
               }
             }
@@ -285,7 +293,7 @@ export function useChuniResultData({
                 console.error(`[DATA_FETCH_HOOK] Critical error during API fetch: ${criticalError}. Bailing out of data processing.`);
                 return;
             }
-            setUserPlayHistory(tempUserShowallRecords); // Set final user history after potential API fetch
+            setUserPlayHistory(tempUserShowallRecords); 
 
             if (fetchedGlobalMusicApiForCache) setCachedData<any[]>(globalMusicKey, fetchedGlobalMusicApiForCache, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
             if (fetchedUserShowallForCache) setCachedData<UserShowallApiResponse>(userShowallKey, fetchedUserShowallForCache);
@@ -299,7 +307,7 @@ export function useChuniResultData({
             if (error instanceof Error) {
               if (error.message.startsWith('API_TIMEOUT:')) {
                 const endpointMatch = error.message.match(/Request to (.*) timed out/);
-                const endpointName = endpointMatch ? endpointMatch[1].split('.')[0] : 'API'; // Extract main part like 'records/profile'
+                const endpointName = endpointMatch ? endpointMatch[1].split('.')[0] : 'API'; 
                 detailedErrorMessage = getTranslation(locale, 'toastErrorApiTimeout', endpointName);
               } else {
                 detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error.message);
@@ -322,7 +330,7 @@ export function useChuniResultData({
       }
 
       const overridesToApply = constOverridesInternal as ConstOverride[];
-      if (Array.isArray(overridesToApply) && overridesToApply.length > 0 && tempFlattenedGlobalMusicRecords.length > 0) {
+      if (Array.isArray(overridesToApply) && overridesToApply.length > 0 && Array.isArray(tempFlattenedGlobalMusicRecords) && tempFlattenedGlobalMusicRecords.length > 0) {
         console.log(`[CONST_OVERRIDE] Applying ${overridesToApply.length} overrides to ${tempFlattenedGlobalMusicRecords.length} global songs...`);
         overridesToApply.forEach(override => {
           let songsFoundAndOverridden = 0;
@@ -474,7 +482,6 @@ export function useChuniResultData({
       setSimulationLog([getTranslation(locale, 'resultPageLogNoStrategy')]);
       return;
     } else {
-      // Should not happen if calculationStrategy is one of the defined enum values
       console.error(`[SIM_STRATEGY_EFFECT] Unknown calculationStrategy: ${calculationStrategy}`);
       setErrorLoadingData(`Internal error: Unknown calculation strategy.`);
       setCurrentPhase('error_simulation_logic');
@@ -627,7 +634,7 @@ export function useChuniResultData({
     let baseB30: Song[];
     let baseN20: Song[];
 
-    if (preComputationResult && currentPhase === 'target_unreachable_info') { // Check against new phase
+    if (preComputationResult && currentPhase === 'target_unreachable_info') { 
         baseB30 = preComputationResult.theoreticalMaxSongsB30 || [];
         baseN20 = preComputationResult.theoreticalMaxSongsN20 || [];
         console.log(`[COMBINED_SONGS_EFFECT] Using preComputationResult for combined. B30: ${baseB30.length}, N20: ${baseN20.length}`);
@@ -690,4 +697,3 @@ export function useChuniResultData({
     preComputationResult,
   };
 }
-

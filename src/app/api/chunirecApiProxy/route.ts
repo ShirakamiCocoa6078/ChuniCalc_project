@@ -4,67 +4,64 @@ import { type NextRequest, NextResponse } from 'next/server';
 const CHUNIREC_API_BASE_URL = 'https://api.chunirec.net/2.0';
 
 export async function GET(request: NextRequest) {
-  const apiKey = process.env.CHUNIREC_API_KEY; // This is the expected environment variable name
+  const { searchParams } = new URL(request.url);
+  const proxyEndpoint = searchParams.get('proxyEndpoint');
+  const clientProvidedToken = searchParams.get('localApiToken');
+  const serverApiKey = process.env.CHUNIREC_API_KEY;
+
+  let apiKeyToUse: string | null = null;
+  let usingKeySource: string = "";
+
+  if (clientProvidedToken && clientProvidedToken.trim() !== "") {
+    apiKeyToUse = clientProvidedToken.trim();
+    usingKeySource = "client-provided localApiToken";
+  } else if (serverApiKey && serverApiKey.trim() !== "") {
+    apiKeyToUse = serverApiKey.trim();
+    usingKeySource = "server-side CHUNIREC_API_KEY environment variable";
+  }
 
   // --- 임시 디버깅 로그 시작 ---
-  // 이 로그는 환경 변수가 서버 프로세스에 의해 올바르게 인식되었는지 확인하기 위함입니다.
-  // 실제 API 키 값은 절대 로그로 남기지 마세요.
   console.log(
-    '[PROXY_ENV_CHECK] CHUNIREC_API_KEY is defined:',
-    !!apiKey,
-    apiKey ? `Length: ${apiKey.length}` : '(Not Set or Empty)'
+    `[PROXY_KEY_SELECTION] Attempting to use API key from: ${usingKeySource || "N/A (No key found)"}. Client token was: ${clientProvidedToken ? 'Present' : 'Absent'}. Server env key was: ${serverApiKey ? 'Present' : 'Absent'}`
   );
   // --- 임시 디버깅 로그 끝 ---
 
-  if (!apiKey) {
-    console.error('[PROXY_ERROR] CHUNIREC_API_KEY is not set in server environment variables. This is a server configuration issue.');
-    return NextResponse.json({ error: 'Server configuration error: API key for Chunirec is missing or not accessible by the server.' }, { status: 500 });
+  if (!apiKeyToUse) {
+    console.error('[PROXY_ERROR] No API key available. Neither client-provided token nor server CHUNIREC_API_KEY is set/valid.');
+    return NextResponse.json({ error: 'Server configuration error: API key for Chunirec is missing or not accessible by the server, and no valid client token was provided.' }, { status: 500 });
   }
-  // console.log('[PROXY_INFO] CHUNIREC_API_KEY found. Proceeding with proxy request.');
-
-
-  const { searchParams } = new URL(request.url);
-  const proxyEndpoint = searchParams.get('proxyEndpoint');
-
+  
   if (!proxyEndpoint) {
     return NextResponse.json({ error: 'proxyEndpoint query parameter is required.' }, { status: 400 });
   }
 
-  // Construct the target URL for Chunirec API
   const targetUrl = new URL(`${CHUNIREC_API_BASE_URL}/${proxyEndpoint}`);
   
-  // Append all original search parameters except 'proxyEndpoint', and add the API token
   searchParams.forEach((value, key) => {
-    if (key !== 'proxyEndpoint') {
+    if (key !== 'proxyEndpoint' && key !== 'localApiToken') { // Exclude localApiToken from being passed to Chunirec
       targetUrl.searchParams.append(key, value);
     }
   });
-  targetUrl.searchParams.append('token', apiKey);
+  targetUrl.searchParams.append('token', apiKeyToUse);
 
   try {
-    // console.log(`[PROXY_INFO] Fetching from Chunirec: ${targetUrl.toString().replace(apiKey, "REDACTED_API_KEY")}`);
+    // console.log(`[PROXY_INFO] Fetching from Chunirec using ${usingKeySource}: ${targetUrl.toString().replace(apiKeyToUse, "REDACTED_API_KEY")}`);
     const chunirecResponse = await fetch(targetUrl.toString(), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        // Add any other headers Chunirec might expect
       },
     });
 
-    // Extract data and headers from Chunirec response
     const data = await chunirecResponse.json().catch(err => {
-      // If JSON parsing fails, it might be an empty response or non-JSON error
       console.warn(`[PROXY_WARN] Failed to parse JSON from Chunirec for ${proxyEndpoint} (Status: ${chunirecResponse.status}): ${err.message}. Chunirec response text might follow.`);
-      // Try to get text if JSON fails
       return chunirecResponse.text().then(text => {
         console.warn(`[PROXY_WARN] Chunirec non-JSON response text for ${proxyEndpoint}: ${text.substring(0, 200)}...`);
-        // Return an error structure that the client might expect
         return { error: `Chunirec API Error (non-JSON or parsing failed for status ${chunirecResponse.status}): ${text.substring(0,100)}...`};
       });
     });
     
     const responseHeaders = new Headers();
-    // Copy relevant headers from Chunirec response to our proxy response
     const rateLimitLimit = chunirecResponse.headers.get('X-Rate-Limit-Limit');
     const rateLimitRemaining = chunirecResponse.headers.get('X-Rate-Limit-Remaining');
     const rateLimitReset = chunirecResponse.headers.get('X-Rate-Limit-Reset');
@@ -74,21 +71,17 @@ export async function GET(request: NextRequest) {
     if (rateLimitReset) responseHeaders.set('X-Rate-Limit-Reset', rateLimitReset);
     responseHeaders.set('Content-Type', 'application/json');
 
-
-    // Return the data with the original status code and copied headers
     return NextResponse.json(data, {
       status: chunirecResponse.status,
       headers: responseHeaders,
     });
 
   } catch (error) {
-    console.error(`[PROXY_FATAL_ERROR] Error during fetch operation to Chunirec API (${proxyEndpoint}):`, error);
+    console.error(`[PROXY_FATAL_ERROR] Error during fetch operation to Chunirec API (${proxyEndpoint}) using key from ${usingKeySource}:`, error);
     let errorMessage = 'Failed to fetch data from Chunirec API via proxy due to a network or unexpected error.';
     if (error instanceof Error) {
         errorMessage = error.message;
     }
-    // For network errors or other unexpected errors during the fetch itself
-    return NextResponse.json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined }, { status: 503 }); // Service Unavailable
+    return NextResponse.json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined }, { status: 503 });
   }
 }
-

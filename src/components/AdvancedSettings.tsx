@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { setCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { getLocalReferenceApiToken } from "@/lib/get-api-token";
 import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
@@ -50,7 +51,7 @@ export default function AdvancedSettings() {
         localStorage.setItem('chuniCalcData_userApiToken', localApiTokenInput.trim());
         toast({
             title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'),
-            description: getTranslation(locale, 'toastSuccessLocalApiKeyActuallySavedDesc') // Changed translation key
+            description: getTranslation(locale, 'toastSuccessLocalApiKeyActuallySavedDesc') 
         });
       }
     }
@@ -108,6 +109,19 @@ export default function AdvancedSettings() {
     }
   };
 
+  const fetchWithLocalToken = async (baseUrl: string) => {
+    const localToken = getLocalReferenceApiToken();
+    let urlToFetch = baseUrl;
+    if (localToken) {
+      const separator = urlToFetch.includes('?') ? '&' : '?';
+      urlToFetch += `${separator}localApiToken=${encodeURIComponent(localToken)}`;
+      console.log("[AdvancedSettings] Using local reference API token for caching request.");
+    } else {
+      console.log("[AdvancedSettings] No local reference API token found, relying on server-side key for caching request.");
+    }
+    return fetch(urlToFetch);
+  };
+
   const handleCacheGlobalMusic = async () => {
     setIsCachingGlobal(true);
     toast({
@@ -115,7 +129,7 @@ export default function AdvancedSettings() {
         description: getTranslation(locale, 'toastInfoCachingStartedDesc', getTranslation(locale, 'cacheGlobalMusicButton'))
     });
     try {
-      const response = await fetch(`/api/chunirecApiProxy?proxyEndpoint=music/showall.json&region=jp2`);
+      const response = await fetchWithLocalToken(`/api/chunirecApiProxy?proxyEndpoint=music/showall.json&region=jp2`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
@@ -142,7 +156,7 @@ export default function AdvancedSettings() {
     if (!cacheNickname.trim()) {
       toast({
           title: getTranslation(locale, 'toastErrorNicknameNeeded'),
-          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailed', getTranslation(locale, 'toastErrorNicknameNeededDesc')),
+          description: getTranslation(locale, 'toastErrorUserRecordsCacheFailedDesc', getTranslation(locale, 'toastErrorNicknameNeededDesc')),
           variant: "destructive"
       });
       return;
@@ -153,7 +167,7 @@ export default function AdvancedSettings() {
         description: getTranslation(locale, 'toastInfoCachingStartedDesc', `${cacheNickname.trim()}'s records`)
     });
     try {
-      const response = await fetch(`/api/chunirecApiProxy?proxyEndpoint=records/showall.json&region=jp2&user_name=${encodeURIComponent(cacheNickname.trim())}`);
+      const response = await fetchWithLocalToken(`/api/chunirecApiProxy?proxyEndpoint=records/showall.json&region=jp2&user_name=${encodeURIComponent(cacheNickname.trim())}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
@@ -343,4 +357,3 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
-    

@@ -21,9 +21,9 @@ export const translations = {
     advancedSettingsTitle: "고급 설정",
     advancedSettingsDesc: "앱 설정 및 개발자 도구를 관리합니다.",
     localApiKeyLabel: "로컬 API 키 참조 (선택 사항)",
-    localApiKeyPlaceholder: "개인 Chunirec API 토큰 (참고용)",
+    localApiKeyPlaceholder: "개인 Chunirec API 토큰",
     saveApiKeyButton: "로컬 참조용 API 키 저장/업데이트",
-    localApiKeyHelpUpdated: "이곳에 API 키를 저장해두면 필요시 참조할 수 있습니다. 앱의 API 호출은 보안 프록시를 통하므로, 여기에 저장된 값은 실제 API 요청에 직접 사용되지 않습니다. 비우고 저장하면 제거됩니다.",
+    localApiKeyHelpUpdated: "이곳에 API 키를 저장하면, 앱의 모든 API 호출 시 이 키가 우선적으로 사용됩니다. 만약 여기에 키를 저장하지 않거나 비워두면, 서버에 설정된 기본 API 키가 사용됩니다. 이 키는 브라우저의 로컬 저장소에만 저장됩니다. 비우고 저장하면 제거됩니다.",
     adminNameLabel: "관리자 이름",
     adminNamePlaceholder: "관리자 이름 입력",
     adminPasswordLabel: "개발자 인증",
@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.17",
+    appVersion: "ChuniCalc v1.0.18",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류", 
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.", 
@@ -95,7 +95,7 @@ export const translations = {
     toastErrorUserRecordsCacheFailed: "캐싱 실패",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "사용자 기록 캐싱 중 오류 발생.",
     toastInfoLocalApiKeyRefMissingTitle: "로컬 참조 API 키 확인 (정보)",
-    toastInfoLocalApiKeyRefMissingDesc: "고급 설정에 로컬 참조용 API 키가 저장되어 있지 않습니다. API 호출은 정상적으로 진행되지만, 전반적인 API 키 설정을 확인해보세요.",
+    toastInfoLocalApiKeyRefMissingDesc: "고급 설정에 로컬 참조용 API 키가 저장되어 있지 않습니다. 이 경우 서버의 기본 API 키를 사용합니다.",
     toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} 요청 시간이 초과되었습니다. (15초)`,
     // Result Page
     resultPageDefaultPlayerName: "플레이어",
@@ -163,9 +163,9 @@ export const translations = {
     advancedSettingsTitle: "高度な設定",
     advancedSettingsDesc: "アプリ設定と開発者ツールを管理します。",
     localApiKeyLabel: "ローカルAPIキー参照 (任意)",
-    localApiKeyPlaceholder: "個人用 Chunirec API トークン (参照用)",
+    localApiKeyPlaceholder: "個人用 Chunirec API トークン",
     saveApiKeyButton: "ローカル参照用APIキー保存/更新",
-    localApiKeyHelpUpdated: "ここにAPIキーを保存しておくと、必要に応じて参照できます。アプリのAPI呼び出しは安全なプロキシ経由で行われるため、ここに保存された値は実際のAPIリクエストには直接使用されません。空にして保存すると削除されます。",
+    localApiKeyHelpUpdated: "ここにAPIキーを保存すると、アプリの全てのAPI呼び出しでこのキーが優先的に使用されます。ここにキーを保存しないか空にしておくと、サーバーに設定されたデフォルトのAPIキーが使用されます。このキーはブラウザのローカルストレージにのみ保存されます。空にして保存すると削除されます。",
     adminNameLabel: "管理者名",
     adminNamePlaceholder: "管理者名を入力",
     adminPasswordLabel: "開発者認証",
@@ -188,7 +188,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.17",
+    appVersion: "ChuniCalc v1.0.18",
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
     toastErrorNicknameNeeded: "ユーザー名が必要です",
@@ -236,7 +236,7 @@ export const translations = {
     toastErrorUserRecordsCacheFailed: "キャッシング失敗",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "ユーザー記録のキャッシング中にエラーが発生しました。",
     toastInfoLocalApiKeyRefMissingTitle: "ローカル参照APIキー確認 (情報)",
-    toastInfoLocalApiKeyRefMissingDesc: "詳細設定にローカル参照用APIキーが保存されていません。API呼び出しは正常に進行しますが、全体的なAPIキー設定を確認してみてください。",
+    toastInfoLocalApiKeyRefMissingDesc: "詳細設定にローカル参照用APIキーが保存されていません。この場合、サーバーのデフォルトAPIキーを使用します。",
     toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} リクエストがタイムアウトしました。(15秒)`,
     // Result Page
     resultPageDefaultPlayerName: "プレイヤー",
@@ -333,4 +333,3 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
-

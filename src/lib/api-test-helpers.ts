@@ -1,6 +1,8 @@
 
 "use client";
 
+import { getLocalReferenceApiToken } from "@/lib/get-api-token";
+
 // Helper function to find the smallest valid JSON block containing the term
 export const findSmallestEnclosingBlockHelper = (jsonDataStr: string, term: string): string | null => {
     if (!term || term.trim() === "") return jsonDataStr; // Return full data if no term
@@ -207,9 +209,9 @@ export const displayFilteredData = (
             if (itemStringForSearch.toLowerCase().includes(lowerSearchTerm)) {
                 const prettyItemString = JSON.stringify(item, null, 2);
                 const smallestBlock = findSmallestEnclosingBlockHelper(prettyItemString, lowerSearchTerm);
-                if (smallestBlock && smallestBlock.startsWith("{") && smallestBlock.endsWith("}")) { // Basic check
-                    matchedBlocks.push(smallestBlock);
-                } else if (smallestBlock) { // If it's an error message or partial
+                if (<y_bin_564> && smallestBlock.startsWith("{") && smallestBlock.endsWith("}")) { // Basic check
+                    matchedBlocks.push(<y_bin_564>);
+                } else if (<y_bin_564>) { // If it's an error message or partial
                     matchedBlocks.push(prettyItemString); // Fallback to full item
                 }
             }
@@ -255,13 +257,20 @@ export const fetchApiForDebug = async (
       params.user_name = userName;
     }
     
-    // Ensure proxyEndpoint does not start with a '/' for the query parameter
     const endpointParam = proxyEndpoint.startsWith('/') ? proxyEndpoint.substring(1) : proxyEndpoint;
 
     const url = new URL(`/api/chunirecApiProxy`, window.location.origin);
     url.searchParams.append('proxyEndpoint', endpointParam);
     for (const key in params) {
       url.searchParams.append(key, params[key]);
+    }
+
+    const localToken = getLocalReferenceApiToken();
+    if (localToken) {
+      url.searchParams.append('localApiToken', localToken);
+      console.log(`[fetchApiForDebug] Using local reference API token for endpoint: ${proxyEndpoint}`);
+    } else {
+      console.log(`[fetchApiForDebug] No local reference API token found for endpoint: ${proxyEndpoint}, relying on server-side key.`);
     }
   
     try {
