@@ -227,12 +227,23 @@ export function calculateTheoreticalMaxRatingsForList(
   const maxedSongs: Song[] = candidatePool
     .map(s_item => {
       const songToConsider = ('currentScore' in s_item)
-        ? { ...s_item } as Song // It's already a Song, create a shallow copy
+        ? { ...s_item } as Song
         : mapApiSongToAppSong(s_item as ShowallApiSongEntry, 0, (s_item as ShowallApiSongEntry).const);
 
       if (!songToConsider.chartConstant) {
-        return { ...songToConsider, targetRating: 0, targetScore: 0 }; // Keep original currentScore/Rating
+        return { ...songToConsider, targetScore: songToConsider.currentScore, targetRating: songToConsider.currentRating };
       }
+
+      // If current score is already at or above the scoreToAssume, keep current values for target
+      if (songToConsider.currentScore >= scoreToAssume) {
+        return {
+          ...songToConsider,
+          targetScore: songToConsider.currentScore,
+          targetRating: songToConsider.currentRating,
+        };
+      }
+
+      // Otherwise, calculate based on scoreToAssume
       const maxRating = calculateChunithmSongRating(scoreToAssume, songToConsider.chartConstant);
       return {
         ...songToConsider,
@@ -240,8 +251,8 @@ export function calculateTheoreticalMaxRatingsForList(
         targetRating: parseFloat(maxRating.toFixed(4)),
       };
     })
-    .filter(song => song.chartConstant !== null) // Ensure only songs with chartConstant are processed
-    .sort((a, b) => b.targetRating - a.targetRating); // Sort by the new targetRating
+    .filter(song => song.chartConstant !== null)
+    .sort((a, b) => b.targetRating - a.targetRating);
 
   const topSongs = maxedSongs.slice(0, listLimit);
 
@@ -253,3 +264,4 @@ export function calculateTheoreticalMaxRatingsForList(
   const average = parseFloat((sum / topSongs.length).toFixed(4));
   return { list: topSongs, average, sum };
 }
+
