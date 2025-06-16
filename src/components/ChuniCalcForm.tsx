@@ -12,8 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
 import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
-import { useLanguage } from "@/contexts/LanguageContext"; 
-import { getTranslation } from "@/lib/translations"; 
+import { useLanguage } from "@/contexts/LanguageContext";
+import { getTranslation } from "@/lib/translations";
 
 type ProfileData = {
   player_name: string;
@@ -30,7 +30,7 @@ export default function ChuniCalcForm() {
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { locale } = useLanguage(); 
+  const { locale } = useLanguage();
 
   useEffect(() => {
     setIsClient(true);
@@ -38,14 +38,14 @@ export default function ChuniCalcForm() {
 
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
-    setCurrentRatingStr(""); 
-    setTargetRatingStr(""); 
+    setCurrentRatingStr("");
+    setTargetRatingStr("");
   };
 
   const handleFetchRating = async () => {
     if (!nickname) {
       toast({
-        title: getTranslation(locale, 'toastErrorNicknameNeeded'), 
+        title: getTranslation(locale, 'toastErrorNicknameNeeded'),
         description: getTranslation(locale, 'toastErrorNicknameNeededDesc'),
         variant: "destructive",
       });
@@ -59,13 +59,10 @@ export default function ChuniCalcForm() {
         description: getTranslation(locale, 'toastInfoLocalApiKeyRefMissingDesc'),
         variant: "default", // Informational, not destructive
       });
-      // Removed setIsFetchingRating(false) here to allow the loading state to be set if the call proceeds.
-      // If we decide to prevent the call, then setIsFetchingRating(false) should be added before return.
-      // For now, let's prevent the call as it's a strong hint of misconfiguration.
-      setIsFetchingRating(false);
-      return;
+      // Do NOT return here. Allow the API call to proceed.
+      // The proxy will handle the actual API key.
     }
-    
+
     setIsFetchingRating(true);
     setCurrentRatingStr("");
     setTargetRatingStr("");
@@ -87,7 +84,7 @@ export default function ChuniCalcForm() {
         setIsFetchingRating(false);
         return;
       }
-      if (response.status === 403 && data.error?.code === 40301) { 
+      if (response.status === 403 && data.error?.code === 40301) {
         toast({
           title: getTranslation(locale, 'toastErrorAccessDenied'),
           description: getTranslation(locale, 'toastErrorAccessDeniedDesc', nickname, data.error?.code),
@@ -97,12 +94,26 @@ export default function ChuniCalcForm() {
         return;
       }
       if (!response.ok) {
-        // The proxy should return a structured error, but handle cases where it might not.
-        const errorMessage = data.error?.message || response.statusText || getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, "Unknown error from proxy");
-        throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorMessage));
+        const errorMessageFromServer = data.error?.message || response.statusText || getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, "Unknown error from proxy");
+        // Check if the error message from server already indicates a server-side key issue.
+        if (errorMessageFromServer.includes("API key for Chunirec is missing")) {
+            toast({
+                title: getTranslation(locale, 'toastErrorApiKeyNotSet'), // Or a more specific "Server API Key Error"
+                description: errorMessageFromServer, // Display the detailed error from server
+                variant: "destructive",
+            });
+        } else {
+            toast({
+                title: getTranslation(locale, 'toastErrorApiRequestFailed'),
+                description: errorMessageFromServer,
+                variant: "destructive",
+            });
+        }
+        setIsFetchingRating(false);
+        return;
       }
-      
-      if (data.error) { 
+
+      if (data.error) {
          toast({
           title: getTranslation(locale, 'toastErrorApiLogicalError'),
           description: getTranslation(locale, 'toastErrorApiLogicalErrorDesc', data.error.message || "Unknown error from API."),
@@ -126,7 +137,7 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        const newTargetRating = Math.min(ratingValue + 0.01, 17.50); 
+        const newTargetRating = Math.min(ratingValue + 0.01, 17.50);
         setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
           title: getTranslation(locale, 'toastSuccessRatingFetched'),
@@ -188,7 +199,7 @@ export default function ChuniCalcForm() {
       return;
     }
 
-    if (current < 0 || current >= 17.50 || target < 0 || target > 17.50) { 
+    if (current < 0 || current >= 17.50 || target < 0 || target > 17.50) {
         toast({
           title: getTranslation(locale, 'toastErrorInvalidRatingRange'),
           description: getTranslation(locale, 'toastErrorInvalidRatingRangeDesc'),
@@ -271,12 +282,12 @@ export default function ChuniCalcForm() {
               type="number"
               step="0.01"
               min="0"
-              max="17.49" 
+              max="17.49"
               placeholder={getTranslation(locale, 'currentRatingPlaceholder')}
               value={currentRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setCurrentRatingStr(e.target.value)}
-              className="text-lg bg-muted/50" 
-              disabled 
+              className="text-lg bg-muted/50"
+              disabled
             />
           </div>
 
@@ -289,7 +300,7 @@ export default function ChuniCalcForm() {
               type="number"
               step="0.01"
               min="0"
-              max="17.50" 
+              max="17.50"
               placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
               value={targetRatingStr}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetRatingStr(e.target.value)}
