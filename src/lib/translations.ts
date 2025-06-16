@@ -313,10 +313,10 @@ export const translations = {
     toastErrorTargetRatingTooHighForm: (maxValue: string | number) => `目標レーティングは${maxValue}以下である必要があります。`,
     toastErrorRatingInvalidStep: "レーティングは0.01単位で入力してください。",
     // Tooltip translations
-    tooltipChunirecNicknameContent: "https://chunirec.net/ で登録したデータを読み込みます。該当サイトでのデータ事前登録が必要です。",
+    tooltipChunirecNicknameContent: "https://chunirec.net/ に登録されたデータを読み込みます。該当サイトでのデータの事前登録が必要です。",
     tooltipTargetRatingContent: "自分が到達したい目標レーティングを入力します。",
-    tooltipCalcStrategyB30Focus: "Best 30 集中: Best 30 曲のみで目標達成経路を計算します。",
-    tooltipCalcStrategyN20Focus: "New 20 集中: New 20 曲のみで目標達成経路を計算します。",
+    tooltipCalcStrategyB30Focus: "Best 30 集中: Best 30 の曲だけで目標達成経路を計算します。",
+    tooltipCalcStrategyN20Focus: "New 20 集中: New 20 の曲だけで目標達成経路を計算します。",
     tooltipCalcStrategyHybridFloor: "全体(低点優先): 全ての曲を対象に、現在レーティングが低い曲からスコアを上げる現実的な経路を計算します。",
     tooltipCalcStrategyHybridPeak: "全体(高点優先): 全ての曲を対象に、現在レーティングが高い曲をさらに成長させる効率的な経路を計算します。",
     tooltipResultTabsContent: "シミュレーション結果リストで、スコアを上げるのが難しい、または望まない曲をクリックして計算から除外できます。(最大スコア未満の曲のみ対象)",
@@ -370,3 +370,4 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+

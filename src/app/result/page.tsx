@@ -10,8 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import SongCard from "@/components/SongCard";
-import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass, X, Focus, HelpCircle } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { User, Gauge, Target as TargetIconLucide, ArrowLeft, Loader2, AlertTriangle, BarChart3, TrendingUp, TrendingDown, RefreshCw, Info, Settings2, Activity, Zap, Replace, Rocket, Telescope, CheckCircle2, XCircle, Brain, PlaySquare, ListChecks, FilterIcon, DatabaseZap, FileJson, Server, CalendarDays, BarChartHorizontalBig, FileSearch, Shuffle, Hourglass, X, Focus } from "lucide-react";
+// Removed HelpCircle from lucide-react imports as it's no longer used here for tooltips
 import { cn } from "@/lib/utils";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getTranslation } from '@/lib/translations';
@@ -85,7 +85,6 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        // No need to remove global music key here, SWR handles it.
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     } else {
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
@@ -118,30 +117,30 @@ function ResultContent() {
     if (errorLoadingSongs && (currentPhase === 'error_data_fetch' || currentPhase === 'error_simulation_logic')) {
         statusText = getTranslation(locale, 'resultPageErrorLoadingTitle') + `: ${errorLoadingSongs}`;
         bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
-    } else if (isLoadingSongs && (currentPhase === 'idle' || currentPhase === 'simulating')) { // Simplified loading check for general data/sim loading
+    } else if (isLoadingSongs && (currentPhase === 'idle' || currentPhase === 'simulating' || (calculationStrategy === 'none' && currentPhase !== 'error_data_fetch'))) { 
       statusText = getTranslation(locale, 'resultPageLoadingSongsTitle');
       IconComponent = Loader2; iconShouldSpin = true;
     } else if (preComputationResult && currentPhase === 'target_unreachable_info' && preComputationResult.messageKey) {
         statusText = getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4));
         bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
-    } else if (calculationStrategy === "none" && currentPhase !== 'error_data_fetch' && !isLoadingSongs) { // Show only if not loading and no error
+    } else if (calculationStrategy === "none" && currentPhase !== 'error_data_fetch' && !isLoadingSongs) { 
         statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
         bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
-    } else { // Simulation outcomes or idle after load
+    } else { 
         switch (currentPhase) {
-          case 'idle': // Idle after successful load, strategy not "none" but no simulation triggered or finished
+          case 'idle': 
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
                 statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr);
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
             } else if (calculationStrategy !== "none") {
                  statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (전체: " + overallRatingStr + ")";
-                 IconComponent = PlaySquare; // Ready to simulate or simulation just finished with this state
-            } else { // Should be caught by calculationStrategy === "none" above
+                 IconComponent = PlaySquare; 
+            } else { 
                  statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
                  bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
             }
             break;
-          case 'simulating': // This case should be covered by isLoadingSongs already
+          case 'simulating': 
              statusText = getTranslation(locale, 'resultPageLogSimulationStarting') + " (로직 수행 중)";
              IconComponent = Activity; iconShouldSpin = true;
              break;
@@ -157,23 +156,20 @@ function ResultContent() {
             textColor = (currentPhase === 'stuck_both_no_improvement' ? "text-orange-700 dark:text-orange-300" : "text-yellow-700 dark:text-yellow-300");
             IconComponent = (currentPhase === 'stuck_both_no_improvement' ? XCircle : Replace);
             break;
-          case 'target_unreachable_info': // Covered by preComputationResult check at the top
+          case 'target_unreachable_info': 
             statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined)
                 ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4))
                 : getTranslation(locale, 'resultPageErrorSimulationGeneric', "목표 도달 불가 (사전 계산)");
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
-          // error_data_fetch and error_simulation_logic are handled by the top-level errorLoadingSongs check
           default:
-            if (!isLoadingSongs && calculationStrategy !== "none") { // If not loading, no error, and strategy is selected, but phase is unknown
+            if (!isLoadingSongs && calculationStrategy !== "none") { 
               statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
               IconComponent = AlertTriangle;
             } else if (!isLoadingSongs && calculationStrategy === "none"){
-              // Default to prompt if idle, loaded, and no strategy.
               statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
               bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
             }
-            // If isLoadingSongs is true, it's handled by the spinner logic.
         }
     }
 
@@ -236,22 +232,8 @@ function ResultContent() {
 
         <Card className="mb-6 shadow-md">
           <CardHeader>
-            <div className="flex items-center">
-                <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <HelpCircle className="ml-2 h-4 w-4 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-sm" side="top">
-                            <p>{getTranslation(locale, 'tooltipCalcStrategyB30Focus')}</p>
-                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyN20Focus')}</p>
-                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyHybridFloor')}</p>
-                            <p className="mt-1">{getTranslation(locale, 'tooltipCalcStrategyHybridPeak')}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            </div>
+            {/* Tooltip for Calculation Strategy removed */}
+            <CardTitle className="font-headline text-xl">{getTranslation(locale, 'resultPageStrategyTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <RadioGroup
@@ -304,16 +286,7 @@ function ResultContent() {
               <TabsTrigger value="new20" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabNew20')}</TabsTrigger>
               <TabsTrigger value="combined" className="px-2 py-2 text-xs whitespace-nowrap sm:px-3 sm:py-1.5 sm:text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md">{getTranslation(locale, 'resultPageTabCombined')}</TabsTrigger>
             </TabsList>
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <HelpCircle className="ml-2 mt-1.5 h-5 w-5 text-muted-foreground cursor-help shrink-0" />
-                    </TooltipTrigger>
-                    <TooltipContent side="left" className="max-w-xs">
-                        <p>{getTranslation(locale, 'tooltipResultTabsContent')}</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
+            {/* Tooltip for Tabs group removed */}
           </div>
 
           {/* Main content display logic */}
@@ -323,7 +296,7 @@ function ResultContent() {
               <p className="text-xl text-muted-foreground">{getTranslation(locale, 'resultPageLoadingSongsTitle')}</p>
               <p className="text-sm text-muted-foreground">
                 { clientHasMounted && userNameForApi && userNameForApi !== getTranslation(locale, 'resultPageDefaultPlayerName')
-                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`)) // Simplified check
+                  ? ( (localStorage.getItem(`${LOCAL_STORAGE_PREFIX}profile_${userNameForApi}`) || localStorage.getItem(`${LOCAL_STORAGE_PREFIX}rating_data_${userNameForApi}`)) 
                     ? getTranslation(locale, 'resultPageLoadingCacheCheck')
                     : getTranslation(locale, 'resultPageLoadingApiFetch'))
                   : getTranslation(locale, 'resultPageLoadingDataStateCheck')
@@ -454,3 +427,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
