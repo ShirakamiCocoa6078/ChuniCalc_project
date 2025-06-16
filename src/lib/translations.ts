@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.32",
+    appVersion: "ChuniCalc v1.0.33",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.",
@@ -189,14 +189,14 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.32",
+    appVersion: "ChuniCalc v1.0.33",
     // Toast Messages JP
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
     toastErrorNicknameNeeded: "ユーザー名が必要です",
     toastErrorNicknameNeededDesc: "レーティングを読み込むにはユーザー名を入力してください。",
     toastErrorApiKeyMissing: "APIトークンがありません",
-    toastErrorApiKeyMissingDesc: "APIトークンが設定されていないため、レーティングを読み込むことができません。詳細設定または環境変数を確認してください。",
+    toastErrorApiKeyMissingDesc: "APIトークンが設定されていないため、レーティングを読み込むことができません。高度な設定または環境変数を確認してください。",
     toastErrorUserNotFound: "ユーザーが見つかりません",
     toastErrorUserNotFoundDesc: (nickname: string) => `ユーザー名「${nickname}」のユーザーが見つからないか、プレイデータがありません。`,
     toastErrorAccessDenied: "アクセス拒否",
@@ -238,12 +238,12 @@ export const translations = {
     toastErrorUserRecordsCacheFailed: "キャッシング失敗",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "ユーザー記録のキャッシング中にエラーが発生しました。",
     toastInfoLocalApiKeyRefMissingTitle: "ローカル参照APIキー確認 (情報)",
-    toastInfoLocalApiKeyRefMissingDesc: "詳細設定にローカル参照用APIキーが保存されていません。この場合、サーバーのデフォルトAPIキーを使用し、問題が発生した場合はサーバー管理者に問い合わせてください。(ローカルキーを直接入力した場合は、そのキーが優先使用されます。)",
+    toastInfoLocalApiKeyRefMissingDesc: "高度な設定にローカル参照用APIキーが保存されていません。この場合、サーバーのデフォルトAPIキーを使用し、問題が発生した場合はサーバー管理者に問い合わせてください。(ローカルキーを直接入力した場合は、そのキーが優先使用されます。)",
     toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} リクエストがタイムアウトしました。(15秒)`,
     // Result Page
     resultPageDefaultPlayerName: "プレイヤー",
     resultPageNotAvailable: "N/A",
-    resultPageErrorApiTokenNotSetResult: "APIトークンが設定されていません。曲情報を取得できません。詳細設定でローカルトークンを入力するか、環境変数を確認してください。",
+    resultPageErrorApiTokenNotSetResult: "APIトークンが設定されていません。曲情報を取得できません。高度な設定でローカルトークンを入力するか、環境変数を確認してください。",
     resultPageErrorNicknameNotProvidedResult: "ユーザーニックネームが提供されていないため、データを取得できません。",
     resultPageToastRefreshingDataTitle: "データ更新中",
     resultPageToastRefreshingDataDesc: "ユーザー関連キャッシュをクリアし、APIから最新データを取得します。",
@@ -285,8 +285,8 @@ export const translations = {
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
-    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在 New 20 曲を 유지할 경우, Best 30 曲만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
-    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在 Best 30 曲을 유지할 경우, New 20 曲만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
+    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在のNew 20曲を維持する場合、Best 30曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
+    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在のBest 30曲を維持する場合、New 20曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
   }
 };
 
@@ -335,3 +335,4 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+
