@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.13",
+    appVersion: "ChuniCalc v1.0.14",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류", 
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.", 
@@ -94,7 +94,8 @@ export const translations = {
     toastErrorUserRecordsCacheFailed: "캐싱 실패",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "사용자 기록 캐싱 중 오류 발생.",
     toastInfoLocalApiKeyRefMissingTitle: "로컬 참조 API 키 확인 (정보)",
-    toastInfoLocalApiKeyRefMissingDesc: "고급 설정에 로컬 참조용 API 키가 저장되어 있지 않습니다. 실제 API 호출은 서버 측 키를 사용하므로 이 설정이 필수는 아니지만, API 호출 실패 시 서버 환경 변수와 함께 이 설정을 확인해보세요.",
+    toastInfoLocalApiKeyRefMissingDesc: "고급 설정에 로컬 참조용 API 키가 저장되어 있지 않습니다. 실제 API 호출은 서버 측 키를 사용하므로 이 설정이 필수는 아니지만, API 호출 실패 시 서버 환경 변수와 함께 이 설정을 확인해보세요. API 호출은 정상적으로 진행됩니다.",
+    toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} 요청 시간이 초과되었습니다. (15초)`,
     // Result Page
     resultPageDefaultPlayerName: "플레이어",
     resultPageNotAvailable: "N/A",
@@ -186,7 +187,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.13",
+    appVersion: "ChuniCalc v1.0.14",
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
     toastErrorNicknameNeeded: "ユーザー名が必要です",
@@ -233,7 +234,8 @@ export const translations = {
     toastErrorUserRecordsCacheFailed: "キャッシング失敗",
     toastErrorUserRecordsCacheFailedDesc: (errorMsg?: string) => errorMsg ? errorMsg : "ユーザー記録のキャッシング中にエラーが発生しました。",
     toastInfoLocalApiKeyRefMissingTitle: "ローカル参照APIキー確認 (情報)",
-    toastInfoLocalApiKeyRefMissingDesc: "詳細設定にローカル参照用APIキーが保存されていません。実際のAPI呼び出しはサーバー側のキーを使用するため、この設定は必須ではありませんが、API呼び出し失敗時にはサーバー環境変数と合わせてこの設定を確認してみてください。",
+    toastInfoLocalApiKeyRefMissingDesc: "詳細設定にローカル参照用APIキーが保存されていません。実際のAPI呼び出しはサーバー側のキーを使用するため、この設定は必須ではありませんが、API呼び出し失敗時にはサーバー環境変数と合わせてこの設定を確認してみてください。API呼び出しは正常に進行します。",
+    toastErrorApiTimeout: (endpoint?: string) => `${endpoint || 'API'} リクエストがタイムアウトしました。(15秒)`,
     // Result Page
     resultPageDefaultPlayerName: "プレイヤー",
     resultPageNotAvailable: "N/A",

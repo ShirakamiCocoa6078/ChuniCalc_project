@@ -4,7 +4,6 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/hooks/use-toast";
-// import { getApiToken } from "@/lib/get-api-token"; // No longer used
 import { getCachedData, setCachedData, USER_DATA_CACHE_EXPIRY_MS, GLOBAL_MUSIC_DATA_KEY, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import NewSongsData from '@/data/NewSongs.json';
 import constOverridesInternal from '@/data/const-overrides.json';
@@ -28,6 +27,7 @@ import type {
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
 const MAX_SCORE_ASSUMED_FOR_POTENTIAL = 1009000;
+const API_CALL_TIMEOUT_MS = 15000; // 15 seconds
 
 
 const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
@@ -71,23 +71,49 @@ interface UseChuniResultDataProps {
   calculationStrategy: CalculationStrategy;
 }
 
-async function fetchApiViaProxy<T>(proxyEndpoint: string, params: Record<string, string> = {}): Promise<{data: T, headers: Headers, ok: boolean, status: number }> {
+async function fetchApiViaProxy<T>(
+  proxyEndpoint: string,
+  params: Record<string, string> = {}
+): Promise<{data: T, headers: Headers, ok: boolean, status: number }> {
   const url = new URL(`/api/chunirecApiProxy`, window.location.origin);
   url.searchParams.append('proxyEndpoint', proxyEndpoint);
   for (const key in params) {
     url.searchParams.append(key, params[key]);
   }
 
-  const response = await fetch(url.toString());
-  const responseData = await response.json().catch(err => {
-      console.warn(`[PROXY_FETCH] Failed to parse JSON from proxy for ${proxyEndpoint}: ${err.message}`);
-      if (!response.ok) {
-        return response.text().then(text => ({ error: `API Error (non-JSON): ${text}`}));
-      }
-      return { error: 'Failed to parse JSON response from proxy.' };
-    });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, API_CALL_TIMEOUT_MS);
 
-  return { data: responseData, headers: response.headers, ok: response.ok, status: response.status };
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), { signal: controller.signal });
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.warn(`[PROXY_FETCH_TIMEOUT] API call to ${proxyEndpoint} timed out after ${API_CALL_TIMEOUT_MS / 1000}s.`);
+      throw new Error(`API_TIMEOUT: Request to ${proxyEndpoint} timed out.`);
+    }
+    console.error(`[PROXY_FETCH_ERROR] Network/fetch error for ${proxyEndpoint}:`, error);
+    throw error; // Re-throw other network errors
+  }
+
+  clearTimeout(timeoutId); // Clear timeout if fetch completes successfully
+
+  const responseData = await response.json().catch(jsonErr => {
+      console.warn(`[PROXY_FETCH_JSON_PARSE_ERROR] Failed to parse JSON from proxy for ${proxyEndpoint} (Status: ${response.status}): ${jsonErr.message}`);
+      if (!response.ok) {
+        return response.text().then(text => {
+            console.warn(`[PROXY_FETCH_NON_JSON_TEXT] Text from non-OK response for ${proxyEndpoint}: ${text.substring(0,200)}...`);
+            return { error: { message: `API Error (status ${response.status}, non-JSON response): ${text.substring(0,100)}...`, code: response.status }};
+        });
+      }
+      console.error(`[PROXY_FETCH_JSON_PARSE_UNEXPECTED] Unexpected JSON parse error for OK response (Status: ${response.status}) for ${proxyEndpoint}.`);
+      return { error: { message: 'Failed to parse normally expected JSON response from proxy, even though status was OK.', code: response.status } };
+  });
+
+  return { data: responseData as T, headers: response.headers, ok: response.ok, status: response.status };
 }
 
 
@@ -120,7 +146,7 @@ export function useChuniResultData({
 
   const [isLoadingInitialData, setIsLoadingInitialData] = useState(true);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null); // Also used for pre-sim messages
+  const [errorLoadingData, setErrorLoadingData] = useState<string | null>(null); 
   const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<SimulationPhase>('idle');
   
@@ -182,13 +208,17 @@ export function useChuniResultData({
               tempFlattenedGlobalMusicRecords.push(...flattenGlobalMusicEntry(rawEntry));
           });
           console.log(`[DATA_FETCH_HOOK] Loaded ${tempFlattenedGlobalMusicRecords.length} flattened global music entries from cache.`);
+      } else {
+          console.log("[DATA_FETCH_HOOK] Global music cache miss or empty.");
       }
 
       if (userShowallCache) {
          tempUserShowallRecords = (userShowallCache.records || []).filter((e: any): e is ShowallApiSongEntry => e && typeof e.id === 'string' && typeof e.diff === 'string');
          console.log(`[DATA_FETCH_HOOK] Loaded ${tempUserShowallRecords.length} user play history entries from cache.`);
+      } else {
+          console.log("[DATA_FETCH_HOOK] User showall cache miss or empty.");
       }
-      setUserPlayHistory(tempUserShowallRecords);
+      setUserPlayHistory(tempUserShowallRecords); // Set even if empty from cache, API will overwrite if fetched
 
       if (!profileData || !ratingData || !globalMusicCacheRaw || tempFlattenedGlobalMusicRecords.length === 0 || !userShowallCache || tempUserShowallRecords.length === 0) {
         const apiRequestsMap = new Map<string, Promise<any>>();
@@ -212,7 +242,7 @@ export function useChuniResultData({
                 if (!criticalError) criticalError = errorMsg; 
                 console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue; 
               }
-              if (res.data.error && res.type !== 'profile') {
+              if (res.data.error && res.type !== 'profile') { // Profile errors (like 40301) have specific handling
                  const errorMsg = `${res.type} data API returned error: ${res.data.error.message || 'Unknown error structure'}`;
                  if (!criticalError) criticalError = errorMsg;
                  console.error(`[DATA_FETCH_API_ERROR] ${errorMsg}`); continue;
@@ -221,9 +251,13 @@ export function useChuniResultData({
               if (res.type === 'profile') {
                 if (res.status === 403 && res.data?.error?.code === 40301) { 
                     criticalError = getTranslation(locale, 'toastErrorAccessDeniedDesc', userNameForApi, res.data.error.code);
-                } else if (!profileData && res.ok && !res.data.error) {
-                    setApiPlayerName(res.data.player_name || userNameForApi); setCachedData<ProfileData>(profileKey, res.data); profileData = res.data;
-                } else if (!res.ok) {
+                } else if (res.ok && !res.data.error) { // Check !profileData here too
+                    if(!profileData) { // Only update if it wasn't already set from cache
+                        setApiPlayerName(res.data.player_name || userNameForApi); 
+                        setCachedData<ProfileData>(profileKey, res.data); 
+                        profileData = res.data;
+                    }
+                } else if (!res.ok) { // Catch other non-ok profile responses
                     criticalError = `${res.type} data API failed (status: ${res.status}): ${res.data?.error?.message || 'Unknown API error from proxy'}`;
                 }
               }
@@ -231,7 +265,7 @@ export function useChuniResultData({
               if (res.type === 'globalMusic' && (!globalMusicCacheRaw || tempFlattenedGlobalMusicRecords.length === 0) && res.ok && !res.data.error) {
                 const apiGlobalMusicData = Array.isArray(res.data) ? res.data : (res.data?.records || []);
                 fetchedGlobalMusicApiForCache = apiGlobalMusicData;
-                tempFlattenedGlobalMusicRecords = [];
+                tempFlattenedGlobalMusicRecords = []; // Reset before filling
                 apiGlobalMusicData.forEach(rawEntry => { tempFlattenedGlobalMusicRecords.push(...flattenGlobalMusicEntry(rawEntry)); });
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempFlattenedGlobalMusicRecords.length} flattened global music entries from API.`);
               }
@@ -239,7 +273,7 @@ export function useChuniResultData({
                 const records = res.data?.records || [];
                 fetchedUserShowallForCache = { records };
                 tempUserShowallRecords = records.filter((e: any): e is ShowallApiSongEntry => e && typeof e.id === 'string' && typeof e.diff === 'string');
-                setUserPlayHistory(tempUserShowallRecords);
+                // setUserPlayHistory is called later with the final tempUserShowallRecords
                 console.log(`[DATA_FETCH_HOOK] Fetched and set ${tempUserShowallRecords.length} user play history entries from API.`);
               }
             }
@@ -251,6 +285,7 @@ export function useChuniResultData({
                 console.error(`[DATA_FETCH_HOOK] Critical error during API fetch: ${criticalError}. Bailing out of data processing.`);
                 return; 
             }
+            setUserPlayHistory(tempUserShowallRecords); // Set final user history after potential API fetch
 
             if (fetchedGlobalMusicApiForCache) setCachedData<any[]>(globalMusicKey, fetchedGlobalMusicApiForCache, GLOBAL_MUSIC_CACHE_EXPIRY_MS);
             if (fetchedUserShowallForCache) setCachedData<UserShowallApiResponse>(userShowallKey, fetchedUserShowallForCache);
@@ -260,8 +295,19 @@ export function useChuniResultData({
             if (responses.some(res => res.ok)) toast({ title: getTranslation(locale, 'resultPageToastApiLoadSuccessTitle'), description: getTranslation(locale, 'resultPageToastApiLoadSuccessDesc', newCacheTimeStr) });
 
           } catch (error) {
-            let detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', "Unknown error");
-            if (error instanceof Error) detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error.message);
+            let detailedErrorMessage: string;
+            if (error instanceof Error) {
+              if (error.message.startsWith('API_TIMEOUT:')) {
+                const endpointMatch = error.message.match(/Request to (.*) timed out/);
+                const endpointName = endpointMatch ? endpointMatch[1].split('.')[0] : 'API'; // Extract main part like 'records/profile'
+                detailedErrorMessage = getTranslation(locale, 'toastErrorApiTimeout', endpointName);
+              } else {
+                detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error.message);
+              }
+            } else {
+              detailedErrorMessage = getTranslation(locale, 'toastErrorRatingFetchFailedDesc', "Unknown error");
+            }
+            
             setErrorLoadingData(detailedErrorMessage);
             if (!apiPlayerName && userNameForApi !== defaultPlayerName) setApiPlayerName(userNameForApi);
             setIsLoadingInitialData(false);
