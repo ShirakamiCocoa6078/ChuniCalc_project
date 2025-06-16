@@ -139,11 +139,16 @@ export const translations = {
     resultPageHeaderTarget: "목표:",
     resultPageNoCombinedData: "Best 30 및 New 20 곡 데이터가 모두 없습니다.",
     resultPageErrorInvalidRatingsInput: "무효한 레이팅 입력값입니다. 현재 또는 목표 레이팅을 확인해주세요.",
-    resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.",
+    resultPageLogNoStrategy: "계산 전략이 선택되지 않았습니다. 현재 곡 데이터를 표시합니다.", // Kept for other potential uses, but specific prompt is now separate
     resultPageLogSimulationStarting: "시뮬레이션을 준비 중입니다...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `시뮬레이션 중 오류 발생: ${errorMsg}`,
     reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 집중 모드] 현재 New 20 곡을 유지할 경우, Best 30 곡만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
     reachableRatingN20OnlyMessage: (rating: string) => `[New 20 집중 모드] 현재 Best 30 곡을 유지할 경우, New 20 곡만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
+    resultPagePromptSelectStrategySuffix: "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.",
+    resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `목표 달성! 최종 전체 레이팅: ${overall} (B30: ${b30}, N20: ${n20})`,
+    resultPageStuckBothBaseFmt: (overall: string) => `B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: ${overall}`,
+    resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30 평균: ${b30Avg}${n20Avg ? `, N20 평균: ${n20Avg}` : ''})`,
+
   },
   JP: {
     homePageTitle: "ChuniCalc",
@@ -287,6 +292,10 @@ export const translations = {
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
     reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在のNew 20曲を維持する場合、Best 30曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
     reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在のBest 30曲を維持する場合、New 20曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
+    resultPagePromptSelectStrategySuffix: "で計算基準を選択してシミュレーションを開始してください。",
+    resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `目標達成！最終総合レーティング: ${overall} (B30: ${b30}, N20: ${n20})`,
+    resultPageStuckBothBaseFmt: (overall: string) => `B30およびN20のどちらもこれ以上改善できません。最終総合: ${overall}`,
+    resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30平均: ${b30Avg}${n20Avg ? `, N20平均: ${n20Avg}` : ''})`,
   }
 };
 

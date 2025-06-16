@@ -19,7 +19,7 @@ import { LanguageToggle } from "@/components/LanguageToggle";
 import { useChuniResultData } from "@/hooks/useChuniResultData";
 import type { CalculationStrategy } from "@/types/result-page";
 import { getLocalReferenceApiToken } from '@/lib/get-api-token'; 
-import { LOCAL_STORAGE_PREFIX } from '@/lib/cache'; // Removed GLOBAL_MUSIC_DATA_KEY
+import { LOCAL_STORAGE_PREFIX } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -84,13 +84,9 @@ function ResultContent() {
         localStorage.removeItem(profileKey);
         localStorage.removeItem(ratingDataKey);
         localStorage.removeItem(userShowallKey);
-        // GLOBAL_MUSIC_DATA_KEY removal is no longer needed here as SWR handles global music cache.
-        // The refreshNonce will trigger SWR revalidation for all data, including global music, via useChuniResultData.
-
-        // console.log(`[SWR_REVALIDATE_TRIGGER] User-specific (${userNameForApi}) localStorage cleared. SWR will revalidate all data.`);
+        
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastRefreshingDataDesc')});
     } else {
-        // console.log(`[SWR_REVALIDATE_TRIGGER] Global music data revalidation will be triggered via SWR in useChuniResultData (no specific user or default user).`);
         toast({ title: getTranslation(locale, 'resultPageToastRefreshingDataTitle'), description: getTranslation(locale, 'resultPageToastSWRRefreshDesc')});
     }
     setCalculationStrategy("none");
@@ -109,13 +105,13 @@ function ResultContent() {
 
     const b30AvgStr = (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating))
         ? simulatedAverageB30Rating.toFixed(4)
-        : 'N/A';
+        : getTranslation(locale, 'resultPageNotAvailable');
     const n20AvgStr = (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating))
         ? simulatedAverageNew20Rating.toFixed(4)
-        : 'N/A';
+        : getTranslation(locale, 'resultPageNotAvailable');
     const overallRatingStr = (typeof finalOverallSimulatedRating === 'number' && !isNaN(finalOverallSimulatedRating))
         ? finalOverallSimulatedRating.toFixed(4)
-        : 'N/A';
+        : getTranslation(locale, 'resultPageNotAvailable');
 
 
     if (errorLoadingSongs) {
@@ -128,55 +124,55 @@ function ResultContent() {
         statusText = getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4));
         bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
     } else if (calculationStrategy === "none") {
-        statusText = getTranslation(locale, 'resultPageStrategyTitle') + "에서 계산 기준을 선택하여 시뮬레이션을 시작하세요.";
+        statusText = getTranslation(locale, 'resultPageStrategyTitle') + getTranslation(locale, 'resultPagePromptSelectStrategySuffix');
         bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Brain;
     } else {
         switch (currentPhase) {
           case 'idle':
             if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
-                statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다.";
+                statusText = "현재 레이팅이 목표 레이팅과 같거나 높습니다. 시뮬레이션이 필요하지 않습니다."; // TODO: Translate if needed
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
             } else {
-                 statusText = "시뮬레이션 대기 중 또는 완료. 전체 레이팅: " + overallRatingStr;
+                 statusText = "시뮬레이션 대기 중 또는 완료. 전체 레이팅: " + overallRatingStr;  // TODO: Translate if needed
                  IconComponent = PlaySquare;
             }
             break;
           case 'simulating':
-             statusText = "시뮬레이션 실행 중... (로직 수행 중)";
+             statusText = "시뮬레이션 실행 중... (로직 수행 중)"; // TODO: Translate if needed
              IconComponent = Activity; iconShouldSpin = true;
              break;
           case 'target_reached':
-            statusText = `목표 달성! 최종 전체 레이팅: ${overallRatingStr} (B30: ${b30AvgStr}, N20: ${n20AvgStr})`;
+            statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr);
             bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = TargetIconLucide;
             break;
           case 'stuck_b30_no_improvement':
-            statusText = "B30 개선 불가. N20 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr;
+            statusText = "B30 개선 불가. N20 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr; // TODO: Translate if needed
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'stuck_n20_no_improvement':
-            statusText = "N20 개선 불가. B30 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr;
+            statusText = "N20 개선 불가. B30 시뮬레이션으로 전환 또는 완료. 현재 전체: " + overallRatingStr; // TODO: Translate if needed
             bgColor = "bg-yellow-100 dark:bg-yellow-900"; textColor = "text-yellow-700 dark:text-yellow-300"; IconComponent = Replace;
             break;
           case 'stuck_both_no_improvement':
-            statusText = "B30 및 N20 모두에서 더 이상 개선할 수 없습니다. 최종 전체: " + overallRatingStr;
+            statusText = getTranslation(locale, 'resultPageStuckBothBaseFmt', overallRatingStr);
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
           case 'target_unreachable_info': 
             statusText = (preComputationResult?.messageKey && preComputationResult?.reachableRating !== undefined) 
                 ? getTranslation(locale, preComputationResult.messageKey as any, preComputationResult.reachableRating.toFixed(4)) 
-                : "사전 계산 결과, 목표 레이팅 도달이 불가능합니다.";
+                : "사전 계산 결과, 목표 레이팅 도달이 불가능합니다."; // TODO: Translate if needed
             bgColor = "bg-orange-100 dark:bg-orange-900"; textColor = "text-orange-700 dark:text-orange-300"; IconComponent = XCircle;
             break;
           case 'error_data_fetch':
-            statusText = `데이터 로딩 오류: ${errorLoadingSongs || '알 수 없는 오류'}`;
+            statusText = `${getTranslation(locale, 'resultPageErrorLoadingTitle')}: ${errorLoadingSongs || getTranslation(locale, 'resultPageErrorUnknown')}`; // Added resultPageErrorUnknown
             bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
           case 'error_simulation_logic':
-            statusText = `시뮬레이션 로직 오류: ${simulationLog.find(log => log.toLowerCase().includes("error")) || '알 수 없는 시뮬레이션 오류'}`;
+            statusText = `${getTranslation(locale, 'resultPageErrorSimulationGeneric', '')}: ${simulationLog.find(log => log.toLowerCase().includes("error")) || getTranslation(locale, 'resultPageErrorUnknown')}`; // Added resultPageErrorUnknown
             bgColor = "bg-red-100 dark:bg-red-900"; textColor = "text-red-700 dark:text-red-300"; IconComponent = AlertTriangle;
             break;
           default:
-            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`;
+            statusText = `알 수 없는 페이즈: ${currentPhase || 'N/A'}. 전체: ${overallRatingStr}`; // TODO: Translate if needed
             IconComponent = AlertTriangle;
         }
     }
@@ -185,13 +181,10 @@ function ResultContent() {
         if (currentPhase !== 'idle' && currentPhase !== 'target_reached' && currentPhase !== 'target_unreachable_info') {
             let detailString = "";
             if (typeof simulatedAverageB30Rating === 'number' && !isNaN(simulatedAverageB30Rating)) {
-                detailString += ` (B30 평균: ${simulatedAverageB30Rating.toFixed(4)}`;
-                if (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating) && new20SongsData.length > 0) {
-                    detailString += `, N20 평균: ${simulatedAverageNew20Rating.toFixed(4)}`;
-                }
-                detailString += ")";
+                const n20AvgForDetail = (typeof simulatedAverageNew20Rating === 'number' && !isNaN(simulatedAverageNew20Rating) && new20SongsData.length > 0) ? simulatedAverageNew20Rating.toFixed(4) : undefined;
+                detailString = getTranslation(locale, 'resultPageDetailRatingsAvgFmt', simulatedAverageB30Rating.toFixed(4), n20AvgForDetail);
             }
-             if (statusText.includes("...")) {
+             if (statusText.includes("...")) { // Placeholder for detail string
                 statusText = statusText.replace("...", detailString + "...");
              } else if (currentPhase !== 'target_reached') {
                 statusText += detailString;
@@ -449,3 +442,4 @@ export default function ResultPage() {
     </Suspense>
   );
 }
+
