@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { setCachedData, LOCAL_STORAGE_PREFIX, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { setCachedData, LOCAL_STORAGE_PREFIX } from "@/lib/cache";
 import { getLocalReferenceApiToken } from "@/lib/get-api-token";
 import { KeyRound, Trash2, CloudDownload, UserCircle, DatabaseZap, Settings, FlaskConical, ShieldAlert, Brain, Loader2, LogIn } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getTranslation } from "@/lib/translations";
+
+const MANUAL_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for manual caching actions
 
 export default function AdvancedSettings() {
   const [localApiTokenInput, setLocalApiTokenInput] = useState("");
@@ -135,7 +137,8 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
       const data = await response.json();
-      setCachedData<any[]>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, Array.isArray(data) ? data : (data?.records || []), GLOBAL_MUSIC_CACHE_EXPIRY_MS);
+      // Use MANUAL_CACHE_EXPIRY_MS for manual caching action
+      setCachedData<any[]>(`${LOCAL_STORAGE_PREFIX}globalMusicData`, Array.isArray(data) ? data : (data?.records || []), MANUAL_CACHE_EXPIRY_MS);
       toast({
           title: getTranslation(locale, 'toastSuccessGlobalMusicCached'),
           description: getTranslation(locale, 'toastSuccessGlobalMusicCachedDesc')
@@ -173,7 +176,8 @@ export default function AdvancedSettings() {
         throw new Error(getTranslation(locale, 'toastErrorApiRequestFailedDesc', response.status, errorData.error?.message || response.statusText));
       }
       const data = await response.json();
-      setCachedData<any>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data);
+      // For user records, we can use the same manual cache expiry or a different one if needed
+      setCachedData<any>(`${LOCAL_STORAGE_PREFIX}showall_${cacheNickname.trim()}`, data, MANUAL_CACHE_EXPIRY_MS);
       toast({
           title: getTranslation(locale, 'toastSuccessUserRecordsCached'),
           description: getTranslation(locale, 'toastSuccessUserRecordsCachedDesc', cacheNickname.trim())
@@ -357,3 +361,6 @@ export default function AdvancedSettings() {
     </Card>
   );
 }
+
+
+    

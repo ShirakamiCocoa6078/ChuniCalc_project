@@ -46,7 +46,7 @@ export const translations = {
     clearLocalDataHelp: "앱이 로컬 저장소에 저장한 모든 캐시 데이터 (UI 설정, API 응답 등)를 삭제합니다. 참조용 API 키는 삭제되지 않습니다.",
     contactInfoLabel: "문의 및 정보",
     contactInfoBugReport: "버그 리포트 및 기타 문의:",
-    appVersion: "ChuniCalc v1.0.28",
+    appVersion: "ChuniCalc v1.0.29",
     // Toast Messages KR
     toastErrorApiKeyNotSet: "API 키 오류",
     toastErrorApiKeyNotSetDesc: "Chunirec API 토큰이 서버에 설정되지 않았거나 유효하지 않습니다. 호스팅 환경 설정을 확인해주세요.",
@@ -188,7 +188,7 @@ export const translations = {
     clearLocalDataHelp: "アプリがローカルストレージに保存した全てのキャッシュデータ（UI設定、API応答など）を削除します。参照用APIキーは削除されません。",
     contactInfoLabel: "お問い合わせと情報",
     contactInfoBugReport: "バグレポートおよびその他のお問い合わせ:",
-    appVersion: "ChuniCalc v1.0.28",
+    appVersion: "ChuniCalc v1.0.29",
     // Toast Messages JP
     toastErrorApiKeyNotSet: "APIキーエラー",
     toastErrorApiKeyNotSetDesc: "Chunirec API トークンがサーバーに設定されていないか、無効です。ホスティング環境の設定を確認してください。",
@@ -283,8 +283,8 @@ export const translations = {
     resultPageLogNoStrategy: "計算戦略が選択されていません。現在の曲データを表示します。",
     resultPageLogSimulationStarting: "シミュレーションを準備中です...",
     resultPageErrorSimulationGeneric: (errorMsg: string) => `シミュレーション中にエラー発生: ${errorMsg}`,
-    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在 New 20 曲を維持する場合、Best 30 曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
-    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在 Best 30 曲を維持する場合、New 20 曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
+    reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在 New 20 曲を 유지할 경우, Best 30 曲만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
+    reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在 Best 30 曲을 유지할 경우, New 20 曲만으로 도달 가능한 최대 레이팅은 약 ${rating} 입니다. 목표 레이팅이 이보다 높으면 이 전략으로는 달성할 수 없습니다.`,
   }
 };
 
@@ -333,3 +333,6 @@ export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
   [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
+
+
+    
