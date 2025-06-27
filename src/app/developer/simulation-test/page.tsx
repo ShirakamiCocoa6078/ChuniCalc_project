@@ -11,8 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, Play, Brain } from "lucide-react";
-import { getLocalReferenceApiToken } from "@/lib/get-api-token"; // Changed import
-import { getCachedData, GLOBAL_MUSIC_DATA_KEY, GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
+import { getLocalReferenceApiToken } from "@/lib/get-api-token";
+import { getCachedData, LOCAL_STORAGE_PREFIX, SIMULATION_CACHE_EXPIRY_MS as GLOBAL_MUSIC_CACHE_EXPIRY_MS } from "@/lib/cache";
 import { mapApiSongToAppSong, sortSongsByRatingDesc } from "@/lib/rating-utils";
 import { runFullSimulation } from "@/lib/simulation-logic";
 import type {
@@ -24,14 +24,18 @@ import type {
   RatingApiResponse,
   ShowallApiSongEntry,
   RatingApiSongEntry,
-  UserShowallApiResponse
+  UserShowallApiResponse,
+  ConstOverride,
 } from "@/types/result-page";
 import NewSongsData from '@/data/NewSongs.json';
+import constOverridesData from '@/data/const-overrides.json';
 import SongCard from "@/components/SongCard"; 
 import { cn } from "@/lib/utils"; 
 
 const BEST_COUNT = 30;
 const NEW_20_COUNT = 20;
+const GLOBAL_MUSIC_DATA_KEY = `${LOCAL_STORAGE_PREFIX}globalMusicData`;
+
 
 const flattenGlobalMusicEntry = (rawEntry: any): ShowallApiSongEntry[] => {
     const flattenedEntries: ShowallApiSongEntry[] = [];
@@ -97,8 +101,7 @@ export default function SimulationTestPage() {
       return;
     }
     
-    const localRefToken = getLocalReferenceApiToken(); // Changed function name
-    // This token isn't strictly needed here as proxy handles the real key, but kept for consistency if a local check is desired.
+    const localRefToken = getLocalReferenceApiToken();
     if (!localRefToken) {
         appendLog("Warning: Local reference API token not found in Advanced Settings. API calls will rely solely on server-side key.");
     }
@@ -162,21 +165,21 @@ export default function SimulationTestPage() {
       const isScoreLimitReleased = (targetRatingNum - currentRatingNum) * 50 > 10; 
       const phaseTransitionPoint = currentRatingNum + (targetRatingNum - currentRatingNum) * 0.95; 
 
-      let simulationScope: SimulationInput['simulationScope'] = 'hybrid'; // Changed from combined to hybrid
-      let improvementMethod: SimulationInput['improvementMethod'] = 'floor';
+      let simulationMode: SimulationInput['simulationMode'] = 'hybrid';
+      let algorithmPreference: SimulationInput['algorithmPreference'] = 'floor';
 
-      if (uiStrategy === 'b30_focus') { // Changed from b30_only
-        simulationScope = 'b30_only';
-        improvementMethod = 'floor';
-      } else if (uiStrategy === 'n20_focus') { // Changed from n20_only
-        simulationScope = 'n20_only';
-        improvementMethod = 'floor';
+      if (uiStrategy === 'b30_focus') {
+        simulationMode = 'b30_only';
+        algorithmPreference = 'floor';
+      } else if (uiStrategy === 'n20_focus') {
+        simulationMode = 'n20_only';
+        algorithmPreference = 'floor';
       } else if (uiStrategy === 'hybrid_floor') {
-        simulationScope = 'hybrid'; // Changed from combined
-        improvementMethod = 'floor';
+        simulationMode = 'hybrid';
+        algorithmPreference = 'floor';
       } else if (uiStrategy === 'hybrid_peak') {
-        simulationScope = 'hybrid'; // Changed from combined
-        improvementMethod = 'peak';
+        simulationMode = 'hybrid';
+        algorithmPreference = 'peak';
       }
       
       const simulationInput: SimulationInput = {
@@ -187,10 +190,13 @@ export default function SimulationTestPage() {
         userPlayHistory: userPlayHistoryRecords,
         currentRating: currentRatingNum,
         targetRating: targetRatingNum,
-        simulationScope, // Renamed from simulationMode
-        improvementMethod, // Renamed from algorithmPreference
+        simulationMode,
+        algorithmPreference,
         isScoreLimitReleased,
         phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
+        excludedSongKeys: new Set<string>(),
+        newSongsDataTitlesVerse: NewSongsData.titles.verse,
+        constOverrides: constOverridesData as ConstOverride[],
       };
 
       appendLog("Running simulation function...");
