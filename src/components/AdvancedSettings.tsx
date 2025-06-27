@@ -20,6 +20,7 @@ const MANUAL_CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days for manual cac
 export default function AdvancedSettings() {
   const [localApiTokenInput, setLocalApiTokenInput] = useState("");
   const [cacheNickname, setCacheNickname] = useState("");
+  const [deleteNickname, setDeleteNickname] = useState("");
   const [isCachingGlobal, setIsCachingGlobal] = useState(false);
   const [isCachingUser, setIsCachingUser] = useState(false);
   const [clientHasMounted, setClientHasMounted] = useState(false);
@@ -54,7 +55,7 @@ export default function AdvancedSettings() {
         localStorage.setItem('chuniCalcData_userApiToken', localApiTokenInput.trim());
         toast({
             title: getTranslation(locale, 'toastSuccessLocalApiKeySaved'),
-            description: getTranslation(locale, 'toastSuccessLocalApiKeyActuallySavedDesc') 
+            description: getTranslation(locale, 'toastSuccessLocalApiKeySavedDesc') 
         });
       }
     }
@@ -111,6 +112,50 @@ export default function AdvancedSettings() {
       });
     }
   };
+
+  const handleDeleteUserData = () => {
+    if (!deleteNickname.trim()) {
+      toast({
+        title: getTranslation(locale, 'toastErrorNicknameToDeleteNeeded'),
+        description: getTranslation(locale, 'toastErrorNicknameToDeleteNeededDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const trimmedNickname = deleteNickname.trim();
+    if (typeof window !== 'undefined') {
+      let clearedCount = 0;
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        // Look for keys like chuniCalcData_profile_nickname, chuniCalcData_showall_nickname etc.
+        if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && key.includes(`_${trimmedNickname}`)) {
+          keysToRemove.push(key);
+        }
+      }
+
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+        clearedCount++;
+      });
+
+      if (clearedCount > 0) {
+        toast({
+          title: getTranslation(locale, 'toastSuccessUserDataDeleted'),
+          description: getTranslation(locale, 'toastSuccessUserDataDeletedDesc', trimmedNickname, clearedCount),
+        });
+      } else {
+        toast({
+          title: getTranslation(locale, 'toastInfoNoUserDataFound'),
+          description: getTranslation(locale, 'toastInfoNoUserDataFoundDesc', trimmedNickname),
+          variant: 'default',
+        });
+      }
+      setDeleteNickname("");
+    }
+  };
+
 
   const fetchWithLocalToken = async (baseUrl: string) => {
     const localToken = getLocalReferenceApiToken();
@@ -343,6 +388,27 @@ export default function AdvancedSettings() {
                           <Button onClick={handleCacheUserRecords} variant="outline" className="w-full mt-1" disabled={!cacheNickname.trim() || isCachingUser}>
                               {isCachingUser && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               <UserCircle className="mr-2 h-4 w-4"/> {getTranslation(locale, 'cacheUserRecordsButton')}
+                          </Button>
+                      </div>
+                  </div>
+
+                  <hr/>
+
+                  <div className="space-y-3">
+                      <h3 className="font-medium flex items-center"><UserCircle className="mr-2 h-5 w-5 text-destructive" />{getTranslation(locale, 'deleteSpecificUserDataLabel')}</h3>
+                      <p className="text-xs text-muted-foreground">{getTranslation(locale, 'deleteSpecificUserDataDesc')}</p>
+                      <div>
+                          <Label htmlFor="deleteNicknameDev" className="text-sm">{getTranslation(locale, 'deleteUserNicknameLabel')}</Label>
+                           <Input
+                              id="deleteNicknameDev"
+                              type="text"
+                              placeholder={getTranslation(locale, 'deleteUserNicknamePlaceholder')}
+                              value={deleteNickname}
+                              onChange={(e) => setDeleteNickname(e.target.value)}
+                              className="mt-1"
+                          />
+                          <Button onClick={handleDeleteUserData} variant="destructive" className="w-full mt-1" disabled={!deleteNickname.trim()}>
+                              <Trash2 className="mr-2 h-4 w-4"/> {getTranslation(locale, 'deleteUserDataButton')}
                           </Button>
                       </div>
                   </div>
