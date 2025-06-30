@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageToggle } from "@/components/LanguageToggle"; // Added
 import { useLanguage } from "@/contexts/LanguageContext"; // Added
 import { getTranslation } from "@/lib/translations"; // Added
+import { Analytics } from "@vercel/analytics/next"
 
 export default function Home() {
   const { locale } = useLanguage(); // Added
@@ -24,6 +25,7 @@ export default function Home() {
       </div>
       <ChuniCalcForm />
       <AdvancedSettings />
+      <Analytics/>
     </main>
   );
 }
