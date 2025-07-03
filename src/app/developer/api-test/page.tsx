@@ -339,9 +339,9 @@ export default function ApiTestPage() {
       step4Output: initialNew20DebugState.step4Output,
     }));
     try {
-        const titlesFromVerse = NewSongsData.titles?.verse || [];
-        const processedTitles = Array.isArray(titlesFromVerse) ? titlesFromVerse.map(t => t.trim().toLowerCase()) : [];
-        const titleLoadSummary = `1-1단계: NewSongs.json ('verse')에서 ${processedTitles.length}개의 제목 로드 완료.\n샘플: ${processedTitles.slice(0,3).join(', ')}`;
+        const titlesFromXverse = NewSongsData.titles?.xverse || [];
+        const processedTitles = Array.isArray(titlesFromXverse) ? titlesFromXverse.map(t => t.trim().toLowerCase()) : [];
+        const titleLoadSummary = `1-1단계: NewSongs.json ('xverse')에서 ${processedTitles.length}개의 제목 로드 완료.\n샘플: ${processedTitles.slice(0,3).join(', ')}`;
         console.log(`[N20_DEBUG_STEP_1.1] Loaded titles from NewSongs.json:`, processedTitles);
 
         setNew20Debug(prev => ({
@@ -1423,4 +1423,5 @@ export default function ApiTestPage() {
   );
 }
 
+    
     

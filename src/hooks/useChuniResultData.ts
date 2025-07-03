@@ -265,7 +265,7 @@ export function useChuniResultData({
       });
       const processedOriginalB30 = sortSongsByRatingDesc(deduplicateAndPrioritizeSongs(mappedOriginalB30));
 
-      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesRaw = NewSongsData.titles?.xverse || [];
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
       const newSongDefinitions = tempFlattenedGlobalMusicRecords.filter(globalSong => globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase()));
       const userPlayedMap = new Map<string, ShowallApiSongEntry>();
@@ -369,7 +369,7 @@ export function useChuniResultData({
         fixedListRatingSum = (currentN20Avg || 0) * Math.min(NEW_20_COUNT, state.originalNew20SongsData.length);
         fixedListCount = Math.min(NEW_20_COUNT, state.originalNew20SongsData.length);
         const b30PreCalcCandidates = state.allMusicData.filter(ms => {
-            const isNewSong = NewSongsData.titles.verse.some(title => title.trim().toLowerCase() === ms.title.trim().toLowerCase());
+            const isNewSong = NewSongsData.titles.xverse.some(title => title.trim().toLowerCase() === ms.title.trim().toLowerCase());
             const isInFixedN20 = state.originalNew20SongsData.some(n20s => n20s.id === ms.id && n20s.diff.toUpperCase() === ms.diff.toUpperCase());
             return !isNewSong && !isInFixedN20;
         });
@@ -410,7 +410,7 @@ export function useChuniResultData({
       allPlayedNewSongsPool: JSON.parse(JSON.stringify(state.allPlayedNewSongsPool)),
       allMusicData: JSON.parse(JSON.stringify(state.allMusicData)),
       userPlayHistory: JSON.parse(JSON.stringify(state.userPlayHistory)),
-      newSongsDataTitlesVerse: NewSongsData.titles.verse, // Pass to worker
+      newSongsDataTitlesVerse: NewSongsData.titles.xverse, // Pass to worker
       constOverrides: constOverridesInternal as ConstOverride[], // Pass to worker
       currentRating: currentRatingNum,
       targetRating: targetRatingNum,
@@ -487,3 +487,5 @@ export function useChuniResultData({
 
 // Small helper for useMemo, might not be needed if state structure is flat for combinedTopSongs calculation.
 // Removed: const { useMemo } = React; // Now directly imported at the top
+
+    

@@ -138,7 +138,7 @@ export default function SimulationTestPage() {
 
       const userPlayHistoryRecords = userShowallDataResponse || [];
       
-      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesRaw = NewSongsData.titles?.xverse || [];
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
 
       const newSongDefinitions = allMusicDataFlattened.filter(globalSong =>
@@ -195,7 +195,7 @@ export default function SimulationTestPage() {
         isScoreLimitReleased,
         phaseTransitionPoint: parseFloat(phaseTransitionPoint.toFixed(4)),
         excludedSongKeys: new Set<string>(),
-        newSongsDataTitlesVerse: NewSongsData.titles.verse,
+        newSongsDataTitlesVerse: NewSongsData.titles.xverse,
         constOverrides: constOverridesData as ConstOverride[],
       };
 
@@ -404,3 +404,5 @@ export default function SimulationTestPage() {
     </main>
   );
 }
+
+    
