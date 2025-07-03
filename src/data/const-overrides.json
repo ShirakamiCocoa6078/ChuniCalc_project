@@ -5,9 +5,9 @@
     "const": 18.0
   },
   {
-    "title": "MegiddØ",
+    "title": "7thSence",
     "diff" : "MAS",
-    "const": 15.6
+    "const": 14.7
   },
   {
     "title": "淵底のグレイ・ユークロニア",
@@ -15,8 +15,23 @@
     "const": 15.0
   },
   {
-    "title": "Crossmythos Rhapsodia",
+    "title": "デスパレイト",
     "diff" : "MAS",
-    "const": 15.7
+    "const": 13.6
+  },
+  {
+    "title": "Swift Swing",
+    "diff" : "MAS",
+    "const": "14.8"
+  },
+  {
+    "title": "Galaxy Blaster",
+    "diff" : "MAS",
+    "const": "14.6"
+  },
+  {
+    "title": "BOUNCE & DANCE",
+    "diff" : "MAS",
+    "const": "14.5"
   }
 ]
