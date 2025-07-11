@@ -48,7 +48,7 @@ function ResultContent() {
     setCurrentRatingDisplay(!isNaN(currentRatingValue) ? currentRatingValue.toFixed(2) : getTranslation(locale, 'resultPageNotAvailable'));
 
     if (initialCurrentRating && !isNaN(currentRatingValue)) {
-      const newTargetRating = Math.min(currentRatingValue + 0.01, 17.50);
+      const newTargetRating = Math.min(currentRatingValue + 0.01, 18.00);
       setTargetRating(newTargetRating.toFixed(2));
     } else {
       setTargetRating('');
