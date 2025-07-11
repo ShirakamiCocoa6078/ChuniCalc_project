@@ -22,6 +22,7 @@ import type { CalculationStrategy } from "@/types/result-page";
 import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 import { LOCAL_STORAGE_PREFIX } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 
 
 function ResultContent() {
@@ -31,11 +32,10 @@ function ResultContent() {
 
   const initialUserName = searchParams.get("nickname");
   const initialCurrentRating = searchParams.get("current");
-  const initialTargetRating = searchParams.get("target");
 
   const [userNameForApi, setUserNameForApi] = useState<string | null>(null);
   const [currentRatingDisplay, setCurrentRatingDisplay] = useState<string | null>(null);
-  const [targetRatingDisplay, setTargetRatingDisplay] = useState<string | null>(null);
+  const [targetRating, setTargetRating] = useState<string>('');
 
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("none");
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -44,10 +44,17 @@ function ResultContent() {
   useEffect(() => {
     setClientHasMounted(true);
     setUserNameForApi(initialUserName || getTranslation(locale, 'resultPageDefaultPlayerName'));
-    setCurrentRatingDisplay(initialCurrentRating || getTranslation(locale, 'resultPageNotAvailable'));
-    setTargetRatingDisplay(initialTargetRating || getTranslation(locale, 'resultPageNotAvailable'));
+    const currentRatingValue = initialCurrentRating ? parseFloat(initialCurrentRating) : NaN;
+    setCurrentRatingDisplay(!isNaN(currentRatingValue) ? currentRatingValue.toFixed(2) : getTranslation(locale, 'resultPageNotAvailable'));
+
+    if (initialCurrentRating && !isNaN(currentRatingValue)) {
+      const newTargetRating = Math.min(currentRatingValue + 0.01, 17.50);
+      setTargetRating(newTargetRating.toFixed(2));
+    } else {
+      setTargetRating('');
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialUserName, initialCurrentRating, initialTargetRating, locale]);
+  }, [initialUserName, initialCurrentRating, locale]);
 
   const {
     apiPlayerName,
@@ -68,7 +75,7 @@ function ResultContent() {
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
-    targetRatingDisplay,
+    targetRatingDisplay: targetRating,
     locale,
     refreshNonce,
     clientHasMounted,
@@ -130,7 +137,7 @@ function ResultContent() {
     } else { 
         switch (currentPhase) {
           case 'idle': 
-            if (currentRatingDisplay && targetRatingDisplay && parseFloat(currentRatingDisplay) >= parseFloat(targetRatingDisplay)) {
+            if (currentRatingDisplay && targetRating && parseFloat(currentRatingDisplay) >= parseFloat(targetRating)) {
                 statusText = getTranslation(locale, 'resultPageTargetReachedFmt', overallRatingStr, b30AvgStr, n20AvgStr);
                 bgColor = "bg-green-100 dark:bg-green-900"; textColor = "text-green-700 dark:text-green-300"; IconComponent = CheckCircle2;
             } else if (calculationStrategy !== "none") {
@@ -205,7 +212,18 @@ function ResultContent() {
                 </div>
                 <div className="flex items-center p-2 bg-secondary rounded-md">
                   <TargetIconLucide className="w-5 h-5 mr-2 text-primary" />
-                  <span>{getTranslation(locale, 'resultPageHeaderTarget')} <span className="font-semibold">{targetRatingDisplay}</span></span>
+                    <Label htmlFor="targetRating" className="whitespace-nowrap mr-2">{getTranslation(locale, 'targetRatingLabel')}</Label>
+                    <Input
+                        id="targetRating"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="17.50"
+                        placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
+                        value={targetRating}
+                        onChange={(e) => setTargetRating(e.target.value)}
+                        className="w-24 h-8 text-base font-semibold"
+                    />
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 w-full">

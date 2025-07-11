@@ -58,64 +58,63 @@ function SongCard({ song, calculationStrategy, isExcluded, onExcludeToggle }: So
       )}
       onClick={handleCardClick}
     >
-      <CardContent className="p-0 flex h-full">
-        <div className="w-1/3 relative h-full flex items-center justify-center min-h-[70px] bg-muted">
-        </div>
-        <div className="w-2/3 p-3 flex flex-col justify-between bg-card-foreground/5">
-          <div>
-            <h3 className={cn(
-                "text-sm font-semibold font-headline truncate flex items-center",
-                getDifficultyColorClass(song.diff)
-              )}
-            >
-              <Music2 className="w-4 h-4 mr-1.5 text-primary shrink-0" />
-              {song.title}
-            </h3>
-            <span className="text-xs font-bold ml-1 text-muted-foreground">
-              {song.diff.toUpperCase()}
-            </span>
-             {isExcluded && (
-                <XCircle className="w-3 h-3 ml-1 text-red-500 inline-block" title="Excluded from calculation"/>
-             )}
+      <CardContent className="p-3 flex flex-col justify-between h-full bg-card-foreground/5">
+        <div>
+          <div className="flex justify-between items-center">
+              <h3 className={cn("text-sm font-semibold font-headline truncate flex items-center", getDifficultyColorClass(song.diff))}>
+                  <Music2 className="w-4 h-4 mr-1.5 text-primary shrink-0" />
+                  {song.title}
+              </h3>
+              <span className="text-xs font-mono text-muted-foreground ml-2 shrink-0">
+                  {song.chartConstant ? song.chartConstant.toFixed(1) : 'N/A'}
+              </span>
           </div>
+          <div className="flex items-center">
+              <span className="text-xs font-bold text-muted-foreground">
+                  {song.diff.toUpperCase()}
+              </span>
+              {isExcluded && (
+                  <XCircle className="w-3 h-3 ml-1 text-red-500 inline-block" title="Excluded from calculation"/>
+              )}
+          </div>
+        </div>
 
-          <div className="space-y-0.5 text-xs mt-1 text-right">
-            {isSimulatedAndChanged && (
-              <div className="flex items-center justify-end text-green-600 dark:text-green-400">
-                <ArrowUpCircle className="w-3 h-3 mr-1" />
-                <span>
-                  {scoreDifference !== 0 ? (scoreDifference > 0 ? "+" : "") + scoreDifference.toLocaleString() : "±0"}
-                  {' / '}
-                  {ratingActuallyChanged ? (ratingDifferenceValue > 0 ? "+" : "") + ratingDifferenceValue.toFixed(2) : "±0.00"}
-                </span>
+        <div className="mt-2 text-right">
+          {isSimulatedAndChanged && (
+              <div className="flex items-center justify-end text-green-600 dark:text-green-400 text-xs">
+                  <ArrowUpCircle className="w-3 h-3 mr-1" />
+                  <span>
+                      {scoreDifference !== 0 ? (scoreDifference > 0 ? "+" : "") + scoreDifference.toLocaleString() : "±0"}
+                      {' / '}
+                      {ratingActuallyChanged ? (ratingDifferenceValue > 0 ? "+" : "") + ratingDifferenceValue.toFixed(2) : "±0.00"}
+                  </span>
               </div>
-            )}
+          )}
 
-            <div className="flex items-center justify-end text-muted-foreground">
+          <div className="flex items-center justify-end text-xs text-muted-foreground mt-0.5">
               <span className="flex items-center mr-1">
-                {isSimulatedAndChanged ? (
-                  <TargetIcon className="w-3 h-3 text-accent" />
-                ) : (
-                  <Star className="w-3 h-3 text-yellow-500" />
-                )}
+                  {isSimulatedAndChanged ? (
+                      <TargetIcon className="w-3 h-3 text-accent" />
+                  ) : (
+                      <Star className="w-3 h-3 text-yellow-500" />
+                  )}
               </span>
               <span className="font-medium text-foreground">
-                {isSimulatedAndChanged || isExcluded ? (
-                  <>
-                    {(song.targetScore > 0 ? song.targetScore : song.currentScore).toLocaleString()}
-                    {' / '}
-                    {song.targetRating.toFixed(2)}
-                  </>
-                ) : (
-                  <>
-                    {(song.currentScore > 0 ? song.currentScore : 0).toLocaleString()}
-                    {' / '}
-                    {song.currentRating.toFixed(2)}
-                  </>
-                )}
+                  {isSimulatedAndChanged || isExcluded ? (
+                      <>
+                          {(song.targetScore > 0 ? song.targetScore : song.currentScore).toLocaleString()}
+                          {' / '}
+                          {song.targetRating.toFixed(2)}
+                      </>
+                  ) : (
+                      <>
+                          {(song.currentScore > 0 ? song.currentScore : 0).toLocaleString()}
+                          {' / '}
+                          {song.currentRating.toFixed(2)}
+                      </>
+                  )}
               </span>
             </div>
-          </div>
         </div>
       </CardContent>
       {isExcluded && (

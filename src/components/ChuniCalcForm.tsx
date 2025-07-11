@@ -26,7 +26,6 @@ type ProfileData = {
 export default function ChuniCalcForm() {
   const [nickname, setNickname] = useState<string>("");
   const [currentRatingStr, setCurrentRatingStr] = useState<string>("");
-  const [targetRatingStr, setTargetRatingStr] = useState<string>("");
   const [isFetchingRating, setIsFetchingRating] = useState<boolean>(false);
   const [isClient, setIsClient] = useState(false);
   const router = useRouter();
@@ -40,7 +39,6 @@ export default function ChuniCalcForm() {
   const handleNicknameChange = (e: ChangeEvent<HTMLInputElement>) => {
     setNickname(e.target.value);
     setCurrentRatingStr("");
-    setTargetRatingStr("");
   };
 
   const handleFetchRating = async () => {
@@ -55,7 +53,6 @@ export default function ChuniCalcForm() {
 
     setIsFetchingRating(true);
     setCurrentRatingStr("");
-    setTargetRatingStr("");
 
     const localToken = getLocalReferenceApiToken();
     let proxyUrl = `/api/chunirecApiProxy?proxyEndpoint=records/profile.json&user_name=${encodeURIComponent(nickname)}&region=jp2`;
@@ -133,15 +130,12 @@ export default function ChuniCalcForm() {
 
       if (ratingValue !== null) {
         setCurrentRatingStr(ratingValue.toFixed(2));
-        const newTargetRating = Math.min(ratingValue + 0.01, 17.50);
-        setTargetRatingStr(newTargetRating.toFixed(2));
         toast({
           title: getTranslation(locale, 'toastSuccessRatingFetched'),
           description: getTranslation(locale, 'toastSuccessRatingFetchedDesc', data.player_name || nickname, ratingValue.toFixed(2)),
         });
       } else {
          setCurrentRatingStr("");
-         setTargetRatingStr("");
         toast({
           title: getTranslation(locale, 'toastErrorInvalidRatingData'),
           description: getTranslation(locale, 'toastErrorInvalidRatingDataDesc'),
@@ -151,7 +145,6 @@ export default function ChuniCalcForm() {
     } catch (error) {
       console.error("Error fetching rating via proxy:", error);
       setCurrentRatingStr("");
-      setTargetRatingStr("");
       toast({
         title: getTranslation(locale, 'toastErrorRatingFetchFailed'),
         description: getTranslation(locale, 'toastErrorRatingFetchFailedDesc', error instanceof Error ? error.message : String(error)),
@@ -165,7 +158,7 @@ export default function ChuniCalcForm() {
   const handleCalculateAndNavigate = (e: FormEvent) => {
     e.preventDefault();
 
-    if (currentRatingStr.trim() === "" || targetRatingStr.trim() === "") {
+    if (currentRatingStr.trim() === "") {
         toast({
             title: getTranslation(locale, 'toastErrorMissingInfo'),
             description: getTranslation(locale, 'toastErrorMissingInfoDesc'),
@@ -175,9 +168,8 @@ export default function ChuniCalcForm() {
     }
 
     const current = parseFloat(currentRatingStr);
-    const target = parseFloat(targetRatingStr);
 
-    if (isNaN(current) || isNaN(target)) {
+    if (isNaN(current)) {
       toast({
         title: getTranslation(locale, 'toastErrorInvalidInput'),
         description: getTranslation(locale, 'toastErrorInvalidInputDesc'),
@@ -187,14 +179,6 @@ export default function ChuniCalcForm() {
     }
     
     if (currentRatingStr.includes('.') && currentRatingStr.split('.')[1].length > 2) {
-        toast({
-            title: getTranslation(locale, 'toastErrorInvalidInput'),
-            description: getTranslation(locale, 'toastErrorRatingInvalidStep'),
-            variant: "destructive",
-        });
-        return;
-    }
-    if (targetRatingStr.includes('.') && targetRatingStr.split('.')[1].length > 2) {
         toast({
             title: getTranslation(locale, 'toastErrorInvalidInput'),
             description: getTranslation(locale, 'toastErrorRatingInvalidStep'),
@@ -220,25 +204,7 @@ export default function ChuniCalcForm() {
       return;
     }
 
-    if (target < 0) {
-        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooLow', 0), variant: "destructive" });
-        return;
-    }
-    if (target > 17.50) { 
-        toast({ title: getTranslation(locale, 'toastErrorInvalidInput'), description: getTranslation(locale, 'toastErrorTargetRatingTooHighForm', 17.50), variant: "destructive" });
-        return;
-    }
-
-    if (target <= current) {
-      toast({
-        title: getTranslation(locale, 'toastErrorTargetRating'),
-        description: getTranslation(locale, 'toastErrorTargetRatingDesc'),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    router.push(`/result?nickname=${encodeURIComponent(nickname)}&current=${currentRatingStr}&target=${targetRatingStr}`);
+    router.push(`/result?nickname=${encodeURIComponent(nickname)}&current=${currentRatingStr}`);
   };
 
   if (!isClient) {
@@ -319,33 +285,6 @@ export default function ChuniCalcForm() {
                 className="text-lg bg-muted/50"
                 disabled
               />
-            </div>
-
-            <div className="space-y-2">
-               <Label htmlFor="targetRating" className="flex items-center text-lg font-medium">
-                  <Target className="mr-2 h-5 w-5 text-primary" /> {getTranslation(locale, 'targetRatingLabel')}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="ml-1.5 h-4 w-4 text-muted-foreground cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{getTranslation(locale, 'tooltipTargetRatingContent')}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-              <Input
-                id="targetRating"
-                type="number"
-                step="0.01"
-                min="0"
-                max="17.50"
-                placeholder={getTranslation(locale, 'targetRatingPlaceholder')}
-                value={targetRatingStr}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setTargetRatingStr(e.target.value)}
-                className="text-lg"
-                aria-describedby="targetRatingHelp"
-              />
-               <p id="targetRatingHelp" className="text-sm text-muted-foreground">{getTranslation(locale, 'targetRatingHelp')}</p>
             </div>
 
             <Button type="submit" className="w-full text-lg py-6 bg-primary hover:bg-primary/90">
