@@ -52,9 +52,9 @@ function ApiTestContent() {
         <div className="container mx-auto p-4 sm:p-6 lg:p-8">
             <header className="mb-6">
                 <Button asChild variant="outline">
-                    <Link href="/developer/page" className="flex items-center">
+                    <Link href="/" className="flex items-center">
                         <ArrowLeft className="w-4 h-4 mr-2" />
-                        Back to Developer Menu
+                        Back to Main Page
                     </Link>
                 </Button>
                 <h1 className="text-4xl font-bold font-headline mt-2">`useChuniResultData` Hook Test Page</h1>
