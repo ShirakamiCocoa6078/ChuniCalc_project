@@ -43,10 +43,11 @@ export default function SimulationPlaylist({
     const [popoverOpen, setPopoverOpen] = useState(false);
 
     const searchResults = useMemo(() => {
+        console.log('[Debug] Search Term:', searchTerm);
         const lowerSearchValue = searchTerm.toLowerCase();
         if (lowerSearchValue.length < 2) return [];
 
-        return allMusicData
+        const results = allMusicData
             .filter(song => {
                 const lowerTitle = song.title.toLowerCase();
 
@@ -59,6 +60,7 @@ export default function SimulationPlaylist({
                 if (wanakana.isRomaji(lowerSearchValue)) {
                     const hiraganaValue = wanakana.toHiragana(lowerSearchValue);
                     const katakanaValue = wanakana.toKatakana(lowerSearchValue);
+                    console.log(`[Debug] Romaji detected. Converted to: Hiragana='${hiraganaValue}', Katakana='${katakanaValue}'`);
                     if (lowerTitle.includes(hiraganaValue)) return true;
                     if (lowerTitle.includes(katakanaValue)) return true;
                 }
@@ -66,10 +68,13 @@ export default function SimulationPlaylist({
                 return false;
             })
             .slice(0, 50);
+
+        console.log('[Debug] Search Results:', results);
+        return results;
     }, [searchTerm, allMusicData]);
 
     const handleAddSong = (musicEntry: ShowallApiSongEntry) => {
-        const newSong = mapApiSongToAppSong(musicEntry);
+        const newSong = mapApiSongToAppSong(musicEntry, 0); // Pass a dummy index
         onAddSong(newSong);
         setSearchTerm('');
         setPopoverOpen(false);
