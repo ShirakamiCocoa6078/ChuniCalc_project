@@ -41,6 +41,7 @@ export type CalculationStrategy =
   | "n20_focus"
   | "hybrid_floor"
   | "hybrid_peak"
+  | "playlist_custom"
   | "none"
   | null;
 
@@ -108,10 +109,11 @@ export interface SimulationInput {
   currentRating: number;
   targetRating: number;
   algorithmPreference: "floor" | "peak";
-  simulationMode: "b30_only" | "n20_only" | "hybrid";
+  simulationMode: "b30_only" | "n20_only" | "hybrid" | "playlist_custom";
   isScoreLimitReleased: boolean;
   phaseTransitionPoint: number | null;
   excludedSongKeys: Set<string>;
+  playlistSongs?: Song[];
 }
 
 export interface SimulationOutput {

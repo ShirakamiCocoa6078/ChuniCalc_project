@@ -43,6 +43,7 @@ interface ResultDataState {
   finalOverallSimulatedRating: number | null;
   simulationLog: string[];
   
+  playlistSongs: Song[]; // Added for the new feature
   currentPhase: SimulationPhase;
   isLoadingSimulation: boolean;
   simulationError: string | null;
@@ -66,6 +67,10 @@ type ResultDataAction =
   | { type: 'SIMULATION_SUCCESS'; payload: SimulationOutput }
   | { type: 'SIMULATION_ERROR'; payload: string }
   | { type: 'TOGGLE_EXCLUDE_SONG'; payload: string }
+  | { type: 'ADD_TO_PLAYLIST'; payload: Song }
+  | { type: 'REMOVE_FROM_PLAYLIST'; payload: { id: string; diff: string } }
+  | { type: 'UPDATE_PLAYLIST_SONG_TARGET'; payload: { id: string; diff: string; targetScore: number; targetRating: number } }
+  | { type: 'CLEAR_PLAYLIST' }
   | { type: 'RESET_SIMULATION_STATE_FOR_NEW_STRATEGY' }
   | { type: 'SET_PRECOMPUTATION_RESULT'; payload: ResultDataState['preComputationResult'] }
   | { type: 'SET_CURRENT_PHASE'; payload: SimulationPhase };
@@ -84,6 +89,7 @@ const initialState: ResultDataState = {
   simulatedAverageNew20Rating: null,
   finalOverallSimulatedRating: null,
   simulationLog: [],
+  playlistSongs: [], // Added
   currentPhase: 'idle',
   isLoadingSimulation: false,
   simulationError: null,
@@ -137,6 +143,25 @@ function resultDataReducer(state: ResultDataState, action: ResultDataAction): Re
       if (newExcludedKeys.has(action.payload)) newExcludedKeys.delete(action.payload);
       else newExcludedKeys.add(action.payload);
       return { ...state, excludedSongKeys: newExcludedKeys };
+    case 'ADD_TO_PLAYLIST':
+        // Avoid duplicates
+        if (state.playlistSongs.some(song => song.id === action.payload.id && song.diff === action.payload.diff)) {
+            return state;
+        }
+        return { ...state, playlistSongs: [...state.playlistSongs, action.payload] };
+    case 'REMOVE_FROM_PLAYLIST':
+        return { ...state, playlistSongs: state.playlistSongs.filter(song => !(song.id === action.payload.id && song.diff === action.payload.diff)) };
+    case 'UPDATE_PLAYLIST_SONG_TARGET':
+        return {
+            ...state,
+            playlistSongs: state.playlistSongs.map(song => 
+                (song.id === action.payload.id && song.diff === action.payload.diff)
+                ? { ...song, targetScore: action.payload.targetScore, targetRating: action.payload.targetRating }
+                : song
+            )
+        };
+    case 'CLEAR_PLAYLIST':
+        return { ...state, playlistSongs: [] };
     case 'RESET_SIMULATION_STATE_FOR_NEW_STRATEGY':
       return {
         ...state,
@@ -337,7 +362,7 @@ export function useChuniResultData({
       return;
     }
     
-    dispatch({ type: 'RESET_SIMULATION_STATE_FOR_NEW_STRATEGY' }); // Reset before new sim
+    dispatch({ type: 'RESET_SIMULATION_STATE_FOR_NEW_STRATEGY' });
     dispatch({ type: 'START_SIMULATION' });
 
     let simulationModeToUse: SimulationInput['simulationMode'];
@@ -347,12 +372,13 @@ export function useChuniResultData({
     else if (calculationStrategy === 'n20_focus') { simulationModeToUse = 'n20_only'; algorithmPreferenceToUse = 'floor'; }
     else if (calculationStrategy === 'hybrid_floor') { simulationModeToUse = 'hybrid'; algorithmPreferenceToUse = 'floor'; }
     else if (calculationStrategy === 'hybrid_peak') { simulationModeToUse = 'hybrid'; algorithmPreferenceToUse = 'peak'; }
+    else if (calculationStrategy === 'playlist_custom') { simulationModeToUse = 'playlist_custom'; algorithmPreferenceToUse = 'floor'; } // peak or floor doesn't matter here
     else {
         dispatch({ type: 'SIMULATION_ERROR', payload: 'Unknown calculation strategy' });
         return;
     }
 
-    // Pre-computation check (simplified version, can be expanded)
+    // Pre-computation check for b30/n20 focus modes
     if (simulationModeToUse === 'b30_only' || simulationModeToUse === 'n20_only') {
       let fixedListSongs: Song[] = [];
       let fixedListRatingSum = 0; let fixedListCount = 0;
@@ -410,8 +436,9 @@ export function useChuniResultData({
       allPlayedNewSongsPool: JSON.parse(JSON.stringify(state.allPlayedNewSongsPool)),
       allMusicData: JSON.parse(JSON.stringify(state.allMusicData)),
       userPlayHistory: JSON.parse(JSON.stringify(state.userPlayHistory)),
-      newSongsDataTitlesVerse: NewSongsData.titles.verse, // Pass to worker
-      constOverrides: constOverridesInternal as ConstOverride[], // Pass to worker
+      playlistSongs: JSON.parse(JSON.stringify(state.playlistSongs)), // Pass playlist songs
+      newSongsDataTitlesVerse: NewSongsData.titles.verse,
+      constOverrides: constOverridesInternal as ConstOverride[],
       currentRating: currentRatingNum,
       targetRating: targetRatingNum,
       simulationMode: simulationModeToUse,
@@ -426,7 +453,7 @@ export function useChuniResultData({
   }, [
     calculationStrategy, isLoadingInitialApiData, clientHasMounted, locale,
     state.originalB30SongsData, state.originalNew20SongsData, state.allPlayedNewSongsPool, state.allMusicData, state.userPlayHistory,
-    currentRatingDisplay, targetRatingDisplay, state.excludedSongKeys
+    currentRatingDisplay, targetRatingDisplay, state.excludedSongKeys, state.playlistSongs
   ]);
 
 
@@ -482,6 +509,9 @@ export function useChuniResultData({
     preComputationResult: state.preComputationResult,
     excludedSongKeys: state.excludedSongKeys,
     toggleExcludeSongKey,
+    playlistSongs: state.playlistSongs,
+    allMusicData: state.allMusicData, // Expose all music data for search functionality
+    dispatch, // Exposing dispatch to allow components to send actions
   };
 }
 

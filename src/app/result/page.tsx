@@ -23,6 +23,8 @@ import { getLocalReferenceApiToken } from '@/lib/get-api-token';
 import { LOCAL_STORAGE_PREFIX } from '@/lib/cache';
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import SimulationPlaylist from '@/components/SimulationPlaylist';
+import { calculateChunithmSongRating } from '@/lib/rating-utils';
 
 
 function ResultContent() {
@@ -40,6 +42,7 @@ function ResultContent() {
   const [calculationStrategy, setCalculationStrategy] = useState<CalculationStrategy>("none");
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [clientHasMounted, setClientHasMounted] = useState(false);
+  const [isPlaylistModeOpen, setIsPlaylistModeOpen] = useState(false);
 
   useEffect(() => {
     setClientHasMounted(true);
@@ -72,6 +75,9 @@ function ResultContent() {
     preComputationResult,
     excludedSongKeys,
     toggleExcludeSongKey,
+    playlistSongs,
+    dispatch,
+    allMusicData, // Assuming the hook will expose this for searching
   } = useChuniResultData({
     userNameForApi,
     currentRatingDisplay,
@@ -311,6 +317,14 @@ function ResultContent() {
 
           {renderSimulationStatus()}
 
+          <div className="flex justify-end mb-4">
+            <Button variant="secondary" onClick={() => setIsPlaylistModeOpen(true)}>
+              <ListChecks className="mr-2 h-4 w-4" />
+              {/* This translation key will need to be added */}
+              {getTranslation(locale, 'playlistButtonText' as any) || "+ 직접 곡 선택하여 계산하기"}
+            </Button>
+          </div>
+
           <Tabs defaultValue="best30" className="w-full">
             <div className="flex items-start justify-between mb-6">
               <TabsList className="grid w-full max-w-lg grid-cols-3 gap-1 bg-muted p-1 rounded-lg shadow-inner">
@@ -453,6 +467,41 @@ function ResultContent() {
             )
           }
           </Tabs>
+
+          {isPlaylistModeOpen && (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center" onMouseDown={() => setIsPlaylistModeOpen(false)}>
+              <Card className="w-full max-w-3xl h-[80vh] flex flex-col" onMouseDown={(e) => e.stopPropagation()}>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>시뮬레이션 플레이리스트</CardTitle>
+                    <Button variant="ghost" size="icon" onClick={() => setIsPlaylistModeOpen(false)}>
+                        <X className="h-4 w-4" />
+                    </Button>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-y-auto p-0">
+                    <SimulationPlaylist
+                        playlistSongs={playlistSongs}
+                        allMusicData={allMusicData}
+                        onAddSong={(song) => dispatch({ type: 'ADD_TO_PLAYLIST', payload: song })}
+                        onRemoveSong={(song) => dispatch({ type: 'REMOVE_FROM_PLAYLIST', payload: { id: song.id, diff: song.diff }})}
+                        onUpdateTarget={(song, newTargetScore) => {
+                            const newRating = calculateChunithmSongRating(newTargetScore, song.chartConstant);
+                            dispatch({ 
+                                type: 'UPDATE_PLAYLIST_SONG_TARGET', 
+                                payload: { id: song.id, diff: song.diff, targetScore: newTargetScore, targetRating: newRating }
+                            });
+                        }}
+                        onClose={() => setIsPlaylistModeOpen(false)}
+                        onCalculate={() => {
+                            // This will trigger the simulation with the new playlist mode
+                            setCalculationStrategy('playlist_custom' as any); 
+                            setIsPlaylistModeOpen(false);
+                        }}
+                    />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
         </div>
       </TooltipProvider>
     </main>

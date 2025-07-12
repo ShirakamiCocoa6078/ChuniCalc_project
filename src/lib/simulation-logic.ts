@@ -164,6 +164,62 @@ function calculateOverallRating(avgB30: number | null, avgN20: number | null, ac
   return parseFloat(((b30Sum + n20Sum) / totalEffectiveSongs).toFixed(4));
 }
 
+function runPlaylistSimulation(
+    originalB30: Song[],
+    originalN20: Song[],
+    playlistSongs: Song[],
+    newSongTitles: string[]
+): Omit<SimulationOutput, 'simulationLog' | 'finalPhase' | 'error'> {
+    let simulatedB30 = [...originalB30];
+    let simulatedN20 = [...originalN20];
+
+    const playlistSongMap = new Map(playlistSongs.map(p => [`${p.id}_${p.diff}`, p]));
+    const newSongTitlesSet = new Set(newSongTitles.map(t => t.toLowerCase()));
+
+    // Update songs in B30 and N20 lists if they are in the playlist
+    simulatedB30 = simulatedB30.map(song => {
+        const key = `${song.id}_${song.diff}`;
+        const playlistVersion = playlistSongMap.get(key);
+        return playlistVersion ? { ...song, targetScore: playlistVersion.targetScore, targetRating: playlistVersion.targetRating } : song;
+    });
+
+    simulatedN20 = simulatedN20.map(song => {
+        const key = `${song.id}_${song.diff}`;
+        const playlistVersion = playlistSongMap.get(key);
+        return playlistVersion ? { ...song, targetScore: playlistVersion.targetScore, targetRating: playlistVersion.targetRating } : song;
+    });
+
+    // Add songs from the playlist that aren't already in the B30/N20 lists
+    playlistSongs.forEach(pSong => {
+        const isInB30 = simulatedB30.some(s => s.id === pSong.id && s.diff === pSong.diff);
+        const inN20 = simulatedN20.some(s => s.id === pSong.id && s.diff === pSong.diff);
+        if (!isInB30 && !inN20) {
+            if (newSongTitlesSet.has(pSong.title.toLowerCase())) {
+                simulatedN20.push(pSong);
+            } else {
+                simulatedB30.push(pSong);
+            }
+        }
+    });
+
+    // Sort and slice to maintain list limits
+    const finalB30 = sortAndSlice(simulatedB30, BEST_COUNT);
+    const finalN20 = sortAndSlice(simulatedN20, NEW_20_COUNT);
+
+    const finalAverageB30 = calculateAverageRating(finalB30, BEST_COUNT, true) || 0;
+    const finalAverageN20 = calculateAverageRating(finalN20, NEW_20_COUNT, true) || 0;
+    const finalOverall = calculateOverallRating(finalAverageB30, finalAverageN20, finalB30.length, finalN20.length);
+
+    return {
+        simulatedB30Songs: finalB30,
+        simulatedNew20Songs: finalN20,
+        finalAverageB30Rating: finalAverageB30,
+        finalAverageNew20Rating: finalAverageN20,
+        finalOverallRating: finalOverall,
+    };
+}
+
+
 function _performListSimulationPhase(
   currentSongsInput: Song[],
   input: SimulationInput,
@@ -358,6 +414,22 @@ function _performListSimulationPhase(
 export function runFullSimulation(input: SimulationInput): SimulationOutput {
   const log: string[] = [];
   log.push(`[WORKER_RUN_SIMULATION_START] Target: ${input.targetRating.toFixed(4)}, Mode: ${input.simulationMode}, Preference: ${input.algorithmPreference}, Current Rating: ${input.currentRating.toFixed(4)}, Excluded: ${input.excludedSongKeys.size}`);
+
+  if (input.simulationMode === 'playlist_custom') {
+    const playlistResult = runPlaylistSimulation(
+        input.originalB30Songs, 
+        input.originalNew20Songs, 
+        input.playlistSongs || [],
+        input.newSongsDataTitlesVerse || []
+    );
+    return {
+        ...playlistResult,
+        simulationLog: ["Playlist simulation complete."],
+        finalPhase: 'target_reached', // Or another appropriate phase
+        error: null,
+    };
+  }
+
 
   let currentSimulatedB30Songs: Song[];
   let currentSimulatedNew20Songs: Song[];
