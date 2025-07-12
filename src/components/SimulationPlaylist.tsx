@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import * as wanakana from 'wanakana';
 import type { Song, ShowallApiSongEntry } from '@/types/result-page';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,11 @@ const rankScorePresets = {
     'SS': 1000000,
 };
 
+const normalizeText = (text: string): string => {
+  // 소문자로 변경하고, 공백, 아포스트로피('), 하이픈(-) 등의 특수문자를 모두 제거
+  return text.toLowerCase().replace(/['\-.\s]/g, '');
+};
+
 export default function SimulationPlaylist({
   playlistSongs,
   allMusicData,
@@ -43,34 +47,16 @@ export default function SimulationPlaylist({
     const [popoverOpen, setPopoverOpen] = useState(false);
 
     const searchResults = useMemo(() => {
-        console.log('[Debug] Search Term:', searchTerm);
-        const lowerSearchValue = searchTerm.toLowerCase();
-        if (lowerSearchValue.length < 2) return [];
+        if (searchTerm.length < 2) return [];
+        
+        const normalizedSearchValue = normalizeText(searchTerm);
 
-        const results = allMusicData
+        return allMusicData
             .filter(song => {
-                const lowerTitle = song.title.toLowerCase();
-
-                // 1. Direct match
-                if (lowerTitle.includes(lowerSearchValue)) {
-                    return true;
-                }
-
-                // 2. Romaji to Kana conversion match
-                if (wanakana.isRomaji(lowerSearchValue)) {
-                    const hiraganaValue = wanakana.toHiragana(lowerSearchValue);
-                    const katakanaValue = wanakana.toKatakana(lowerSearchValue);
-                    console.log(`[Debug] Romaji detected. Converted to: Hiragana='${hiraganaValue}', Katakana='${katakanaValue}'`);
-                    if (lowerTitle.includes(hiraganaValue)) return true;
-                    if (lowerTitle.includes(katakanaValue)) return true;
-                }
-                
-                return false;
+                const normalizedTitle = normalizeText(song.title);
+                return normalizedTitle.includes(normalizedSearchValue);
             })
             .slice(0, 50);
-
-        console.log('[Debug] Search Results:', results);
-        return results;
     }, [searchTerm, allMusicData]);
 
     const handleAddSong = (musicEntry: ShowallApiSongEntry) => {
@@ -100,8 +86,12 @@ export default function SimulationPlaylist({
                     </div>
                 </PopoverTrigger>
                 <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <Command>
-                        <CommandInput placeholder="Filter results..." value={searchTerm} onValueChange={setSearchTerm}/>
+                    <Command shouldFilter={false}>
+                        <CommandInput 
+                            placeholder={getTranslation(locale, 'playlistSearchPlaceholder' as any) || "Filter results..."} 
+                            value={searchTerm} 
+                            onValueChange={setSearchTerm}
+                        />
                         <CommandList>
                             <CommandEmpty>No results found.</CommandEmpty>
                             <CommandGroup>
