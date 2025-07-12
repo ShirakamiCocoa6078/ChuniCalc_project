@@ -40,3 +40,5 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// environment variables in vercel

@@ -111,3 +111,13 @@ const config = {
 } satisfies Config;
 
 export default config;
+
+/* 나중에 추가할 것
+언어 옵션 : eng, jpn, kor
+국제판 전용 스크립트 임포터
+
+
+
+
+
+*/
