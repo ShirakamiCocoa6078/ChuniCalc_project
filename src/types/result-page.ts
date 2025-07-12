@@ -36,14 +36,15 @@ export type ShowallApiSongEntry = {
   is_const_unknown?: boolean; 
 };
 
-export type CalculationStrategy =
-  | "b30_focus"
-  | "n20_focus"
-  | "hybrid_floor"
-  | "hybrid_peak"
-  | "playlist_custom"
-  | "none"
-  | null;
+export type CalculationStrategy = 
+  | 'b30_focus' 
+  | 'n20_focus' 
+  | 'combined_floor' 
+  | 'combined_peak'
+  | 'hybrid_floor' // Re-add for compatibility
+  | 'hybrid_peak'  // Re-add for compatibility
+  | 'playlist_custom'
+  | 'none';
 
 export type Song = {
   id: string;
@@ -108,12 +109,29 @@ export interface SimulationInput {
   constOverrides: ConstOverride[]; // Added for worker
   currentRating: number;
   targetRating: number;
+  strategy: CalculationStrategy;
+  currentB30: Song[];
+  currentN20: Song[];
   algorithmPreference: "floor" | "peak";
   simulationMode: "b30_only" | "n20_only" | "hybrid" | "playlist_custom";
   isScoreLimitReleased: boolean;
   phaseTransitionPoint: number | null;
   excludedSongKeys: Set<string>;
-  playlistSongs?: Song[];
+  playlistSongs: Song[];
+}
+
+export interface ApiData {
+    playerName: string;
+    currentB30: Song[];
+    currentN20: Song[];
+    allMusicData: ShowallApiSongEntry[];
+}
+
+export interface InitialData {
+    userName?: string;
+    currentRating: number;
+    targetRating: number;
+    locale: string;
 }
 
 export interface SimulationOutput {

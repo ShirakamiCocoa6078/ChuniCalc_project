@@ -131,6 +131,7 @@ export const translations = {
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
+    resultPageTabCustom: "커스텀",
     resultPageLoadingSongsTitle: "곡 데이터를 불러오는 중입니다...",
     resultPageLoadingCacheCheck: "캐시를 확인/갱신 중입니다...",
     resultPageLoadingApiFetch: "Chunirec API에서 데이터를 가져오고 있습니다. 잠시만 기다려주세요.",
@@ -309,9 +310,10 @@ export const translations = {
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
-    resultPageLoadingSongsTitle: "楽曲データを読み込み中です...",
-    resultPageLoadingCacheCheck: "キャッシュを確認/更新中です...",
-    resultPageLoadingApiFetch: "Chunirec APIからデータを取得中です。しばらくお待ちください。",
+    resultPageTabCustom: "Custom",
+    resultPageLoadingSongsTitle: "楽曲データを読み込んでいます...",
+    resultPageLoadingCacheCheck: "キャッシュを確認・更新中です...",
+    resultPageLoadingApiFetch: "Chunirec APIからデータを取得しています。しばらくお待ちください。",
     resultPageLoadingDataStateCheck: "データ状態を確認中...",
     resultPageErrorLoadingTitle: "データ読み込みエラー",
     resultPageErrorLoadingDesc: "入力したニックネームが正しいか、Chunirecにデータが公開されているか、またはAPIトークンが有効か確認してください。問題が続く場合は、「データ更新」ボタンを使用してみてください。",
@@ -337,7 +339,7 @@ export const translations = {
     reachableRatingB30OnlyMessage: (rating: string) => `[Best 30 集中モード] 現在のNew 20曲を維持する場合、Best 30曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
     reachableRatingN20OnlyMessage: (rating: string) => `[New 20 集中モード] 現在のBest 30曲を維持する場合、New 20曲のみで到達可能な最大レーティングは約 ${rating} です。目標レーティングがこれより高い場合、この戦略では達成できません。`,
     resultPageTargetReachedFmt: (overall: string, b30: string, n20: string) => `目標達成！最終総合レーティング: ${overall} (B30: ${b30}, N20: ${n20})`,
-    resultPageStuckBothBaseFmt: (overall: string) => `B30およびN20のどちらもこれ以上改善できません。最終総合: ${overall}`,
+    resultPageStuckBothBaseFmt: (overall: string) => `Cannot improve either B30 or N20 any further. Final overall: ${overall}`,
     resultPageDetailRatingsAvgFmt: (b30Avg: string, n20Avg?: string) => ` (B30平均: ${b30Avg}${n20Avg ? `, N20平均: ${n20Avg}` : ''})`,
     // Tooltip translations JP
     tooltipChunirecNicknameContent: "https://chunirec.net/ で登録されたデータを読み込みます。当該サイトでの事前登録が必要です。",
@@ -484,6 +486,7 @@ export const translations = {
     resultPageTabBest30: "Best 30",
     resultPageTabNew20: "New 20",
     resultPageTabCombined: "Best30 + New20",
+    resultPageTabCustom: "Custom",
     resultPageLoadingSongsTitle: "Loading song data...",
     resultPageLoadingCacheCheck: "Checking/updating cache...",
     resultPageLoadingApiFetch: "Fetching data from Chunirec API. Please wait.",
@@ -534,47 +537,48 @@ export const translations = {
 
 export type Locale = keyof typeof translations;
 
-type BaseTranslationKeys = keyof typeof translations['KR'];
+type AllKeys = keyof (typeof translations)['KR'] | keyof (typeof translations)['JP'] | keyof (typeof translations)['EN'];
 
 export type TranslationFunction<P extends any[] = any[], R = string> = (...args: P) => R;
 
-export type TranslationValues = {
-  [K in BaseTranslationKeys]: (typeof translations)['KR'][K] extends TranslationFunction<infer P, infer R>
-    ? TranslationFunction<P, R>
-    : string;
-};
+type TranslationValue<K extends AllKeys> =
+    K extends keyof (typeof translations)['KR'] ? (typeof translations)['KR'][K] :
+    K extends keyof (typeof translations)['JP'] ? (typeof translations)['JP'][K] :
+    K extends keyof (typeof translations)['EN'] ? (typeof translations)['EN'][K] :
+    never;
 
-type TranslationArgs<L extends Locale, K extends keyof typeof translations[L]> =
-  typeof translations[L][K] extends TranslationFunction<infer P, any> ? P : [];
+type TranslationArgs<K extends AllKeys> =
+    TranslationValue<K> extends TranslationFunction<infer P, any> ? P : [];
 
-export function getTranslation<L extends Locale, K extends keyof typeof translations[L]>(
-  locale: L,
-  key: K,
-  ...args: TranslationArgs<L, K>
+export function getTranslation<K extends AllKeys>(
+    locale: Locale,
+    key: K,
+    ...args: TranslationArgs<K>
 ): string {
-  const primaryTranslations = translations[locale] || translations.KR;
-  let messageOrFn = primaryTranslations[key as keyof typeof primaryTranslations];
+    const primaryTranslations = translations[locale] || translations.KR;
+    let messageOrFn = primaryTranslations[key as keyof typeof primaryTranslations];
 
-  if (messageOrFn === undefined && locale !== 'KR') {
-    const fallbackTranslations = translations.KR;
-    messageOrFn = fallbackTranslations[key as keyof typeof fallbackTranslations];
-  }
+    if (messageOrFn === undefined && locale !== 'KR') {
+      const fallbackTranslations = translations.KR;
+      messageOrFn = fallbackTranslations[key as keyof typeof fallbackTranslations];
+    }
+  
+    if (messageOrFn === undefined) {
+      const defaultText = String(key);
+      console.warn(`Translation missing for key: ${defaultText} in locale: ${locale}.`);
+      return defaultText;
+    }
 
-  if (messageOrFn === undefined) {
-    const defaultText = args.length > 0 && typeof args[args.length -1] === 'string' && !Object.keys(primaryTranslations).includes(args[args.length -1] as K) ? args[args.length -1] as string : String(key);
-    console.warn(`Translation missing for key: ${String(key)} in locale: ${locale}. Using default: "${defaultText}"`);
-    return defaultText;
-  }
-
-  if (typeof messageOrFn === 'function') {
-    return (messageOrFn as TranslationFunction<any[], string>)(...args.slice(0, messageOrFn.length));
-  }
-  return messageOrFn as string;
+    if (typeof messageOrFn === 'function') {
+      return (messageOrFn as TranslationFunction<any[], string>)(...args);
+    }
+    return messageOrFn as string;
 }
 
 export type GetTranslationFn = typeof getTranslation;
+
 export type AllTranslationsType = typeof translations;
 export type KRTranslationKey = keyof AllTranslationsType['KR'];
 export type LocaleType = {
-  [K in KRTranslationKey]: AllTranslationsType['KR'][K];
+    [K in KRTranslationKey]: AllTranslationsType['KR'][K];
 };
