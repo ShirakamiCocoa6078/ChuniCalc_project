@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import * as wanakana from 'wanakana';
 import type { Song, ShowallApiSongEntry } from '@/types/result-page';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -42,10 +43,29 @@ export default function SimulationPlaylist({
     const [popoverOpen, setPopoverOpen] = useState(false);
 
     const searchResults = useMemo(() => {
-        if (searchTerm.length < 2) return [];
+        const lowerSearchValue = searchTerm.toLowerCase();
+        if (lowerSearchValue.length < 2) return [];
+
         return allMusicData
-            .filter(song => song.title.toLowerCase().includes(searchTerm.toLowerCase()))
-            .slice(0, 50); // Show more results
+            .filter(song => {
+                const lowerTitle = song.title.toLowerCase();
+
+                // 1. Direct match
+                if (lowerTitle.includes(lowerSearchValue)) {
+                    return true;
+                }
+
+                // 2. Romaji to Kana conversion match
+                if (wanakana.isRomaji(lowerSearchValue)) {
+                    const hiraganaValue = wanakana.toHiragana(lowerSearchValue);
+                    const katakanaValue = wanakana.toKatakana(lowerSearchValue);
+                    if (lowerTitle.includes(hiraganaValue)) return true;
+                    if (lowerTitle.includes(katakanaValue)) return true;
+                }
+                
+                return false;
+            })
+            .slice(0, 50);
     }, [searchTerm, allMusicData]);
 
     const handleAddSong = (musicEntry: ShowallApiSongEntry) => {
