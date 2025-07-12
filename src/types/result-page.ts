@@ -128,10 +128,13 @@ export interface ApiData {
 }
 
 export interface InitialData {
-    userName?: string;
-    currentRating: number;
-    targetRating: number;
+    userNameForApi: string | null;
+    currentRatingDisplay: string | null;
+    targetRatingDisplay: string | null;
     locale: string;
+    refreshNonce: number;
+    clientHasMounted: boolean;
+    calculationStrategy: CalculationStrategy;
 }
 
 export interface SimulationOutput {
