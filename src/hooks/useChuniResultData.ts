@@ -208,9 +208,11 @@ export function useChuniResultData({
   const { data: userShowallData, error: userShowallError, isLoading: isLoadingUserShowall, mutate: mutateUserShowall } = useUserShowallData(userNameForApi && userNameForApi !== defaultPlayerName ? userNameForApi : null);
   const { data: globalMusicRaw, error: globalMusicError, isLoading: isLoadingGlobalMusic, mutate: mutateGlobalMusic } = useGlobalMusicData();
 
+  // titles.xverse 참조 변수명 변경
+  const NewSongsDataTitles = NewSongsData.titles?.xverse || [];
+
   const isLoadingInitialApiData = isLoadingProfile || isLoadingRating || isLoadingUserShowall || isLoadingGlobalMusic;
   const initialApiError = profileError || ratingError || userShowallError || globalMusicError;
-
   // Initialize Web Worker
   useEffect(() => {
     simulationWorkerRef.current = new Worker(new URL('@/workers/simulation.worker.ts', import.meta.url));
@@ -265,7 +267,7 @@ export function useChuniResultData({
       });
       const processedOriginalB30 = sortSongsByRatingDesc(deduplicateAndPrioritizeSongs(mappedOriginalB30));
 
-      const newSongTitlesRaw = NewSongsData.titles?.verse || [];
+      const newSongTitlesRaw = NewSongsDataTitles;
       const newSongTitlesToMatch = newSongTitlesRaw.map(title => title.trim().toLowerCase());
       const newSongDefinitions = tempFlattenedGlobalMusicRecords.filter(globalSong => globalSong.title && newSongTitlesToMatch.includes(globalSong.title.trim().toLowerCase()));
       const userPlayedMap = new Map<string, ShowallApiSongEntry>();
@@ -369,7 +371,7 @@ export function useChuniResultData({
         fixedListRatingSum = (currentN20Avg || 0) * Math.min(NEW_20_COUNT, state.originalNew20SongsData.length);
         fixedListCount = Math.min(NEW_20_COUNT, state.originalNew20SongsData.length);
         const b30PreCalcCandidates = state.allMusicData.filter(ms => {
-            const isNewSong = NewSongsData.titles.verse.some(title => title.trim().toLowerCase() === ms.title.trim().toLowerCase());
+            const isNewSong = NewSongsDataTitles.some(title => title.trim().toLowerCase() === ms.title.trim().toLowerCase());
             const isInFixedN20 = state.originalNew20SongsData.some(n20s => n20s.id === ms.id && n20s.diff.toUpperCase() === ms.diff.toUpperCase());
             return !isNewSong && !isInFixedN20;
         });
@@ -380,7 +382,7 @@ export function useChuniResultData({
         fixedListSongs = state.originalB30SongsData.map(s => ({ ...s, targetScore: s.currentScore, targetRating: s.currentRating }));
         fixedListRatingSum = (currentB30Avg || 0) * Math.min(BEST_COUNT, state.originalB30SongsData.length);
         fixedListCount = Math.min(BEST_COUNT, state.originalB30SongsData.length);
-        variableListCandidatePool = state.allPlayedNewSongsPool.filter(pns => !state.originalB30SongsData.some(b30s => b30s.id === pns.id && b30s.diff === pns.diff));
+      variableListCandidatePool = state.allPlayedNewSongsPool.filter(pns => !state.originalB30SongsData.some(b30s => b30s.id === pns.id && b30s.diff === pns.diff));
         variableListLimit = NEW_20_COUNT;
       }
       const { list: maxedVariableList, average: avgVariableAtMax, sum: sumVariableAtMax } = calculateTheoreticalMaxRatingsForList(variableListCandidatePool, variableListLimit, MAX_SCORE_ASSUMED_FOR_POTENTIAL, state.excludedSongKeys);
@@ -410,7 +412,7 @@ export function useChuniResultData({
       allPlayedNewSongsPool: JSON.parse(JSON.stringify(state.allPlayedNewSongsPool)),
       allMusicData: JSON.parse(JSON.stringify(state.allMusicData)),
       userPlayHistory: JSON.parse(JSON.stringify(state.userPlayHistory)),
-      newSongsDataTitlesVerse: NewSongsData.titles.verse, // Pass to worker
+      newSongsDataTitlesVerse: NewSongsDataTitles, // Pass to worker
       constOverrides: constOverridesInternal as ConstOverride[], // Pass to worker
       currentRating: currentRatingNum,
       targetRating: targetRatingNum,
